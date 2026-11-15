@@ -18,8 +18,8 @@ changes with OpenSpec.
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha. `sj trace` maps OpenSpec scenarios to Rust, vitest, Jest,
-Playwright and pytest tests. `sj gate` and `sj test` run Rust tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
+**Status:** pre-alpha. `sj trace` and `sj test` work with Rust, vitest, Jest,
+Playwright and pytest tests. `sj gate` runs Rust tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
 
 ## Install
@@ -170,17 +170,41 @@ errors, packages without a runner, runners that are not installed, and missing
 spec folders, one per line. It never installs anything: pytest is checked on
 `PATH` or with `uv run --no-sync`, and Node runners in `node_modules/.bin`.
 
-`sj trace` reads the packages and suites. `sj gate` and `sj test` still look for
-Rust tests only and run `cargo test` at the root until the TypeScript and Python
-runners land.
+`sj trace` and `sj test` read the packages and suites. `sj gate` still proves
+red-on-base with Cargo only, until per-suite red-on-base lands.
 
 ## Test runs and the evidence ledger
 
-`sj test` runs `cargo test` and prints one summary line when everything
-passes. When something fails, it lists each failing test with its scenario IDs
+`sj test` runs every suite in `specjutsu.toml` (or `cargo test` when there is
+none) and prints one summary line when everything passes. When something fails, it lists each failing test with its scenario IDs
 and the first 20 lines of its output. A compile error is reported as
 `build failed` with the compiler's error lines, never as an empty run. Exit
 codes match the gate: 0 pass, 1 fail, 2 error. Pass `--json` for tools.
+
+Scopes work across runners:
+
+```bash
+sj test                    # every suite
+sj test AUTH-003           # only the tests linked to AUTH-003, in every suite that has one
+sj test apps/api           # every suite in a package
+sj test apps/app:playwright  # one suite
+```
+
+Each suite runs in its package directory, with a JUnit report written to a
+temporary file:
+
+| Runner | Runs as |
+| --- | --- |
+| `vitest`, `jest`, `playwright` | `pnpm exec`, `yarn` or `npx --no-install`, from the nearest lockfile |
+| `pytest` | `uv run pytest` when there is a `uv.lock`, otherwise `python3 -m pytest` |
+| `junit` | your `command`, which writes the declared `report` |
+
+`command` replaces the launcher of a built-in runner (sj still adds its reporter
+and selection arguments), and `env` adds environment variables. Jest needs the
+`jest-junit` package in the project. A suite that exits without a report is a
+build failure, shown with the last lines of its output, and so is a test file
+that fails to load. `sj test` never installs anything. With more than one suite,
+the summary names the suites that failed.
 
 Each run appends one line per test to `.specjutsu/ledger/runs.jsonl`
 (gitignored, local only). Each line holds the run ID, the time, the git tree hash

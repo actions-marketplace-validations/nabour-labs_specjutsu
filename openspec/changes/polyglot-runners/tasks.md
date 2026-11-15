@@ -16,4 +16,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. Docs and self-hosting
 
-- [ ] 4.1 README "Test runs" section on suites, scopes, launchers and the `junit` runner, the CHANGELOG entry, and the roadmap row split in `docs/migration-readiness.md`. Verify: built `sj test` and `sj gate --base origin/main` pass on this repo. `sj test` on a scratch package that symlinks `chrome-agent`'s `node_modules` runs a real vitest suite and a real Playwright suite. `sj test` on a scratch pytest package runs a real pytest suite through FridgeSense's backend `.venv`. Both show the right failures and IDs.
+- [x] 4.1 README "Test runs" section on suites, scopes, launchers and the `junit` runner, the CHANGELOG entry, and the roadmap row split in `docs/migration-readiness.md`. Verify: built `sj test` and `sj gate --base origin/main` pass on this repo. `sj test` on a scratch package that symlinks `chrome-agent`'s `node_modules` runs a real vitest suite and a real Playwright suite. `sj test` on a scratch pytest package runs a real pytest suite through FridgeSense's backend `.venv`. Both show the right failures and IDs.
