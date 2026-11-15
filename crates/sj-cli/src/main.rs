@@ -69,6 +69,17 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Detect an existing project's packages and runners and write specjutsu.toml.
+    Adopt {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// Print the config instead of writing it.
+        #[arg(long)]
+        dry_run: bool,
+        /// Replace an existing specjutsu.toml.
+        #[arg(long)]
+        force: bool,
+    },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
         /// Report only this scenario ID.
@@ -142,6 +153,11 @@ fn run() -> Result<ExitCode> {
             test_cmd(scope, root, spec_root, json, no_ledger)
         }
         Command::Init { root, force } => init_cmd(&root, force),
+        Command::Adopt {
+            root,
+            dry_run,
+            force,
+        } => adopt_cmd(&root, dry_run, force),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -189,6 +205,40 @@ fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
         config.mode.as_str(),
         plural(config.packages.len(), "package")
     );
+    Ok(ExitCode::SUCCESS)
+}
+
+fn adopt_cmd(root: &Path, dry_run: bool, force: bool) -> Result<ExitCode> {
+    use sj_core::config::FILE;
+
+    let file = root.join(FILE);
+    if !dry_run && file.exists() && !force {
+        anyhow::bail!("{FILE} already exists; pass --force to replace it, or --dry-run to compare");
+    }
+    let detected = sj_core::adopt::detect(root)?;
+    let config = &detected.config;
+    if dry_run {
+        print!("{}", config.to_toml());
+    } else {
+        std::fs::write(&file, config.to_toml())?;
+        println!(
+            "adopt: wrote {FILE} (spec root {}, {})",
+            config.spec_root,
+            plural(config.packages.len(), "package")
+        );
+        for p in &config.packages {
+            let runners: Vec<_> = p.suites.iter().map(|s| s.runner.as_str()).collect();
+            let runners = if runners.is_empty() {
+                "-".to_string()
+            } else {
+                runners.join(", ")
+            };
+            println!("package {}  {runners}", p.path);
+        }
+    }
+    for n in &detected.notes {
+        eprintln!("note    {n}");
+    }
     Ok(ExitCode::SUCCESS)
 }
 

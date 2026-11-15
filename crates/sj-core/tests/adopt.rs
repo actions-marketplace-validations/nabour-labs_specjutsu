@@ -179,3 +179,29 @@ fn conf_010_detected_config_round_trips() {
     let c = detect(dir.path()).unwrap().config;
     assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
 }
+
+#[test]
+fn conf_008_separate_packages_without_a_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "backend/pyproject.toml",
+        "[project]\nname = \"b\"\ndependencies = [\"pytest\"]\n",
+    );
+    write(
+        dir.path(),
+        "pwa/package.json",
+        r#"{ "name": "pwa", "devDependencies": { "vitest": "^3" } }"#,
+    );
+    write(
+        dir.path(),
+        "pwa/tools/package.json",
+        r#"{ "name": "inner" }"#,
+    );
+    write(dir.path(), "infra/package.json", r#"{ "name": "infra" }"#);
+    let d = detect(dir.path()).unwrap();
+    let paths: Vec<_> = d.config.packages.iter().map(|p| p.path.as_str()).collect();
+    assert_eq!(paths, ["backend", "infra", "pwa"]);
+    assert_eq!(runners(pkg(&d.config, "pwa")), [Runner::Vitest]);
+    assert_eq!(d.notes, ["no runner detected: infra"]);
+}

@@ -13,8 +13,8 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. sj adopt (sj-core + sj-cli)
 
-- [ ] 3.1 `sj_core::adopt::detect` for pnpm, npm and yarn workspaces, `pyproject.toml` projects and Cargo, with per-runner suites and default globs (design decision 5) (CONF-008, CONF-009, CONF-010). Verify: `crates/sj-core/tests/adopt.rs` builds the CONF-008 fixture tree (`pnpm-workspace.yaml`, `apps/api`, `apps/app` with `playwright.config.ts`, `packages/ui` with no runner, `python/worker/pyproject.toml`) and asserts the packages, suites, globs, the `no runner detected: packages/ui` note and `spec_root = "openspec"`.
-- [ ] 3.2 `sj adopt [--dry-run] [--force]` prints or writes the result and refuses to overwrite without `--force` (CONF-008, CONF-009, CONF-010). Verify: CLI tests show `--dry-run` printing the config and leaving no file, a plain run writing a file that `config::load` accepts, and an existing file left unchanged with exit 2.
+- [x] 3.1 `sj_core::adopt::detect` for pnpm, npm and yarn workspaces, `pyproject.toml` projects and Cargo, with per-runner suites and default globs (design decision 5) (CONF-008, CONF-009, CONF-010). Verify: `crates/sj-core/tests/adopt.rs` builds the CONF-008 fixture tree (`pnpm-workspace.yaml`, `apps/api`, `apps/app` with `playwright.config.ts`, `packages/ui` with no runner, `python/worker/pyproject.toml`) and asserts the packages, suites, globs, the `no runner detected: packages/ui` note and `spec_root = "openspec"`.
+- [x] 3.2 `sj adopt [--dry-run] [--force]` prints or writes the result and refuses to overwrite without `--force` (CONF-008, CONF-009, CONF-010). Verify: CLI tests show `--dry-run` printing the config and leaving no file, a plain run writing a file that `config::load` accepts, and an existing file left unchanged with exit 2.
 
 ## 4. sj doctor (sj-core + sj-cli)
 
