@@ -44,11 +44,11 @@ Nov 13, 2026 · @Jayson
 
 1. **Verification, not prompts.** Markdown workflows are easy to copy; a polyglot trace-and-gate engine with test-runner adapters is not.
 2. **Red-on-base proof.** CI runs new tests against the base branch's code; a feature test that already passes there didn't drive the change. No competitor does this.
-3. **Interoperability.** specjutsu reads OpenSpec and Spec Kit folders, so adopting it doesn't mean abandoning them. It is the layer that makes their specs trustworthy.
+3. **Zero-migration switch.** specjutsu reads OpenSpec folders in place and imports Spec Kit features, so replacing those tools doesn't mean rewriting a single spec.
 4. **Zero-runtime distribution.** One Rust binary works in a Java, PHP, Go or Python repo without installing Node or Python.
 5. **Token economics.** Deterministic commands return a few lines instead of the model reading whole folders and raw test logs.
 
-**Positioning line:** *Keep your spec tool. specjutsu proves the code matches it.*
+**Positioning line:** *One tool from spec to proof. Bring your OpenSpec folders; specjutsu takes it from there.* (Changed Nov 14, 2026 from "Keep your spec tool. specjutsu proves the code matches it.", when specjutsu became a replacement rather than a layer.)
 
 ## Design principles
 
@@ -59,7 +59,7 @@ Six rules decide every design question; when two conflict, the earlier one wins.
 3. **Language-agnostic.** Test runners are adapters declared in config (`pytest`, `jest`/`vitest`, `go test`, `cargo test`, JUnit/Gradle/Maven, `dotnet test`, PHPUnit, RSpec). Adding a language is a config entry or a small adapter, never a fork.
 4. **Repo-agnostic.** Works the same in a single repo or a monorepo (pnpm/npm/yarn workspaces, Cargo workspaces, Go modules, Nx, Turborepo, Bazel, Gradle multi-project). Specs and runners are scoped per package.
 5. **Greenfield and brownfield.** `init` for new projects; `adopt` for existing ones, which detects languages, runners and workspaces and lets teams spec only what they change.
-6. **Interoperate, don't replace.** Read OpenSpec and Spec Kit folders; emit standard SKILL.md and AGENTS.md; coexist with Superpowers and RTK.
+6. **Replace without a migration.** specjutsu replaces OpenSpec, Spec Kit and Superpowers but keeps their formats: it reads `openspec/` folders in place, imports Spec Kit features, and emits standard SKILL.md and AGENTS.md. Companions that do a different job, such as RTK, stay alongside it.
 
 ## Architecture
 
@@ -307,7 +307,7 @@ Each phase ends only when its exit gate is met; the public launch waits for the 
 | Red-on-base is slow in big repos | Developers disable it | Run only new/changed tests; cache builds; allow per-package opt-out with reason |
 | Trace matching misses tests in some languages | False gaps, lost trust | Report-based confirmation (JUnit/JSON/TAP); comment-tag fallback works everywhere |
 | Ceremony scares off small fixes | Low adoption | Escape hatches; `sj spec new --quick` for one-scenario changes |
-| Competitors add verification | Moat narrows | Ship red-on-base first; interoperate so specjutsu is the layer they plug into |
+| Competitors add verification | Moat narrows | Ship red-on-base first; read their formats so switching to specjutsu needs no migration |
 | Name or trademark conflict | Rebrand cost | Check GitHub org, domain and trademarks before launch |
 
 **Open questions**

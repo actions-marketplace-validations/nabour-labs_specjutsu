@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>specjutsu — Master the art of the spec</title>
+<meta name="description" content="specjutsu is an open-source, single-binary CLI that makes AI coding agents prove their work: every spec scenario gets a test, every test fails first, and CI refuses anything unproven.">
+<meta property="og:title" content="specjutsu — Master the art of the spec">
+<meta property="og:description" content="AI agents that prove their work. Every scenario tested, every test red first, every merge verified.">
+<meta property="og:image" content="https://nabour-labs.github.io/specjutsu/assets/og.jpg">
+<meta property="og:url" content="https://nabour-labs.github.io/specjutsu/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0716">
+<link rel="icon" type="image/png" href="assets/sj-mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<nav class="top" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/sj-mark.png" alt="" width="34" height="34">specjutsu</a>
+    <div class="nav-links">
+      <a href="#why">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#compare">Compare</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="manual.html">Manual</a>
+    </div>
+    <a class="btn" href="https://github.com/nabour-labs/specjutsu">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.6.3 2.8.1 3.2.8.8 1.2 1.9 1.2 3.1 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z"/></svg>
+      Star on GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="hero-art">
+    <img src="assets/banner.jpg" alt="The specjutsu ninja holding a glowing spec scroll marked SJ" width="2000" height="848" fetchpriority="high">
+  </div>
+  <div class="wrap hero-copy">
+    <span class="pill"><span class="dot"></span>v0.2.0 · open source · MIT · single binary</span>
+    <h1>Master the art<br>of the <span class="grad-text">spec.</span></h1>
+    <p class="lede">AI coding agents that <strong>prove their work</strong>. Every spec scenario gets a test, every test fails first, and CI refuses anything unproven.</p>
+    <div class="cta">
+      <a class="btn primary" href="#quickstart">Get started in 60 seconds</a>
+      <a class="btn" href="manual.html">Read the manual</a>
+    </div>
+    <div class="install">
+      <code id="install-cmd"><span class="p">$ </span>cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu</code>
+      <button class="copy" type="button" data-copy="cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu">Copy</button>
+    </div>
+    <p class="tagline"><em>One tool from spec to proof.</em> Bring your OpenSpec folders; specjutsu takes it from there.</p>
+  </div>
+</header>
+
+<section id="why">
+  <div class="wrap">
+    <p class="eyebrow">The gap</p>
+    <h2>Your agent says it's done.<br><span class="grad-text">Can it prove it?</span></h2>
+    <p class="section-lede">Today's spec-driven tools split the job in two. Neither checks that the code actually satisfies the spec. The link between a scenario and the test that proves it lives only in a prompt.</p>
+    <div class="gap-grid">
+      <div class="gap-card">
+        <div class="k">Spec tools</div>
+        <div class="v">Manage <em>what</em> to build</div>
+        <p>Spec Kit and OpenSpec turn intent into durable Markdown. Great specs, but nothing checks the code against them.</p>
+      </div>
+      <div class="gap-card">
+        <div class="k">Discipline tools</div>
+        <div class="v">Manage <em>how</em> the agent works</div>
+        <p>Superpowers nudges the agent toward TDD by prompt. Helpful, but a prompt is a request, not a guarantee.</p>
+      </div>
+      <div class="gap-card hole">
+        <div class="k">Nobody</div>
+        <div class="v">Checks the spec was built</div>
+        <p>Combine them and you get two competing workflows, more ceremony and more tokens, and still no proof.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Three promises, enforced by a binary</p>
+      <h2>Verification, not vibes.</h2>
+      <p class="section-lede">specjutsu does deterministically, in the binary and in CI, what other tools hand to the model.</p>
+    </div>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>Proof, not promises</h3>
+        <p>Every spec scenario is traced to a test. A scenario with no test, or a test pointing at a scenario that no longer exists, blocks the merge.</p>
+      </div>
+      <div class="pillar">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <h3>Red first, for real</h3>
+        <p>CI runs your new tests against the old code. If they already pass there, they didn't drive the change, and the gate says so.</p>
+      </div>
+      <div class="pillar">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg></div>
+        <h3>Fewer tokens</h3>
+        <p>If a program can decide it, the binary does it and hands your agent a few lines, not whole folders and raw test logs.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2>One ID joins spec and test.</h2>
+    <p class="section-lede">Plain OpenSpec Markdown plus one convention: a stable ID at the start of each scenario. Any OpenSpec repo that follows it is already a specjutsu repo.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">01 · spec</div>
+        <h3>Name the scenario</h3>
+        <p>Give every scenario a stable ID like <code>AUTH-003</code>.</p>
+<pre class="code"><span class="c-k">#### Scenario:</span> <span class="c-s">AUTH-003</span> Reject expired token
+- <span class="c-k">**WHEN**</span> the client calls GET /me
+  with a token issued 25 hours ago
+- <span class="c-k">**THEN**</span> the response is 401
+  with code TOKEN_EXPIRED</pre>
+      </div>
+      <div class="step">
+        <div class="n">02 · test</div>
+        <h3>Reference it from a test</h3>
+        <p>By test name or by a comment above it. No library needed.</p>
+<pre class="code"><span class="c-m">#[test]</span>
+<span class="c-k">fn</span> <span class="c-s">auth_003</span>_rejects_expired_token() { … }
+
+<span class="c-m">// spec: </span><span class="c-s">AUTH-003</span>
+<span class="c-m">#[test]</span>
+<span class="c-k">fn</span> rejects_expired() { … }</pre>
+      </div>
+      <div class="step">
+        <div class="n">03 · prove</div>
+        <h3>Trace it and gate it</h3>
+        <p>See every gap locally, then let CI refuse anything unproven.</p>
+<pre class="code"><span class="c-m">$</span> sj trace
+trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span class="c-a">1 orphans</span>, 0 without ID
+<span class="c-r">gap</span>     AUTH-004 Refresh a revoked token
+        <span class="c-m">(openspec/specs/auth/spec.md:31)</span>
+<span class="c-a">orphan</span>  AUTH-009 <span class="c-m">← tests/auth.rs</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap rob">
+    <div>
+      <p class="eyebrow">The moat · red-on-base</p>
+      <h2>A test that passes on the old code didn't drive the change.</h2>
+      <p class="section-lede" style="margin-bottom:0">That's the check no other spec-driven tool makes. <code>sj gate</code> proves your tests were red before they were green, in CI, every pull request.</p>
+      <ul>
+        <li><strong>Checks out the base commit</strong> and overlays only the change's test files.</li>
+        <li><strong>Requires each new test to fail there</strong>, then pass on the PR head.</li>
+        <li><strong>Bounded cost:</strong> only the changed tests run twice.</li>
+        <li><strong>Honest escape hatches:</strong> refactors and chores declare an exemption with a one-line reason, shown in the PR.</li>
+      </ul>
+    </div>
+    <div class="rob-diagram" aria-label="Red-on-base: new tests fail on the base commit and pass on the PR head">
+      <div class="lane">
+        <span class="label">base</span>
+        <div class="chips"><span class="chip">old code</span><span class="chip new">+ new tests</span></div>
+        <span class="verdict red">✗ RED</span>
+      </div>
+      <div class="lane">
+        <span class="label">PR head</span>
+        <div class="chips"><span class="chip new">new code</span><span class="chip new">+ new tests</span></div>
+        <span class="verdict green">✓ GREEN</span>
+      </div>
+<pre class="code" style="margin-top:14px"><span class="c-m">$</span> sj gate --base origin/main
+<span class="c-r">gate: fail — 1 problem</span>
+<span class="c-r">green-on-base</span> AUTH-007 auth_007_rejects_reused_token</pre>
+      <p class="rob-note">Exit codes: 0 pass · 1 fail · 2 error. Drop it into any CI.</p>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <p class="eyebrow">Comparison</p>
+    <h2>The only tool that verifies the spec was <span class="grad-text">built</span>,<br>not just written down.</h2>
+    <p class="section-lede">Most teams stitch two or three of these together. specjutsu is built to replace the stack with one binary, and it reads their specs so you don't start over. Here's where each one stops.</p>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th scope="col"></th>
+            <th scope="col"><a href="https://github.com/github/spec-kit">GitHub Spec Kit</a></th>
+            <th scope="col"><a href="https://github.com/Fission-AI/OpenSpec">OpenSpec</a> + TDD</th>
+            <th scope="col"><a href="https://github.com/obra/superpowers">Superpowers</a></th>
+            <th scope="col">Superpowers + OpenSpec + TDD</th>
+            <th scope="col" class="sj">specjutsu</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Durable spec</th>
+            <td>Strong</td><td>Strongest (delta specs)</td><td class="no">None</td><td>Strong</td>
+            <td class="sj">Strong: OpenSpec-compatible deltas<span class="tag live">LIVE</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Scenario → test trace checked</th>
+            <td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td>
+            <td class="sj"><span class="yes">Yes</span>, <code>sj trace</code><span class="tag live">LIVE</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Proof the test failed first</th>
+            <td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td>
+            <td class="sj"><span class="yes">Yes</span>, red-on-base in <code>sj gate</code><span class="tag live">LIVE</span></td>
+          </tr>
+          <tr>
+            <th scope="row">TDD enforced</th>
+            <td class="no">No</td><td class="no">No (DIY)</td><td>Yes, by prompt</td><td>Yes, loosely tied to spec</td>
+            <td class="sj">Yes, by CI gate<span class="tag live">LIVE</span> + agent hooks<span class="tag soon">v0.3</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Runtime needed</th>
+            <td>Python + uv</td><td>Node 20.19+</td><td>None</td><td>Node</td>
+            <td class="sj">None: single binary<span class="tag live">LIVE</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Reads other tools' specs</th>
+            <td class="no">No</td><td class="no">No</td><td class="no">n/a</td><td class="no">n/a</td>
+            <td class="sj">OpenSpec natively<span class="tag live">LIVE</span> · Spec Kit import<span class="tag soon">v0.5</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Existing projects</th>
+            <td>Via extension</td><td>Best</td><td>Weak</td><td>Good</td>
+            <td class="sj"><code>sj adopt</code>, incremental<span class="tag soon">v0.5</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Monorepo-aware</th>
+            <td>Limited</td><td>Limited</td><td class="no">No</td><td>Limited</td>
+            <td class="sj">Per-package specs and runners<span class="tag soon">v0.5</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Token cost</th>
+            <td>High ceremony</td><td>Low</td><td>Medium</td><td>High (two workflows)</td>
+            <td class="sj">Designed for lowest; public benchmark<span class="tag soon">v0.5</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="tag live" style="margin:0 6px 0 0">LIVE</span>works in v0.2.0 today</span>
+      <span><span class="tag soon" style="margin:0 6px 0 0">v0.x</span>on the public roadmap</span>
+    </div>
+
+    <div class="moat">
+      <div><b>Verification, not prompts</b><span>Markdown workflows are easy to copy. A trace-and-gate engine isn't.</span></div>
+      <div><b>Red-on-base proof</b><span>CI runs new tests against base. No other tool does this.</span></div>
+      <div><b>Zero-migration start</b><span>Your <code>openspec/</code> folders work as-is. Spec Kit import is on the roadmap.</span></div>
+      <div><b>Zero runtime</b><span>One Rust binary. Works in Java, PHP, Go or Python repos.</span></div>
+      <div><b>Token economics</b><span>Deterministic commands return a few lines, not raw logs.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap agents">
+    <div class="art"><img src="assets/mascot.jpg" alt="The specjutsu ninja in neon armor" width="1200" height="896" loading="lazy"></div>
+    <div>
+      <p class="eyebrow">Built for agents</p>
+      <h2>Your agent's sensei.</h2>
+      <p class="section-lede" style="margin-bottom:0">specjutsu never calls an LLM. It's the deterministic referee your agent reports to, and CI calls the same binary, so local and CI results always agree.</p>
+      <div class="agent-list">
+        <span class="first">Claude Code</span><span>Cursor</span><span>Antigravity</span><span>Codex</span><span>GitHub Copilot</span>
+      </div>
+      <ul class="checks">
+        <li><strong>Failures-only output:</strong> a green run prints one line; a red run shows only the failing tests and their scenarios.</li>
+        <li><strong>Machine-readable everything:</strong> every command takes <code>--json</code>.</li>
+        <li><strong>Can't be talked around:</strong> where a tool can't block an edit, the CI gate still refuses unproven work.</li>
+        <li><strong>Any language, any repo:</strong> test runners are adapters. Rust first, then pytest, Jest/Vitest, Go, JUnit, dotnet, PHPUnit and RSpec.</li>
+      </ul>
+      <p style="color:var(--muted);font-size:14px;margin-top:16px">Claude Code adapter lands in v0.3; the other four follow in v0.5.</p>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <p class="eyebrow">Quickstart</p>
+    <h2>From install to a blocking gate<br>in a few minutes.</h2>
+    <p class="section-lede">Prebuilt binaries for macOS, Linux and Windows are on the <a href="https://github.com/nabour-labs/specjutsu/releases">releases page</a>, or build from source.</p>
+    <div class="qs">
+      <div class="qs-card qs-install">
+        <h3><span class="num">1</span>Install</h3>
+        <p>One binary, no runtime. Pick your platform from the release, or build it.</p>
+<pre class="code"><span class="c-m"># prebuilt binary (macOS arm64 shown)</span>
+gh release download v0.2.0 \
+  -R nabour-labs/specjutsu \
+  -p 'sj-aarch64-apple-darwin.tar.gz'
+tar -xzf sj-aarch64-apple-darwin.tar.gz
+install sj-aarch64-apple-darwin/sj ~/.local/bin/
+
+<span class="c-m"># or from source (needs Rust)</span>
+cargo install --tag v0.2.0 \
+  --git https://github.com/nabour-labs/specjutsu \
+  specjutsu
+
+<span class="c-m"># check it</span>
+sj --version</pre>
+      </div>
+      <div class="qs-card qs-run">
+        <h3><span class="num">2</span>Trace locally</h3>
+        <p>See which scenarios have tests and which don't.</p>
+<pre class="code">sj trace          <span class="c-m"># list gaps and orphans</span>
+sj trace --json   <span class="c-m"># for tools and agents</span></pre>
+      </div>
+      <div class="qs-card qs-gate">
+        <h3><span class="num">3</span>Gate every PR</h3>
+        <p>Blocks merges that can't prove red-on-base, then green.</p>
+<pre class="code"><span class="c-m"># .github/workflows/ci.yml</span>
+<span class="c-k">- uses:</span> actions/checkout@v4
+  <span class="c-k">with:</span> { fetch-depth: 0 }
+<span class="c-k">- run:</span> sj gate --base origin/${{ github.base_ref }}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap" class="alt">
+  <div class="wrap">
+    <p class="eyebrow">Roadmap</p>
+    <h2>Built in the open. Built with itself.</h2>
+    <p class="section-lede">specjutsu gates its own repo with its last released binary, so a pull request can never approve itself.</p>
+    <div class="road">
+      <div class="milestone done"><span class="state">shipped</span><div class="v">v0.1</div><p><code>sj trace</code> on OpenSpec + <code>cargo test</code>; CI report.</p></div>
+      <div class="milestone done"><span class="state">shipped</span><div class="v">v0.2</div><p><code>sj gate</code> with red-on-base. Blocking on this repo.</p></div>
+      <div class="milestone next"><span class="state">next</span><div class="v">v0.3</div><p><code>status</code>, <code>next</code>, <code>test</code>, evidence ledger; Claude Code adapter.</p></div>
+      <div class="milestone"><span class="state">launch</span><div class="v">v0.5</div><p>All runners and agents, importers, token benchmark, public launch.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap">
+    <img class="mark" src="assets/sj-mark.png" alt="specjutsu SJ logo" width="120" height="120" loading="lazy">
+    <h2>Stop trusting. Start proving.</h2>
+    <p class="section-lede" style="margin:0 auto 30px">Star the repo to follow the road to v0.5, or send your first PR: adding a test runner or an agent adapter is the intended way in.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/nabour-labs/specjutsu">Star on GitHub</a>
+      <a class="btn" href="https://github.com/nabour-labs/specjutsu/blob/main/CONTRIBUTING.md">Contribute</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 nabour-labs · MIT licensed</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/nabour-labs/specjutsu">GitHub</a>
+      <a href="manual.html">Manual</a>
+      <a href="https://github.com/nabour-labs/specjutsu/releases">Releases</a>
+      <a href="https://github.com/nabour-labs/specjutsu/blob/main/docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md">Design doc</a>
+      <a href="https://github.com/nabour-labs/specjutsu/blob/main/CONTRIBUTING.md">Contributing</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var t = b.getAttribute('data-copy');
+      var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); };
+      if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () {});
+    });
+  });
+</script>
+</body>
+</html>
