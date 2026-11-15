@@ -170,3 +170,29 @@ fn conf_005_nested_packages_resolve_to_the_deepest_one() {
         "apps/api"
     );
 }
+
+#[test]
+fn conf_006_the_written_file_parses_back_to_the_same_config() {
+    let c = load_text(VALID).unwrap();
+    assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
+
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    let d = Config::default_for(dir.path());
+    assert_eq!(Config::parse(&d.to_toml()).unwrap(), d);
+
+    let quoted = Config {
+        spec_root: "spec \"root\" x".into(),
+        ..Config::default_for(dir.path())
+    };
+    assert_eq!(Config::parse(&quoted.to_toml()).unwrap(), quoted);
+}
+
+#[test]
+fn conf_006_a_config_without_packages_is_three_lines() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        Config::default_for(dir.path()).to_toml(),
+        "schema = 1\nspec_root = \"openspec\"\nmode = \"guided\"\n"
+    );
+}
