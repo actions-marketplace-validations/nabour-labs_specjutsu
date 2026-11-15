@@ -482,6 +482,7 @@ dependencies = [
  "ignore",
  "regex",
  "serde",
+ "serde_json",
  "sj-runners",
  "tempfile",
 ]
@@ -493,6 +494,7 @@ dependencies = [
  "anyhow",
  "regex",
  "serde",
+ "tempfile",
 ]
 
 [[package]]

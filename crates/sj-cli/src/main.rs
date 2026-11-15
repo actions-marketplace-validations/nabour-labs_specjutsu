@@ -47,6 +47,29 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Run the tests (all, one package, or one scenario's); print failures only; record the run.
+    Test {
+        /// A scenario ID (e.g. GATE-004) or a Cargo package name. Omit to run everything.
+        scope: Option<String>,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long, default_value = "openspec")]
+        spec_root: PathBuf,
+        #[arg(long)]
+        json: bool,
+        /// Do not write the run to the evidence ledger.
+        #[arg(long)]
+        no_ledger: bool,
+    },
+    /// Per-scenario evidence from recorded runs: latest result and red-before-green.
+    Ledger {
+        /// Report only this scenario ID.
+        id: Option<String>,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -99,6 +122,14 @@ fn run() -> Result<ExitCode> {
                 ExitCode::from(1)
             })
         }
+        Command::Test {
+            scope,
+            root,
+            spec_root,
+            json,
+            no_ledger,
+        } => test_cmd(scope, root, spec_root, json, no_ledger),
+        Command::Ledger { id, root, json } => ledger_cmd(id, root, json),
         Command::Trace {
             root,
             spec_root,
@@ -120,6 +151,101 @@ fn run() -> Result<ExitCode> {
             })
         }
     }
+}
+
+fn test_cmd(
+    scope: Option<String>,
+    root: PathBuf,
+    spec_root: PathBuf,
+    json: bool,
+    no_ledger: bool,
+) -> Result<ExitCode> {
+    use sj_core::ledger::{self, Recorded};
+    use sj_core::run::{run_tests, Scope};
+
+    let run = run_tests(&root, &spec_root, &Scope::parse(scope.as_deref()))?;
+    if !no_ledger {
+        match ledger::record(&root, &run) {
+            Ok(Recorded::Records(_)) => {}
+            Ok(Recorded::NotGit) => eprintln!("warn    not a git repository; run not recorded"),
+            Err(e) => eprintln!("warn    run not recorded: {e:#}"),
+        }
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&run)?);
+    } else if run.build_failed {
+        println!("test: fail — build failed");
+        for l in &run.build_errors {
+            println!("        {l}");
+        }
+    } else {
+        let mut counts = Vec::new();
+        if run.failed > 0 {
+            counts.push(format!("{} failed", run.failed));
+        }
+        counts.push(format!("{} passed", run.passed));
+        if run.ignored > 0 {
+            counts.push(format!("{} ignored", run.ignored));
+        }
+        let verdict = if run.pass { "pass" } else { "fail" };
+        println!("test: {verdict} — {}", counts.join(", "));
+        for t in run
+            .tests
+            .iter()
+            .filter(|t| t.result == sj_core::run::Outcome::Failed)
+        {
+            if t.ids.is_empty() {
+                println!("fail    {}", t.path);
+            } else {
+                println!("fail    {}  {}", t.path, t.ids.join(", "));
+            }
+            if let Some(ex) = &t.excerpt {
+                for l in &ex.lines {
+                    println!("        {l}");
+                }
+                if ex.omitted > 0 {
+                    println!("        … {} more", plural(ex.omitted, "line"));
+                }
+            }
+        }
+    }
+    Ok(if run.pass {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
+}
+
+fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode> {
+    let loaded = sj_core::ledger::load(&root)?;
+    if loaded.skipped > 0 {
+        eprintln!(
+            "warn    skipped {} unreadable ledger {}",
+            loaded.skipped,
+            if loaded.skipped == 1 { "line" } else { "lines" }
+        );
+    }
+    let mut report = sj_core::ledger::report(&loaded.records);
+    if let Some(id) = &id {
+        report.retain(|s| &s.id == id);
+    }
+    if json {
+        let v = serde_json::json!({ "scenarios": report, "skipped": loaded.skipped });
+        println!("{}", serde_json::to_string_pretty(&v)?);
+    } else if let (Some(id), true) = (&id, report.is_empty()) {
+        println!("ledger: no records for {id}");
+    } else {
+        let proven = report.iter().filter(|s| s.proven).count();
+        println!(
+            "ledger: {}, {proven} proven red-before-green",
+            plural(report.len(), "scenario")
+        );
+        for s in &report {
+            let tag = if s.proven { "proven" } else { "open" };
+            println!("{tag:<8}{}  latest {}", s.id, s.latest.as_str());
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn plural(n: usize, word: &str) -> String {

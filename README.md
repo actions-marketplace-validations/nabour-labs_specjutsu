@@ -29,6 +29,9 @@ cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specju
 sj trace            # map scenario IDs in openspec/ to tests; list gaps
 sj trace --json     # machine-readable
 sj gate --base origin/main   # CI: changed scenarios tested, red on base, green on head
+sj test             # run the tests; print failures only; record the run
+sj test GATE-004    # run only the tests mapped to one scenario (or pass a package name)
+sj ledger           # per scenario: latest result, red-before-green proven or not
 ```
 
 ## How tracing works
@@ -64,6 +67,20 @@ overlays only the change's `tests/` files, and requires each new test to fail
 there. A test that passes on the old code didn't drive the change. Refactors and
 chores declare an exemption with a reason (`Exempt: refactor — <why>` in the
 change's `proposal.md`).
+
+## Test runs and the evidence ledger
+
+`sj test` runs `cargo test` and prints one summary line when everything
+passes. When something fails, it lists each failing test with its scenario IDs
+and the first 20 lines of its output. A compile error is reported as
+`build failed` with the compiler's error lines, never as an empty run. Exit
+codes match the gate: 0 pass, 1 fail, 2 error. Pass `--json` for tools.
+
+Each run appends one line per test to `.specjutsu/ledger/runs.jsonl`
+(gitignored, local only). Each line holds the run ID, the time, the git tree hash
+of the working tree, the test, its scenario IDs and the result. `sj ledger`
+reads it back. A scenario is **proven** when a failing run was recorded before
+a passing one, on different code. Pass `--no-ledger` to skip recording.
 
 ## Roadmap
 

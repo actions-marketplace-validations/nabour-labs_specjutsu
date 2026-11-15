@@ -1,5 +1,6 @@
 //! Thin wrapper over the `git` CLI.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -25,8 +26,14 @@ impl Git {
 
     /// Run git with `args` in the repo root and return stdout.
     pub fn run(&self, args: &[&str]) -> Result<String> {
+        self.run_env(args, &[])
+    }
+
+    /// Like `run`, with extra environment variables.
+    pub fn run_env(&self, args: &[&str], env: &[(&str, &OsStr)]) -> Result<String> {
         let out = Command::new("git")
             .args(args)
+            .envs(env.iter().copied())
             .current_dir(&self.root)
             .output()
             .context("running git (is it installed and on PATH?)")?;
@@ -112,5 +119,26 @@ impl Git {
         let p = path.to_string_lossy();
         self.run(&["worktree", "remove", "--force", &p])?;
         self.run(&["worktree", "prune"]).map(|_| ())
+    }
+
+    /// Whether the root is inside a git work tree.
+    pub fn is_repo(&self) -> bool {
+        self.run(&["rev-parse", "--is-inside-work-tree"])
+            .is_ok_and(|o| o.trim() == "true")
+    }
+
+    /// Tree hash of the working tree as it is now: tracked, modified and untracked-but-not-ignored
+    /// files. Uses a throwaway copy of the index, so the user's index and files are never touched.
+    pub fn worktree_tree_hash(&self) -> Result<String> {
+        let real = self.run(&["rev-parse", "--git-path", "index"])?;
+        let real = self.root.join(real.trim());
+        let dir = tempfile::tempdir().context("creating a temporary index directory")?;
+        let tmp = dir.path().join("index");
+        if real.is_file() {
+            std::fs::copy(&real, &tmp).context("copying the git index")?;
+        }
+        let env = [("GIT_INDEX_FILE", tmp.as_os_str())];
+        self.run_env(&["add", "-A", "--", ":/"], &env)?;
+        Ok(self.run_env(&["write-tree"], &env)?.trim().to_string())
     }
 }
