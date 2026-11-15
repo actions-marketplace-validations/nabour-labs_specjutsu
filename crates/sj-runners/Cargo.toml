@@ -11,3 +11,6 @@ rust-version.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 regex.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
