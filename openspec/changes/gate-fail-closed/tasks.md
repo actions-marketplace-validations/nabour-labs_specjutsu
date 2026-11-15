@@ -17,4 +17,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. Docs and self-hosting
 
-- [ ] 4.1 Update the README "How the gate works" section (unidentified scenarios, non-source list, supported runners) and add a CHANGELOG `Unreleased` entry marking the classification change as breaking. Verify: built `sj gate --base origin/main` and `sj gate --since <root commit>` pass on this repo, and the false-pass repro from `docs/migration-readiness.md` now fails with exit 2.
+- [x] 4.1 Update the README "How the gate works" section (unidentified scenarios, non-source list, supported runners) and add a CHANGELOG `Unreleased` entry marking the classification change as breaking. Verify: built `sj gate --base origin/main` and `sj gate --since <root commit>` pass on this repo, and the false-pass repro from `docs/migration-readiness.md` now fails with exit 2.
