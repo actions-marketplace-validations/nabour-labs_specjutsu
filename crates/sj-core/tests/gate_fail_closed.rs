@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 
 use std::path::PathBuf;
 
-use sj_core::gate::{evaluate, is_impl_file, run, Input, Options};
+use sj_core::gate::{evaluate, is_impl_file, run, Exemption, Input, Options};
 use sj_core::trace::Report;
+use sj_runners::cargo::{Outcome, Run, TestResult};
 use support::Repo;
 
 fn input() -> Input {
@@ -242,4 +243,49 @@ fn gate_025_moving_or_copying_a_scenario_without_an_id_is_not_a_change() {
     repo.commit("docs(openspec): archive auth");
     let r = run(&opts(&repo)).unwrap();
     assert!(r.pass, "{:?}", r.failures);
+}
+
+// ---------- exempted source changes ----------
+
+#[test]
+fn gate_029_chore_exemption_does_not_let_a_failing_test_through() {
+    let mut i = input();
+    i.changed_files = vec!["src/auth.rs".into()];
+    i.exemptions = vec![Exemption {
+        kind: "chore".into(),
+        reason: "bump token lifetime".into(),
+    }];
+    i.head_run = Some(Run {
+        success: false,
+        results: vec![
+            TestResult {
+                path: "tests::a".into(),
+                outcome: Outcome::Passed,
+            },
+            TestResult {
+                path: "tests::b".into(),
+                outcome: Outcome::Failed,
+            },
+        ],
+    });
+    let r = evaluate(&i);
+    assert!(!r.pass);
+    assert!(has(&r.failures, "failing tests::b"), "{:?}", r.failures);
+}
+
+#[test]
+fn gate_029_exempted_source_change_runs_the_suite_at_head() {
+    let repo = Repo::with_lib(ADD_OK);
+    repo.write("tests/math.rs", ADD_TEST);
+    repo.commit("test: math");
+    repo.branch("feature");
+    repo.write("src/lib.rs", ADD_BUG);
+    repo.commit("chore: tweak\n\nSpecjutsu-Exempt: chore — bump token lifetime");
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    assert!(
+        has(&r.failures, "failing math_001_adds"),
+        "{:?}",
+        r.failures
+    );
 }
