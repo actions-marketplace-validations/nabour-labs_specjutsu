@@ -115,7 +115,10 @@ tests = ["apps/web/**/*.test.ts"]
     assert!(e.contains("specjutsu.toml"), "{e}");
     assert!(e.contains("apps/web"), "{e}");
     assert!(e.contains("jestt"), "{e}");
-    assert!(e.contains("cargo, jest, playwright, pytest, vitest"), "{e}");
+    assert!(
+        e.contains("cargo, jest, junit, playwright, pytest, vitest"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -195,4 +198,30 @@ fn conf_006_a_config_without_packages_is_three_lines() {
         Config::default_for(dir.path()).to_toml(),
         "schema = 1\nspec_root = \"openspec\"\nmode = \"guided\"\n"
     );
+}
+
+#[test]
+fn conf_003_junit_suites_need_a_command_and_a_report() {
+    let suite = |body: &str| {
+        format!(
+            "schema = 1\n\n[[package]]\npath = \"svc\"\nsources = []\n\n[[package.suite]]\n{body}"
+        )
+    };
+    let e = err_text(&suite("runner = \"junit\"\nreport = \"r.xml\"\n"));
+    assert!(e.contains("svc") && e.contains("command"), "{e}");
+    let e = err_text(&suite("runner = \"junit\"\ncommand = \"make test\"\n"));
+    assert!(e.contains("svc") && e.contains("report"), "{e}");
+    let e = err_text(&suite("runner = \"vitest\"\nreport = \"r.xml\"\n"));
+    assert!(e.contains("report") && e.contains("junit"), "{e}");
+
+    let c = load_text(&suite(
+        "runner = \"junit\"\ncommand = \"make test\"\nreport = \"build/junit.xml\"\nenv = { CI = \"1\" }\n",
+    ))
+    .unwrap();
+    assert_eq!(c.packages[0].suites[0].runner, Runner::Junit);
+    assert_eq!(
+        c.packages[0].suites[0].command.as_deref(),
+        Some("make test")
+    );
+    assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
 }
