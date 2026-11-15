@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `sj test [SCOPE]`: run `cargo test` for the workspace, one package or one
+  scenario's mapped tests; failures-only output with scenario IDs and excerpts;
+  build failures reported as such; `--json`; exit codes 0/1/2.
+- Evidence ledger: every `sj test` run is appended to
+  `.specjutsu/ledger/runs.jsonl` with the working-tree hash (`--no-ledger` to skip).
+- `sj ledger [ID]`: per-scenario latest result and red-before-green proof from
+  recorded runs; `--json`.
+
 ## [0.2.0] - 2026-11-13
 
 ### Added

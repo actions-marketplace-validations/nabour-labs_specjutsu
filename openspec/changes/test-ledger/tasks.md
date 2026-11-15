@@ -22,9 +22,9 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. CLI (sj-cli)
 
-- [ ] 4.1 `sj test [SCOPE] [--root --spec-root --json --no-ledger]`: failures-only text, JSON, exit codes 0/1/2, a warning and no recording outside git (RUN-005, RUN-006, RUN-009, RUN-010, LEDGER-006, LEDGER-007). Verify: `crates/sj-cli/tests/test_cmd.rs` with `assert_cmd` on fixture projects.
-- [ ] 4.2 `sj ledger [ID] [--json]` compact report and JSON (LEDGER-008, LEDGER-011). Verify: `crates/sj-cli/tests/ledger_cmd.rs`.
-- [ ] 4.3 Document `sj test` and `sj ledger` in README.md (commands and the ledger's location and format) and add a CHANGELOG `Unreleased` entry. Verify: the README examples run as written against this repo.
+- [x] 4.1 `sj test [SCOPE] [--root --spec-root --json --no-ledger]`: failures-only text, JSON, exit codes 0/1/2, a warning and no recording outside git (RUN-005, RUN-006, RUN-009, RUN-010, LEDGER-006, LEDGER-007). Verify: `crates/sj-cli/tests/test_cmd.rs` with `assert_cmd` on fixture projects.
+- [x] 4.2 `sj ledger [ID] [--json]` compact report and JSON (LEDGER-008, LEDGER-011). Verify: `crates/sj-cli/tests/ledger_cmd.rs`.
+- [x] 4.3 Document `sj test` and `sj ledger` in README.md (commands and the ledger's location and format) and add a CHANGELOG `Unreleased` entry. Verify: the README examples run as written against this repo.
 
 ## 5. Self-hosting
 

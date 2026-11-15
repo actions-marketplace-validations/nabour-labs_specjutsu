@@ -7,7 +7,8 @@ use std::sync::OnceLock;
 use anyhow::{bail, Result};
 use regex::Regex;
 use serde::Serialize;
-use sj_runners::cargo::{cargo_test_detailed, Outcome};
+use sj_runners::cargo::cargo_test_detailed;
+pub use sj_runners::cargo::Outcome;
 
 use crate::{spec, testscan, trace};
 
