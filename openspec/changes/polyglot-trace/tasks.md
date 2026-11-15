@@ -20,4 +20,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 5. Docs and self-hosting
 
-- [ ] 5.1 Update the README "How tracing works" section with the JS/TS and Python link forms, update this repo's `specjutsu.toml` cargo glob, and add a CHANGELOG entry. Verify: built `sj trace` and `sj gate --base origin/main` pass on this repo. `sj trace` on scratch copies of the three migration targets' adopted configs (read-only on the projects) reports tests found per suite, and the misses get noted in the PR.
+- [x] 5.1 Update the README "How tracing works" section with the JS/TS and Python link forms, update this repo's `specjutsu.toml` cargo glob, and add a CHANGELOG entry. Verify: built `sj trace` and `sj gate --base origin/main` pass on this repo. `sj trace` on scratch copies of the three migration targets' adopted configs (read-only on the projects) reports tests found per suite, and the misses get noted in the PR.
