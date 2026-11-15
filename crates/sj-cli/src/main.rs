@@ -19,9 +19,9 @@ enum Command {
         /// Repository root (defaults to the current directory).
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        /// Spec root relative to the repository root.
-        #[arg(long, default_value = "openspec")]
-        spec_root: PathBuf,
+        /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
         /// Print JSON instead of the compact report.
         #[arg(long)]
         json: bool,
@@ -39,8 +39,8 @@ enum Command {
         since: Option<String>,
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        #[arg(long, default_value = "openspec")]
-        spec_root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
         /// Warn instead of failing when a test cannot be overlaid on base.
         #[arg(long)]
         allow_unverifiable: bool,
@@ -53,13 +53,37 @@ enum Command {
         scope: Option<String>,
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        #[arg(long, default_value = "openspec")]
-        spec_root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,
         /// Do not write the run to the evidence ledger.
         #[arg(long)]
         no_ledger: bool,
+    },
+    /// Start a project: write specjutsu.toml and create the spec folders.
+    Init {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// Replace an existing specjutsu.toml.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Detect an existing project's packages and runners and write specjutsu.toml.
+    Adopt {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// Print the config instead of writing it.
+        #[arg(long)]
+        dry_run: bool,
+        /// Replace an existing specjutsu.toml.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Check the setup: project file, packages, runner executables and spec folders.
+    Doctor {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
     },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
@@ -92,6 +116,7 @@ fn run() -> Result<ExitCode> {
             allow_unverifiable,
             json,
         } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
             let report = match (base, since) {
                 (_, Some(since)) => sj_core::gate::history(&root, &since)?,
                 (Some(base), None) => sj_core::gate::run(&sj_core::gate::Options {
@@ -128,14 +153,39 @@ fn run() -> Result<ExitCode> {
             spec_root,
             json,
             no_ledger,
-        } => test_cmd(scope, root, spec_root, json, no_ledger),
-        Command::Ledger { id, root, json } => ledger_cmd(id, root, json),
+        } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
+            test_cmd(scope, root, spec_root, json, no_ledger)
+        }
+        Command::Init { root, force } => init_cmd(&root, force),
+        Command::Doctor { root } => {
+            let problems = sj_core::doctor::check(&root);
+            if problems.is_empty() {
+                println!("doctor: ok");
+                return Ok(ExitCode::SUCCESS);
+            }
+            println!("doctor: {}", plural(problems.len(), "problem"));
+            for p in &problems {
+                println!("{p}");
+            }
+            Ok(ExitCode::from(1))
+        }
+        Command::Adopt {
+            root,
+            dry_run,
+            force,
+        } => adopt_cmd(&root, dry_run, force),
+        Command::Ledger { id, root, json } => {
+            sj_core::config::load(&root)?;
+            ledger_cmd(id, root, json)
+        }
         Command::Trace {
             root,
             spec_root,
             json,
             strict,
         } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
             let scenarios = sj_core::spec::load_scenarios(&root.join(&spec_root))?;
             let tests = sj_core::testscan::scan_tree(&root)?;
             let report = sj_core::trace::build_report(&scenarios, &tests);
@@ -151,6 +201,68 @@ fn run() -> Result<ExitCode> {
             })
         }
     }
+}
+
+fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
+    use sj_core::config::{Config, FILE};
+
+    let file = root.join(FILE);
+    if file.exists() && !force {
+        anyhow::bail!("{FILE} already exists; pass --force to replace it");
+    }
+    let config = Config::default_for(root);
+    std::fs::write(&file, config.to_toml())?;
+    let spec_root = root.join(&config.spec_root);
+    for dir in ["specs", "changes"] {
+        std::fs::create_dir_all(spec_root.join(dir))?;
+    }
+    println!(
+        "init: wrote {FILE} (spec root {}, mode {}, {})",
+        config.spec_root,
+        config.mode.as_str(),
+        plural(config.packages.len(), "package")
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+fn adopt_cmd(root: &Path, dry_run: bool, force: bool) -> Result<ExitCode> {
+    use sj_core::config::FILE;
+
+    let file = root.join(FILE);
+    if !dry_run && file.exists() && !force {
+        anyhow::bail!("{FILE} already exists; pass --force to replace it, or --dry-run to compare");
+    }
+    let detected = sj_core::adopt::detect(root)?;
+    let config = &detected.config;
+    if dry_run {
+        print!("{}", config.to_toml());
+    } else {
+        std::fs::write(&file, config.to_toml())?;
+        println!(
+            "adopt: wrote {FILE} (spec root {}, {})",
+            config.spec_root,
+            plural(config.packages.len(), "package")
+        );
+        for p in &config.packages {
+            let runners: Vec<_> = p.suites.iter().map(|s| s.runner.as_str()).collect();
+            let runners = if runners.is_empty() {
+                "-".to_string()
+            } else {
+                runners.join(", ")
+            };
+            println!("package {}  {runners}", p.path);
+        }
+    }
+    for n in &detected.notes {
+        eprintln!("note    {n}");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Load the project file (failing on a bad one) and pick the spec root: the flag, then the file.
+fn spec_root_for(root: &Path, flag: Option<PathBuf>) -> Result<PathBuf> {
+    let config = sj_core::config::load(root)?;
+    Ok(flag.unwrap_or_else(|| PathBuf::from(config.spec_root)))
 }
 
 fn test_cmd(

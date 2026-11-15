@@ -1,0 +1,11 @@
+schema = 1
+spec_root = "openspec"
+mode = "guided"
+
+[[package]]
+path = "."
+sources = ["**/*.rs"]
+
+[[package.suite]]
+runner = "cargo"
+tests = ["**/tests/**/*.rs"]

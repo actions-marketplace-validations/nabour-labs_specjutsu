@@ -92,3 +92,48 @@ pub fn spec_md(scenarios: &[(&str, &str)]) -> String {
     }
     s
 }
+
+/// The CONF-008 layout: a pnpm workspace (`apps/*`, `packages/*`) with two vitest apps, one of
+/// them also on Playwright, a UI package with no runner, and a uv/pytest service outside the
+/// workspace. `node_modules` holds a package that must be ignored.
+pub fn monorepo(root: &Path) {
+    let w = |rel: &str, content: &str| {
+        let p = root.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, content).unwrap();
+    };
+    w(
+        "package.json",
+        r#"{ "name": "mono", "private": true, "devDependencies": { "turbo": "^2" } }"#,
+    );
+    w(
+        "pnpm-workspace.yaml",
+        "# workspace\npackages:\n  - 'apps/*'\n  - \"packages/*\"\n\ncatalog:\n  react: ^19\n",
+    );
+    w(
+        "apps/api/package.json",
+        r#"{ "name": "api", "devDependencies": { "vitest": "^3" } }"#,
+    );
+    w(
+        "apps/app/package.json",
+        r#"{ "name": "app", "devDependencies": { "vitest": "^3", "@playwright/test": "^1" } }"#,
+    );
+    w(
+        "apps/app/playwright.config.ts",
+        "import { defineConfig } from '@playwright/test'\nexport default defineConfig({ retries: 1 })\n",
+    );
+    w(
+        "packages/ui/package.json",
+        r#"{ "name": "ui", "dependencies": { "react": "^19" } }"#,
+    );
+    w(
+        "python/worker/pyproject.toml",
+        "[project]\nname = \"worker\"\ndependencies = [\"httpx\"]\n\n\
+         [dependency-groups]\ndev = [\"pytest>=8\", \"ruff\"]\n",
+    );
+    w(
+        "node_modules/vitest/package.json",
+        r#"{ "name": "vitest", "devDependencies": { "vitest": "*" } }"#,
+    );
+    w("openspec/specs/.gitkeep", "");
+}
