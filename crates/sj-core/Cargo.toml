@@ -11,6 +11,7 @@ rust-version.workspace = true
 sj-runners.workspace = true
 anyhow.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 ignore.workspace = true
 regex.workspace = true
 tempfile.workspace = true

@@ -15,10 +15,10 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Ledger (sj-core)
 
-- [ ] 3.1 Working-tree hash through a throwaway index (LEDGER-004, LEDGER-005). Verify: in a fixture repo, an edit changes the hash, and `git status --porcelain` is byte-identical before and after.
-- [ ] 3.2 `Record`, a single-write append to `.specjutsu/ledger/runs.jsonl`, and a load that skips and counts bad lines (LEDGER-001, LEDGER-002, LEDGER-012). Verify: `crates/sj-core/tests/ledger.rs`.
-- [ ] 3.3 Record build failures against the mapped tests for scenario scopes, and nothing for package or workspace scopes (LEDGER-003). Verify: a fixture with a compile error under `sj test`-equivalent core calls.
-- [ ] 3.4 Per-scenario report: latest result, and red-before-green proven on a different tree in file order (LEDGER-008, LEDGER-009, LEDGER-010). Verify: pure tests on hand-built record lists.
+- [x] 3.1 Working-tree hash through a throwaway index (LEDGER-004, LEDGER-005). Verify: in a fixture repo, an edit changes the hash, and `git status --porcelain` is byte-identical before and after.
+- [x] 3.2 `Record`, a single-write append to `.specjutsu/ledger/runs.jsonl`, and a load that skips and counts bad lines (LEDGER-001, LEDGER-002, LEDGER-012). Verify: `crates/sj-core/tests/ledger.rs`.
+- [x] 3.3 Record build failures against the mapped tests for scenario scopes, and nothing for package or workspace scopes (LEDGER-003). Verify: a fixture with a compile error under `sj test`-equivalent core calls.
+- [x] 3.4 Per-scenario report: latest result, and red-before-green proven on a different tree in file order (LEDGER-008, LEDGER-009, LEDGER-010). Verify: pure tests on hand-built record lists.
 
 ## 4. CLI (sj-cli)
 
