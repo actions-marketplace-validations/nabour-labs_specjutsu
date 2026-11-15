@@ -22,4 +22,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 5. Docs and self-hosting
 
-- [ ] 5.1 Run the built `sj adopt` on this repo and commit its `specjutsu.toml` (one root package, `cargo` suite). Add a README section on the project file and the three commands, and a CHANGELOG `Unreleased` entry. Verify: `sj doctor` prints `doctor: ok`, `sj trace` and `sj gate --base origin/main` pass, and `sj adopt --dry-run` on a scratch copy of the CONF-008 fixture matches the README example.
+- [x] 5.1 Run the built `sj adopt` on this repo and commit its `specjutsu.toml` (one root package, `cargo` suite). Add a README section on the project file and the three commands, and a CHANGELOG `Unreleased` entry. Verify: `sj doctor` prints `doctor: ok`, `sj trace` and `sj gate --base origin/main` pass, and `sj adopt --dry-run` on a scratch copy of the CONF-008 fixture matches the README example.

@@ -18,6 +18,16 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `specjutsu.toml`: the project file, with `schema`, `spec_root`, `mode` and
+  packages with test suites. Every command reads it, rejects unknown keys and
+  runners (exit 2), and `--spec-root` overrides it. Without one, behaviour is
+  unchanged.
+- `sj init [--force]`: write `specjutsu.toml` and create the spec folders.
+- `sj adopt [--dry-run] [--force]`: detect Cargo, pnpm, npm, yarn and
+  `pyproject.toml` packages and the `cargo`, `vitest`, `jest`, `pytest` and
+  `playwright` runners, and write them to `specjutsu.toml`.
+- `sj doctor`: report config errors, packages without a runner, missing runner
+  executables and missing spec folders; exit 1 when it finds any.
 - `sj test [SCOPE]`: run `cargo test` for the workspace, one package or one
   scenario's mapped tests; failures-only output with scenario IDs and excerpts;
   build failures reported as such; `--json`; exit codes 0/1/2.

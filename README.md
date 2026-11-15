@@ -40,6 +40,9 @@ sj gate --base origin/main   # CI: changed scenarios tested, red on base, green 
 sj test             # run the tests; print failures only; record the run
 sj test GATE-004    # run only the tests mapped to one scenario (or pass a package name)
 sj ledger           # per scenario: latest result, red-before-green proven or not
+sj init             # new project: write specjutsu.toml, create openspec/specs and changes
+sj adopt --dry-run  # existing project: detect packages and runners, print the config
+sj doctor           # check the config, runner executables and spec folders
 ```
 
 ## How tracing works
@@ -85,6 +88,60 @@ or edited scenario without an ID fails as `unidentified`. Existing scenarios
 without IDs are counted in one warning. The only supported runner today is
 `cargo`, so the gate exits 2 in a repository without a root `Cargo.toml`
 instead of passing changes it can't test.
+
+## The project file
+
+`specjutsu.toml` at the repository root says where the specs are and which
+packages and test suites the project has. Without one, every command uses
+`openspec/` and, when there is a root `Cargo.toml`, one Cargo suite at the root.
+
+Nobody should write it by hand. `sj init` writes it for a new project. `sj adopt`
+reads an existing one's manifests (Cargo, pnpm, npm and yarn workspaces,
+`pyproject.toml`) and config files, and never runs a tool. It detects `cargo`,
+`vitest`, `jest`, `pytest` and `playwright`. For a pnpm monorepo with a uv
+service, `sj adopt --dry-run` prints:
+
+```toml
+schema = 1
+spec_root = "openspec"
+mode = "guided"
+
+[[package]]
+path = "apps/app"
+sources = ["apps/app/**"]
+
+[[package.suite]]
+runner = "vitest"
+tests = ["apps/app/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}"]
+
+[[package.suite]]
+runner = "playwright"
+tests = ["apps/app/e2e/**"]
+
+[[package]]
+path = "python/worker"
+sources = ["python/worker/**"]
+
+[[package.suite]]
+runner = "pytest"
+tests = ["python/worker/**/test_*.py", "python/worker/**/*_test.py"]
+```
+
+Paths and globs are relative to the repository root and use forward slashes on
+every OS. A file belongs to the package with the longest matching path. A
+package with no runner is written with no suites, and adopt reports it as
+`no runner detected: <path>`. Both commands refuse to replace an existing file
+without `--force`.
+
+Every command reads the file first. An unknown key or runner exits 2 and names
+the problem. `--spec-root` still overrides `spec_root`. `sj doctor` lists config
+errors, packages without a runner, runners that are not installed, and missing
+spec folders, one per line. It never installs anything: pytest is checked on
+`PATH` or with `uv run --no-sync`, and Node runners in `node_modules/.bin`.
+
+Today only `spec_root` changes what `trace`, `gate` and `test` do. They read the
+packages and suites when the TypeScript and Python runners land. Until then they
+still run `cargo test` at the root.
 
 ## Test runs and the evidence ledger
 
