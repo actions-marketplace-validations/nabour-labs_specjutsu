@@ -26,6 +26,7 @@ fn input() -> Input {
         head_run: None,
         base: BTreeMap::new(),
         allow_unverifiable: false,
+        spec_root: "openspec".into(),
     }
 }
 
