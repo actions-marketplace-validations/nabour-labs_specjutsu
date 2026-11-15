@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>specjutsu manual</title>
+<meta name="description" content="How to use specjutsu: install, scenario IDs, your first proven change, CI setup, agent setup, exemptions and the command reference.">
+<meta property="og:title" content="specjutsu manual">
+<meta property="og:description" content="Install, your first proven change, CI setup, agent setup and the command reference.">
+<meta property="og:image" content="https://nabour-labs.github.io/specjutsu/assets/og.jpg">
+<meta property="og:url" content="https://nabour-labs.github.io/specjutsu/manual.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0716">
+<link rel="icon" type="image/png" href="assets/sj-mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<style>
+  .doc { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 56px; padding-top: 48px; padding-bottom: 96px; }
+  .toc { position: sticky; top: 86px; align-self: start; max-height: calc(100vh - 110px); overflow-y: auto; font-size: 14.5px; }
+  .toc p { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--magenta); margin: 0 0 12px; }
+  .toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--muted); border-left: 2px solid transparent; }
+  .toc a::before { content: counter(toc, decimal-leading-zero) "  "; font-family: var(--mono); font-size: 11.5px; color: #6f6894; }
+  .toc a:hover { color: var(--text); text-decoration: none; background: var(--panel); }
+  .toc a.active { color: var(--text); background: var(--panel); border-left-color: var(--cyan); }
+
+  .prose { min-width: 0; }
+  .prose > header { margin-bottom: 36px; }
+  .prose h1 { font-size: clamp(36px, 5.5vw, 56px); margin: 10px 0 14px; }
+  .prose section { padding: 0; margin: 0 0 64px; scroll-margin-top: 84px; }
+  .prose h2 { font-size: clamp(26px, 3.4vw, 34px); margin-bottom: 14px; }
+  .prose h3 { font-size: 19px; margin: 30px 0 10px; }
+  .prose p, .prose li { color: #cdc8e4; }
+  .prose p { margin: 0 0 14px; }
+  .prose ul, .prose ol.steps-list { padding-left: 22px; margin: 0 0 16px; }
+  .prose li { margin-bottom: 6px; }
+  .prose strong { color: var(--text); }
+  .prose :not(pre) > code { font-size: .88em; background: var(--panel-2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; color: #f0d9ff; }
+  .prose pre.code { margin: 0 0 18px; }
+  .lead { font-size: 19px; color: var(--muted) !important; max-width: 720px; }
+
+  .callout { border: 1px solid var(--line); border-left: 3px solid var(--cyan); background: var(--panel); border-radius: 10px; padding: 14px 18px; margin: 0 0 18px; }
+  .callout.warn { border-left-color: var(--amber); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout b { color: var(--text); }
+
+  .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; margin: 0 0 18px; background: var(--panel); }
+  .tbl table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 560px; }
+  .tbl th, .tbl td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; color: #cdc8e4; }
+  .tbl thead th { background: var(--bg-2); color: var(--muted); font-size: 13px; font-weight: 600; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl td:first-child { white-space: nowrap; }
+
+  .badge { display: inline-block; font: 600 10.5px var(--mono); letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; vertical-align: 2px; white-space: nowrap; }
+  .badge.live { color: var(--green); background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.35); }
+  .badge.next { color: var(--cyan); background: rgba(34,211,238,.1); border: 1px solid rgba(34,211,238,.35); }
+  .badge.plan { color: var(--amber); background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3); }
+
+  .flow { counter-reset: flow; list-style: none; padding: 0; margin: 0 0 18px; }
+  .flow > li { counter-increment: flow; position: relative; padding: 0 0 6px 46px; margin: 0 0 18px; }
+  .flow > li::before { content: counter(flow); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); color: #0b0716; font: 700 13px var(--mono); }
+  .flow > li::after { content: ""; position: absolute; left: 14px; top: 36px; bottom: -14px; width: 2px; background: var(--line); }
+  .flow > li:last-child::after { display: none; }
+  .flow h3 { margin: 3px 0 8px; }
+
+  .cmd { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 18px 20px; margin: 0 0 16px; }
+  .cmd h3 { margin: 0 0 6px; font-family: var(--mono); font-size: 17px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .cmd dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 12px 0 0; font-size: 14.5px; }
+  .cmd dt { font-family: var(--mono); color: var(--cyan); font-size: 13.5px; }
+  .cmd dd { margin: 0; color: #cdc8e4; }
+  .cmd pre.code { margin: 12px 0 0; }
+
+  details.faq { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin: 0 0 10px; }
+  details.faq summary { cursor: pointer; padding: 14px 18px; font-weight: 600; color: var(--text); }
+  details.faq > div { padding: 0 18px 14px; }
+
+  @media (max-width: 920px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-top: 28px; }
+    .toc { position: static; max-height: none; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 16px; }
+    .toc ol { columns: 2; column-gap: 12px; }
+    .toc a { padding: 4px 6px; }
+    .nav-links { display: none; }
+  }
+  @media (max-width: 560px) {
+    .toc ol { columns: 1; }
+    .cmd dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .cmd dd { margin-bottom: 8px; }
+    .flow > li { padding-left: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/sj-mark.png" alt="" width="34" height="34">specjutsu</a>
+    <div class="nav-links">
+      <a href="index.html#why">Why</a>
+      <a href="index.html#compare">Compare</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="manual.html" style="color:var(--text)">Manual</a>
+    </div>
+    <a class="btn" href="https://github.com/nabour-labs/specjutsu">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.6.3 2.8.1 3.2.8.8 1.2 1.9 1.2 3.1 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z"/></svg>
+      Star on GitHub
+    </a>
+  </div>
+</nav>
+
+<div class="wrap doc">
+  <aside class="toc" aria-label="On this page">
+    <p>Manual</p>
+    <ol>
+      <li><a href="#status">What works today</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#concepts">Core concepts</a></li>
+      <li><a href="#first-change">Your first change</a></li>
+      <li><a href="#agents">Set up your agent</a></li>
+      <li><a href="#ci">Gate every PR</a></li>
+      <li><a href="#exemptions">Exemptions</a></li>
+      <li><a href="#commands">Command reference</a></li>
+      <li><a href="#from-openspec">Coming from OpenSpec</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ol>
+  </aside>
+
+  <main class="prose">
+    <header>
+      <p class="eyebrow">User manual · v0.2.0</p>
+      <h1>Using <span class="grad-text">specjutsu</span></h1>
+      <p class="lead">Everything you need to go from an <code>openspec/</code> folder to pull requests that can't merge unless every scenario is tested and every test was red first.</p>
+    </header>
+
+    <section id="status">
+      <h2>What works today</h2>
+      <p>specjutsu is pre-alpha and built in the open. This manual marks every feature with its state, so you know what you can rely on.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Feature</th><th>State</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>sj trace</code></td><td><span class="badge live">v0.2.0</span></td><td>Map scenario IDs to tests; list gaps and orphans.</td></tr>
+          <tr><td><code>sj gate</code></td><td><span class="badge live">v0.2.0</span></td><td>CI check, including red-on-base. Blocking on specjutsu's own repo.</td></tr>
+          <tr><td><code>sj test</code>, <code>sj ledger</code></td><td><span class="badge next">v0.3</span></td><td>Merged on main; ships with the next release.</td></tr>
+          <tr><td>Rust (<code>cargo test</code>)</td><td><span class="badge live">v0.2.0</span></td><td>The only test runner today.</td></tr>
+          <tr><td><code>sj status</code>, <code>next</code>, <code>verify</code>, <code>task done</code></td><td><span class="badge plan">planned</span></td><td>The agent's working loop.</td></tr>
+          <tr><td><code>sj spec new / validate / check / archive</code></td><td><span class="badge plan">planned</span></td><td>Replaces the OpenSpec CLI and Spec Kit clarify/analyze.</td></tr>
+          <tr><td><code>sj-*</code> agent skills, Claude Code adapter</td><td><span class="badge plan">planned</span></td><td>Claude Code first, then Cursor, Antigravity, Codex and Copilot.</td></tr>
+          <tr><td>pytest, Jest/Vitest, Go, JUnit and more</td><td><span class="badge plan">planned</span></td><td>Through JUnit XML and per-language matchers.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><p><b>In practice today:</b> write and archive changes with OpenSpec, and use <code>sj</code> to prove them. When the authoring commands land, OpenSpec drops out and nothing in your <code>openspec/</code> folder changes.</p></div>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <p>One binary, no runtime. Prebuilt archives for macOS, Linux and Windows are on the <a href="https://github.com/nabour-labs/specjutsu/releases">releases page</a>, with a <code>SHA256SUMS</code> file.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Platform</th><th>Archive</th></tr></thead>
+        <tbody>
+          <tr><td>macOS, Apple silicon</td><td><code>sj-aarch64-apple-darwin.tar.gz</code></td></tr>
+          <tr><td>macOS, Intel</td><td><code>sj-x86_64-apple-darwin.tar.gz</code></td></tr>
+          <tr><td>Linux x64 (glibc / musl)</td><td><code>sj-x86_64-unknown-linux-gnu.tar.gz</code> / <code>…-musl.tar.gz</code></td></tr>
+          <tr><td>Linux arm64</td><td><code>sj-aarch64-unknown-linux-gnu.tar.gz</code></td></tr>
+          <tr><td>Windows x64</td><td><code>sj-x86_64-pc-windows-msvc.zip</code></td></tr>
+        </tbody>
+      </table></div>
+<pre class="code"><span class="c-m"># download, verify and install (macOS Apple silicon shown)</span>
+gh release download v0.2.0 -R nabour-labs/specjutsu \
+  -p 'sj-aarch64-apple-darwin.tar.gz' -p SHA256SUMS
+grep ' sj-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
+tar -xzf sj-aarch64-apple-darwin.tar.gz
+install sj-aarch64-apple-darwin/sj ~/.local/bin/
+
+<span class="c-m"># or build from source (needs Rust)</span>
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu
+
+sj --version</pre>
+    </section>
+
+    <section id="concepts">
+      <h2>Core concepts</h2>
+
+      <h3>Specs live where OpenSpec puts them</h3>
+      <p>specjutsu reads the OpenSpec layout in place. Current truth lives in <code>openspec/specs/</code>; in-flight changes live in <code>openspec/changes/&lt;change&gt;/specs/</code>; the archive is skipped. Use <code>--spec-root</code> if your folder has another name.</p>
+<pre class="code">openspec/
+  specs/auth/spec.md                 <span class="c-m"># current truth</span>
+  changes/add-token-expiry/
+    proposal.md                      <span class="c-m"># why, scope, exemptions</span>
+    specs/auth/spec.md               <span class="c-m"># ADDED / MODIFIED / REMOVED</span>
+    tasks.md
+  changes/archive/                   <span class="c-m"># ignored</span></pre>
+
+      <h3>Every scenario gets a stable ID</h3>
+      <p>Put an ID of the form <code>PREFIX-NNN</code> at the start of each scenario name. Use one prefix per capability and never reuse an ID. Matching ignores case and treats <code>-</code> and <code>_</code> the same, so <code>AUTH-003</code> matches <code>auth_003</code>.</p>
+<pre class="code"><span class="c-k">### Requirement:</span> Expired tokens are rejected
+The system SHALL reject tokens older than 24 hours.
+
+<span class="c-k">#### Scenario:</span> <span class="c-s">AUTH-003</span> Reject expired token
+- <span class="c-k">**WHEN**</span> the client calls GET /me with a token issued 25 hours ago
+- <span class="c-k">**THEN**</span> the response is 401 with code TOKEN_EXPIRED</pre>
+      <p>A scenario heading with no ID isn't dropped: <code>sj trace</code> reports it as <em>without ID</em> so you can fix it.</p>
+
+      <h3>Tests point at scenarios</h3>
+      <p>Link a test by putting the ID in its name, or in a <code>// spec:</code> comment on the line above. No library needed.</p>
+<pre class="code"><span class="c-m">// tests/auth.rs</span>
+<span class="c-m">#[test]</span>
+<span class="c-k">fn</span> <span class="c-s">auth_003</span>_rejects_expired_token() { … }
+
+<span class="c-m">// spec: </span><span class="c-s">AUTH-003</span>
+<span class="c-m">#[test]</span>
+<span class="c-k">fn</span> rejects_token_issued_yesterday() { … }</pre>
+
+      <h3>Trace states</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>State</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="c-g">mapped</span></td><td>The scenario has at least one test.</td></tr>
+          <tr><td><span class="c-r">gap</span></td><td>The scenario has no test.</td></tr>
+          <tr><td><span class="c-a">orphan</span></td><td>A test names an ID that no spec contains any more.</td></tr>
+          <tr><td>without ID</td><td>A scenario heading has no ID.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Red-on-base</h3>
+      <p>The gate's core check. It checks out the base commit, overlays only the change's test files, and runs the new tests there. They must fail. Then they must pass on the PR head. A test that already passes on the old code didn't drive the change.</p>
+      <ul>
+        <li>An assertion failure on base counts as red (<code>red:assert</code>).</li>
+        <li>A compile failure on base also counts, recorded separately (<code>red:compile</code>). New tests often call code that doesn't exist yet.</li>
+        <li>Only separate test files can be overlaid. Keep scenario tests in <code>tests/</code>. Tests inline in source files (<code>#[cfg(test)] mod tests</code>) are reported as <em>unverifiable</em>.</li>
+      </ul>
+
+      <h3>The evidence ledger <span class="badge next">v0.3</span></h3>
+      <p><code>sj test</code> appends one line per test to <code>.specjutsu/ledger/runs.jsonl</code>: run ID, time, git tree hash, test, scenario IDs and result. It's gitignored and local. A scenario is <strong>proven</strong> when a failing run was recorded before a passing one, on different code. CI never trusts the ledger; it recomputes red and green itself.</p>
+    </section>
+
+    <section id="first-change">
+      <h2>Your first proven change</h2>
+      <p>The full loop, using OpenSpec for authoring and <code>sj</code> for proof. The same steps work whether you type them or your agent does.</p>
+      <ol class="flow">
+        <li>
+          <h3>Propose the change</h3>
+          <p>Create the change folder as usual: <code>/opsx:propose add-token-expiry</code> in your agent, or <code>openspec new change add-token-expiry</code>.</p>
+        </li>
+        <li>
+          <h3>Give every scenario an ID</h3>
+          <p>Add IDs to the delta spec's scenario headings: <code>#### Scenario: AUTH-003 Reject expired token</code>. Then check what's missing:</p>
+<pre class="code"><span class="c-m">$</span> sj trace
+trace: 12 mapped, <span class="c-r">1 gaps</span>, 0 orphans, 0 without ID
+<span class="c-r">gap</span>     AUTH-003 Reject expired token  <span class="c-m">(openspec/changes/add-token-expiry/specs/auth/spec.md:9)</span></pre>
+        </li>
+        <li>
+          <h3>Write the failing test first, and commit it</h3>
+          <p>Add <code>auth_003_rejects_expired_token</code> to <code>tests/auth.rs</code>. Run it and watch it fail. Commit it on its own:</p>
+<pre class="code">cargo test auth_003          <span class="c-m"># or, from v0.3: sj test AUTH-003</span>
+git commit -m "test(AUTH-003): red"</pre>
+        </li>
+        <li>
+          <h3>Make it pass</h3>
+          <p>Write the implementation until the test is green, then commit:</p>
+<pre class="code">git commit -m "feat(AUTH-003): green"
+sj trace                     <span class="c-m"># no gaps for this change</span></pre>
+          <p>The <code>test(ID): red</code> / <code>feat(ID): green</code> commit pair lets <code>sj gate --since</code> check red-before-green from history later.</p>
+        </li>
+        <li>
+          <h3>Open the PR</h3>
+          <p>CI runs <code>sj gate</code> (see <a href="#ci">Gate every PR</a>). To preview it locally:</p>
+<pre class="code"><span class="c-m">$</span> sj gate --base origin/main
+gate: pass — 1 scenario proven (1 red:compile)</pre>
+        </li>
+        <li>
+          <h3>Archive</h3>
+          <p>After merging, fold the delta into current specs with <code>/opsx:archive</code>. From the planned release, that's <code>sj spec archive</code>.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="agents">
+      <h2>Set up your agent</h2>
+      <p>specjutsu never calls an LLM. Your agent runs <code>sj</code> like any other command and gets a few lines back. Until the Claude Code adapter ships, paste these rules into <code>CLAUDE.md</code> or <code>AGENTS.md</code>:</p>
+<pre class="code"><span class="c-k">## specjutsu</span>
+
+- Every spec scenario starts with a stable ID: `#### Scenario: AUTH-003 …`.
+  Use the capability's prefix and the next free number. Never reuse an ID.
+- For each scenario, write the test first, in `tests/`, named after the ID
+  (`auth_003_…`) or with `// spec: AUTH-003` on the line above.
+- Run the new test and confirm it fails before touching implementation code.
+  Commit it as `test(AUTH-003): red`, then implement and commit
+  `feat(AUTH-003): green`.
+- Before saying a task is done, run `sj trace`. It must show no gaps for the
+  change you are working on.
+- Never weaken or delete a test to make it pass. If a test is wrong, say so.
+- For a refactor with no behaviour change, add to the change's proposal.md:
+  `Exempt: refactor — &lt;reason&gt;`.</pre>
+      <div class="callout"><p><b>Why the CI gate still matters:</b> rules in a prompt are requests. If an agent skips them, <code>sj gate</code> refuses the merge anyway. When the adapter ships, a pre-edit hook will also block source edits until a failing test exists.</p></div>
+    </section>
+
+    <section id="ci">
+      <h2>Gate every pull request</h2>
+      <p>Add a job that installs a pinned <code>sj</code> and runs the gate against the PR's base. It needs the full history (<code>fetch-depth: 0</code>) to check out the base commit, and a Rust toolchain to build and run your tests on both sides.</p>
+<pre class="code"><span class="c-m"># .github/workflows/ci.yml</span>
+<span class="c-k">jobs:</span>
+  <span class="c-k">gate:</span>
+    <span class="c-k">if:</span> github.event_name == 'pull_request'
+    <span class="c-k">runs-on:</span> ubuntu-latest
+    <span class="c-k">steps:</span>
+      - <span class="c-k">uses:</span> actions/checkout@v4
+        <span class="c-k">with:</span>
+          <span class="c-k">fetch-depth:</span> 0
+      - <span class="c-k">uses:</span> dtolnay/rust-toolchain@stable
+      - <span class="c-k">name:</span> Install sj
+        <span class="c-k">env:</span>
+          <span class="c-k">GH_TOKEN:</span> ${{ github.token }}
+        <span class="c-k">run:</span> |
+          gh release download v0.2.0 -R nabour-labs/specjutsu \
+            -p 'sj-x86_64-unknown-linux-gnu.tar.gz' -D "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/sj-x86_64-unknown-linux-gnu.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/sj-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      - <span class="c-k">run:</span> sj gate --base origin/${{ github.base_ref }}</pre>
+      <p>Not ready to block merges? Start with a report: <code>sj trace | tee -a "$GITHUB_STEP_SUMMARY"</code> prints coverage on every run without failing it. Add <code>--strict</code> when you want gaps to fail.</p>
+
+      <h3>What fails the gate</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Reason</th><th>What happened</th></tr></thead>
+        <tbody>
+          <tr><td><code>untested AUTH-004</code></td><td>An added, modified or newly implemented scenario has no test.</td></tr>
+          <tr><td><code>failing AUTH-004 &lt;test&gt;</code></td><td>A mapped test fails on the PR head.</td></tr>
+          <tr><td><code>not-run AUTH-004 &lt;test&gt;</code></td><td>A mapped test didn't run.</td></tr>
+          <tr><td><code>green-on-base AUTH-004 &lt;test&gt;</code></td><td>The new test already passes on the old code.</td></tr>
+          <tr><td><code>unverifiable</code></td><td>The test is inline in a source file and can't be overlaid. Move it to <code>tests/</code>, or pass <code>--allow-unverifiable</code> to warn instead.</td></tr>
+          <tr><td><code>orphan AUTH-003 &lt;test&gt;</code></td><td>A test points at a scenario that was removed.</td></tr>
+          <tr><td><code>unspecified change</code></td><td>Source files changed with no added or modified scenario and no exemption.</td></tr>
+          <tr><td><code>exemption needs a reason</code></td><td>An exemption line has no reason.</td></tr>
+          <tr><td><code>spike cannot merge to main</code></td><td>A spike exemption targets <code>main</code>.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Changes that touch only docs, specs, CI or other non-source files pass without an exemption. Unchanged scenarios without tests show up as warnings, not failures, so you can adopt specjutsu in an existing repo and tighten coverage as you go.</p>
+    </section>
+
+    <section id="exemptions">
+      <h2>Exemptions</h2>
+      <p>Some changes don't add behaviour. Declare them explicitly, with a reason. Every exemption appears in the gate summary.</p>
+<pre class="code"><span class="c-m"># in the change's proposal.md</span>
+Exempt: refactor — extract token parser
+
+<span class="c-m"># or, for changes without a change folder, as a commit trailer</span>
+Specjutsu-Exempt: chore — bump dependencies</pre>
+      <div class="tbl"><table>
+        <thead><tr><th>Kind</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>refactor</code></td><td>Skips red-on-base and the unspecified-change rule; the full test suite must still pass.</td></tr>
+          <tr><td><code>docs</code>, <code>config</code>, <code>chore</code></td><td>No scenario required.</td></tr>
+          <tr><td><code>spike</code></td><td>Allowed on <code>spike/*</code> branches; blocked from merging to <code>main</code>.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="commands">
+      <h2>Command reference</h2>
+      <p>Every command takes <code>--json</code> for tools and agents. Exit codes are shared: <strong>0</strong> pass, <strong>1</strong> fail, <strong>2</strong> usage or environment error.</p>
+
+      <div class="cmd">
+        <h3>sj trace <span class="badge live">v0.2.0</span></h3>
+        <p>Map spec scenario IDs to tests; list gaps and orphans.</p>
+        <dl>
+          <dt>--json</dt><dd>JSON instead of the compact report.</dd>
+          <dt>--strict</dt><dd>Exit 1 when there are gaps or orphans.</dd>
+          <dt>--spec-root &lt;dir&gt;</dt><dd>Spec folder, relative to the repo root. Default <code>openspec</code>.</dd>
+          <dt>--root &lt;dir&gt;</dt><dd>Repository root. Default: the current directory.</dd>
+        </dl>
+      </div>
+
+      <div class="cmd">
+        <h3>sj gate <span class="badge live">v0.2.0</span></h3>
+        <p>CI check: every changed scenario tested, red on base, green on head.</p>
+        <dl>
+          <dt>--base &lt;ref&gt;</dt><dd>Base to compare against, e.g. <code>origin/main</code>. A ref that doesn't resolve exits 2 with a hint about <code>fetch-depth: 0</code>.</dd>
+          <dt>--since &lt;commit&gt;</dt><dd>Check commit history instead: every <code>feat(ID)</code> commit needs an earlier <code>test(ID): red</code>. IDs can be ranges (<code>TRACE-001..006</code>) or comma-separated.</dd>
+          <dt>--allow-unverifiable</dt><dd>Warn instead of failing when a test can't be overlaid on base.</dd>
+          <dt>--json, --root, --spec-root</dt><dd>As for <code>trace</code>.</dd>
+        </dl>
+      </div>
+
+      <div class="cmd">
+        <h3>sj test [scope] <span class="badge next">v0.3</span></h3>
+        <p>Run the tests and print failures only. A green run is one summary line; each failure shows its scenario IDs and the first 20 lines of output. A compile error is reported as <code>build failed</code>, never as an empty run. Records the run in the ledger.</p>
+        <dl>
+          <dt>scope</dt><dd>A scenario ID (<code>AUTH-003</code>) runs just its tests; a Cargo package name runs that package. Omit to run everything.</dd>
+          <dt>--no-ledger</dt><dd>Don't record this run.</dd>
+          <dt>--json, --root, --spec-root</dt><dd>As above.</dd>
+        </dl>
+      </div>
+
+      <div class="cmd">
+        <h3>sj ledger [ID] <span class="badge next">v0.3</span></h3>
+        <p>Per scenario: the latest result, and whether red-before-green is proven.</p>
+        <dl>
+          <dt>ID</dt><dd>Report only this scenario.</dd>
+          <dt>--json, --root</dt><dd>As above.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section id="from-openspec">
+      <h2>Coming from OpenSpec</h2>
+      <p>specjutsu keeps OpenSpec's format and replaces its workflow. Today you keep the <code>/opsx:*</code> commands and add <code>sj</code> for proof. As the planned releases land, each command gets a specjutsu equivalent, driven by a skill that calls the binary instead of reading whole folders.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>OpenSpec</th><th>Today</th><th>specjutsu (planned)</th></tr></thead>
+        <tbody>
+          <tr><td><code>/opsx:explore</code></td><td>Keep using it</td><td><code>sj-explore</code> skill</td></tr>
+          <tr><td><code>/opsx:propose</code>, <code>/opsx:update</code></td><td>Keep using it; add scenario IDs</td><td><code>sj-propose</code> → <code>sj spec new</code>, <code>sj spec validate</code></td></tr>
+          <tr><td>none</td><td>none</td><td><code>sj-clarify</code> → <code>sj spec check</code>: uncovered scenarios, open questions</td></tr>
+          <tr><td><code>/opsx:apply</code></td><td>Keep using it, test first, then <code>sj trace</code></td><td><code>sj-apply</code> → <code>sj next</code>, <code>sj test &lt;ID&gt;</code>, <code>sj task done</code></td></tr>
+          <tr><td>none</td><td><code>sj gate</code> locally</td><td><code>sj-verify</code> → <code>sj verify</code></td></tr>
+          <tr><td><code>/opsx:archive</code>, <code>/opsx:sync</code></td><td>Keep using it</td><td><code>sj-finish</code> → <code>sj spec archive</code></td></tr>
+        </tbody>
+      </table></div>
+      <h3>What changes for you</h3>
+      <ul>
+        <li><strong>Your agent stops reading folders.</strong> <code>sj status</code> answers "where am I" in ten lines; <code>sj next</code> returns only the current task, its scenarios and the exact test command.</li>
+        <li><strong>"Done" is checked, not claimed.</strong> In strict mode <code>sj task done</code> refuses to tick a task until the ledger shows its tests went red, then green.</li>
+        <li><strong>TDD is enforced, not requested.</strong> With the adapter, editing source before a failing test exists is blocked. Writing the test is always allowed.</li>
+        <li><strong>Your specs don't move.</strong> Same folders, same headings. The switch is a config change, not a migration.</li>
+      </ul>
+    </section>
+
+    <section id="faq">
+      <h2>FAQ</h2>
+      <details class="faq"><summary>Does specjutsu call an AI model?</summary><div><p>No. It's a deterministic binary. Your agent calls it; it never calls your agent or any LLM.</p></div></details>
+      <details class="faq"><summary>Which languages work today?</summary><div><p>Rust with <code>cargo test</code>. pytest, Jest/Vitest, Playwright, Go, JUnit, dotnet, PHPUnit and RSpec are on the roadmap, mostly through JUnit XML reports.</p></div></details>
+      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings. Add IDs as you touch specs, and add <code>sj trace</code> to CI as a non-blocking report first.</p></div></details>
+      <details class="faq"><summary>Why must tests live in <code>tests/</code>?</summary><div><p>Red-on-base overlays the change's test files onto the base commit. A test inside a source file can't be moved without also moving the new code, so it's reported as unverifiable.</p></div></details>
+      <details class="faq"><summary>Is the local ledger trusted by CI?</summary><div><p>No. A local file is easy to forge, so CI recomputes red and green itself with red-on-base. The ledger is local evidence for your workflow and for strict mode.</p></div></details>
+      <details class="faq"><summary>Can I check red-before-green on work I've already done?</summary><div><p>If you used <code>test(ID): red</code> and <code>feat(ID): green</code> commit subjects, yes: <code>sj gate --since &lt;first-commit&gt;</code> checks the history.</p></div></details>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 nabour-labs · MIT licensed</span>
+    <nav aria-label="Footer">
+      <a href="index.html">Home</a>
+      <a href="https://github.com/nabour-labs/specjutsu">GitHub</a>
+      <a href="https://github.com/nabour-labs/specjutsu/releases">Releases</a>
+      <a href="https://github.com/nabour-labs/specjutsu/blob/main/CONTRIBUTING.md">Contributing</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('.toc a');
+    if (!('IntersectionObserver' in window)) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (a) { a.classList.remove('active'); });
+          var a = map[e.target.id]; if (a) a.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('.prose section[id]').forEach(function (s) { obs.observe(s); });
+  })();
+</script>
+</body>
+</html>
