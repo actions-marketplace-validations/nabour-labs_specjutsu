@@ -292,7 +292,12 @@ fn test_cmd(
     if json {
         println!("{}", serde_json::to_string_pretty(&run)?);
     } else if run.build_failed {
-        println!("test: fail — build failed");
+        if run.suites.len() > 1 {
+            let names: Vec<&str> = run.suites.iter().map(|s| s.name.as_str()).collect();
+            println!("test: fail — build failed ({})", names.join(", "));
+        } else {
+            println!("test: fail — build failed");
+        }
         for l in &run.build_errors {
             println!("        {l}");
         }
@@ -306,7 +311,18 @@ fn test_cmd(
             counts.push(format!("{} ignored", run.ignored));
         }
         let verdict = if run.pass { "pass" } else { "fail" };
-        println!("test: {verdict} — {}", counts.join(", "));
+        let failed: Vec<&str> = run
+            .suites
+            .iter()
+            .filter(|s| !s.pass)
+            .map(|s| s.name.as_str())
+            .collect();
+        let suffix = if run.suites.len() > 1 && !failed.is_empty() {
+            format!(" (failed: {})", failed.join(", "))
+        } else {
+            String::new()
+        };
+        println!("test: {verdict} — {}{suffix}", counts.join(", "));
         for t in run
             .tests
             .iter()
@@ -324,6 +340,12 @@ fn test_cmd(
                 if ex.omitted > 0 {
                     println!("        … {} more", plural(ex.omitted, "line"));
                 }
+            }
+        }
+        for s in run.suites.iter().filter(|s| !s.build_errors.is_empty()) {
+            println!("build failed ({})", s.name);
+            for l in &s.build_errors {
+                println!("        {l}");
             }
         }
     }

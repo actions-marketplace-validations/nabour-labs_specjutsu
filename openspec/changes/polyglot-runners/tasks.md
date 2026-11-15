@@ -12,7 +12,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. sj test across suites (sj-core + sj-cli)
 
-- [ ] 3.1 Scope parsing, the run loop, `SuiteRun`, per-suite build failures, `records_for` and the output from design decisions 4–6 (RUN-011, RUN-012, RUN-013, RUN-014, RUN-016, RUN-017). Verify: `crates/sj-cli/tests/test_polyglot.rs` uses fake `pnpm` and `python3` executables (Unix) that log their argv and write canned reports. It covers the RUN-011 failure output with AUTH-003 and `expected 401, got 200`, the RUN-012 one-line pass for 12 tests, RUN-013's missing report as a build failure, RUN-016 running one vitest and one Playwright test for CHAT-002 with the right selection arguments, and RUN-017 running only `apps/app:playwright`. A `junit` suite whose command copies a report runs on every OS (RUN-014). The existing RUN-001..010 and LEDGER tests stay green.
+- [x] 3.1 Scope parsing, the run loop, `SuiteRun`, per-suite build failures, `records_for` and the output from design decisions 4–6 (RUN-011, RUN-012, RUN-013, RUN-014, RUN-016, RUN-017). Verify: `crates/sj-cli/tests/test_polyglot.rs` uses fake `pnpm` and `python3` executables (Unix) that log their argv and write canned reports. It covers the RUN-011 failure output with AUTH-003 and `expected 401, got 200`, the RUN-012 one-line pass for 12 tests, RUN-013's missing report as a build failure, RUN-016 running one vitest and one Playwright test for CHAT-002 with the right selection arguments, and RUN-017 running only `apps/app:playwright`. A `junit` suite whose command copies a report runs on every OS (RUN-014). The existing RUN-001..010 and LEDGER tests stay green.
 
 ## 4. Docs and self-hosting
 

@@ -218,7 +218,7 @@ pub fn title_pattern(title: &str) -> String {
     let chars: Vec<char> = title.chars().collect();
     let mut i = 0;
     let flush = |lit: &mut String, out: &mut String| {
-        out.push_str(&regex::escape(lit));
+        out.push_str(&escape(lit));
         lit.clear();
     };
     while i < chars.len() {
@@ -244,6 +244,24 @@ pub fn title_pattern(title: &str) -> String {
     }
     flush(&mut lit, &mut out);
     out
+}
+
+/// Escape the characters that are special in both JavaScript and Rust regexes (not `-` or `/`,
+/// which only matter inside classes or JS literals), so `-t` patterns stay readable.
+fn escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if "\\^$.*+?()[]{}|".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Whether a title holds `.each` placeholders.
+fn has_placeholder(title: &str) -> bool {
+    title_pattern(title).contains(".*")
 }
 
 /// `file` (relative to the repository root) relative to `cwd`, with forward slashes.
@@ -287,12 +305,11 @@ enum Seg {
 
 impl Seg {
     fn new(s: &str) -> Seg {
-        let p = title_pattern(s);
-        if p == regex::escape(s) {
-            Seg::Exact(s.to_string())
-        } else {
-            regex::Regex::new(&format!("^{p}$")).map_or(Seg::Exact(s.to_string()), Seg::Pattern)
+        if !has_placeholder(s) {
+            return Seg::Exact(s.to_string());
         }
+        regex::Regex::new(&format!("^{}$", title_pattern(s)))
+            .map_or(Seg::Exact(s.to_string()), Seg::Pattern)
     }
 
     fn matches(&self, s: &str) -> bool {
@@ -531,4 +548,100 @@ fn candidates(by_base: &BTreeMap<&str, Vec<usize>>, file: &[String], pytest: boo
 
 fn ends_with(long: &[&str], short: &[&str]) -> bool {
     !short.is_empty() && long.len() >= short.len() && long[long.len() - short.len()..] == *short
+}
+
+/// What one non-Cargo suite run produced.
+#[derive(Debug, Clone, Default)]
+pub struct SuiteResult {
+    pub joined: Vec<Joined>,
+    /// No parsable report: the suite failed before running (RUN-013).
+    pub no_report: bool,
+    /// The last lines of the runner's output, when there is no report.
+    pub build_errors: Vec<String>,
+    /// The runner exited 0.
+    pub exit_ok: bool,
+}
+
+/// Most output lines kept when a suite fails without a report.
+pub const BUILD_ERROR_LINES: usize = 20;
+
+/// Run one suite and join its report to `traced` (the suite's traced tests). With
+/// `Pick::Tests`, results are post-filtered to the picked tests.
+pub fn run_suite(
+    root: &Path,
+    pkg: &Package,
+    suite: &Suite,
+    traced: &[TestFn],
+    pick: &Pick,
+) -> Result<SuiteResult> {
+    use anyhow::Context;
+
+    let tmp = tempfile::tempdir()?;
+    let report = match declared_report(root, pkg, suite) {
+        Some(r) => {
+            // Never read a stale report from an earlier run.
+            let _ = std::fs::remove_file(&r);
+            r
+        }
+        None => tmp.path().join("report.xml"),
+    };
+    let inv = invocation(root, pkg, suite, pick, &report)?;
+    // Resolve through PATH (and PATHEXT on Windows, where `pnpm` is `pnpm.cmd`).
+    let program =
+        crate::doctor::on_path(&inv.program).unwrap_or_else(|| PathBuf::from(&inv.program));
+    let out = std::process::Command::new(&program)
+        .args(&inv.args)
+        .current_dir(&inv.cwd)
+        .envs(&inv.env)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .with_context(|| {
+            format!(
+                "cannot run `{}` for {}:{} in {}",
+                inv.program,
+                pkg.path,
+                suite.runner.as_str(),
+                inv.cwd.display()
+            )
+        })?;
+
+    let mut result = SuiteResult {
+        exit_ok: out.status.success(),
+        ..SuiteResult::default()
+    };
+    let cases = std::fs::read_to_string(&report)
+        .ok()
+        .and_then(|xml| sj_runners::junit::parse(&xml).ok());
+    let Some(cases) = cases else {
+        result.no_report = true;
+        let text = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let lines: Vec<&str> = text
+            .lines()
+            .map(str::trim_end)
+            .filter(|l| !l.trim().is_empty())
+            .collect();
+        let from = lines.len().saturating_sub(BUILD_ERROR_LINES);
+        result.build_errors = lines[from..].iter().map(|l| l.to_string()).collect();
+        if result.build_errors.is_empty() {
+            result.build_errors.push(format!(
+                "{} exited with {} and wrote no report",
+                inv.program, out.status
+            ));
+        }
+        return Ok(result);
+    };
+    let mut joined = match_cases(suite.runner, traced, &cases);
+    if let Pick::Tests(picked) = pick {
+        let keep: Vec<bool> = traced
+            .iter()
+            .map(|t| picked.iter().any(|p| p.file == t.file && p.name == t.name))
+            .collect();
+        joined.retain(|j| j.test.is_some_and(|i| keep[i]));
+    }
+    result.joined = joined;
+    Ok(result)
 }
