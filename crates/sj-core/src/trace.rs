@@ -38,6 +38,8 @@ pub struct Report {
     pub gaps: Vec<Scenario>,
     pub orphans: Vec<Orphan>,
     pub unidentified: Vec<Scenario>,
+    /// Setup problems worth a look, e.g. `no test suite: packages/ui`.
+    pub warnings: Vec<String>,
 }
 
 impl Report {

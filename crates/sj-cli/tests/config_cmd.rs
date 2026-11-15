@@ -22,7 +22,11 @@ fn sj() -> Command {
 #[test]
 fn conf_001_trace_uses_the_spec_root_from_the_project_file() {
     let repo = Repo::with_lib("");
-    repo.write("specjutsu.toml", "schema = 1\nspec_root = \"specs\"\n");
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\nspec_root = \"specs\"\n\n[[package]]\npath = \".\"\nsources = []\n\n\
+         [[package.suite]]\nrunner = \"cargo\"\ntests = []\n",
+    );
     repo.write("specs/specs/demo/spec.md", SPEC);
     repo.write("other/specs/.gitkeep", "");
     repo.write("tests/demo.rs", "#[test]\nfn demo_001_works() {}\n");

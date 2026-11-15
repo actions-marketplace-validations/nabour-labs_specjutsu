@@ -16,7 +16,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. Report and CLI (sj-core + sj-cli)
 
-- [ ] 4.1 `TestRef` fields, `Report.warnings`, the `unsuited` packages, and `sj trace` on `scan_project` (design decision 5) (TRACE-015, TRACE-016). Verify: `crates/sj-cli/tests/trace_polyglot.rs` runs `sj trace --json` in the same tree, finds `package`/`suite` on entries (`apps/api`, `vitest`), and finds `warn    no test suite: packages/ui` in the compact output. `sj trace` on this repo still reports the same mapped count.
+- [x] 4.1 `TestRef` fields, `Report.warnings`, the `unsuited` packages, and `sj trace` on `scan_project` (design decision 5) (TRACE-015, TRACE-016). Verify: `crates/sj-cli/tests/trace_polyglot.rs` runs `sj trace --json` in the same tree, finds `package`/`suite` on entries (`apps/api`, `vitest`), and finds `warn    no test suite: packages/ui` in the compact output. `sj trace` on this repo still reports the same mapped count.
 
 ## 5. Docs and self-hosting
 

@@ -53,6 +53,7 @@ The first argument must be a string literal (quotes, or a template with no `${}`
 - [Tokenizer misreads unusual syntax (JSX text containing `it(`, regex heuristics)] → JSX text is not a call position after `>`, and the cost of a miss is a gap, not a false pass. Golden tests cover JSX, regex, template-literal and comment edge cases.
 - [Implicit title IDs like `UTF-8` show up as orphans] → They only count when the prefix is one the specs use, the same rule Rust names follow.
 - [A file matched by two suites is attributed to one] → Deterministic (longest literal prefix), and `polyglot-runners` revisits it when suites actually run.
+- [A hand-written `specjutsu.toml` with no packages now traces no tests, where the old walk found every `*.rs`] → `sj init` and `sj adopt` both write the root `cargo` package for Rust repos, and without a file the default still has it. A repo with `.rs` files and no `Cargo.toml` (like the old `fixtures/trace-basic`) gets nothing, so that fixture gains a `Cargo.toml`.
 - [`fixtures/` skipped for every language] → Kept for compatibility with today's Rust rule. A project keeping real tests under a `fixtures` directory needs a rename. Recorded for `polyglot-runners`, which adds `support` globs.
 
 ## Migration Plan
