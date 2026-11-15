@@ -4,8 +4,11 @@ mod support;
 
 use std::collections::BTreeMap;
 
-use sj_core::gate::{evaluate, is_impl_file, Input};
+use std::path::PathBuf;
+
+use sj_core::gate::{evaluate, is_impl_file, run, Input, Options};
 use sj_core::trace::Report;
+use support::Repo;
 
 fn input() -> Input {
     Input {
@@ -18,8 +21,41 @@ fn input() -> Input {
         base: BTreeMap::new(),
         allow_unverifiable: false,
         spec_root: "openspec".into(),
+        unidentified: vec![],
+        unidentified_known: 0,
     }
 }
+
+fn opts(repo: &Repo) -> Options {
+    Options {
+        root: repo.path().to_path_buf(),
+        spec_root: PathBuf::from("openspec"),
+        base: "main".into(),
+        allow_unverifiable: false,
+    }
+}
+
+const ADD_OK: &str = "pub fn add(a: i32, b: i32) -> i32 { a + b }\n";
+const ADD_BUG: &str = "pub fn add(a: i32, b: i32) -> i32 { a - b }\n";
+const ADD_TEST: &str = "#[test]\nfn math_001_adds() { assert_eq!(demo::add(2, 2), 4); }\n";
+
+/// A spec file holding scenarios without IDs: (name, THEN text).
+fn no_id_spec(scenarios: &[(&str, &str)]) -> String {
+    let mut s =
+        String::from("## Requirements\n\n### Requirement: Auth\nThe system SHALL auth.\n\n");
+    for (name, then) in scenarios {
+        s.push_str(&format!(
+            "#### Scenario: {name}\n- **WHEN** called\n- **THEN** {then}\n\n"
+        ));
+    }
+    s
+}
+
+const THREE: [(&str, &str); 3] = [
+    ("Valid login", "a session starts"),
+    ("Wrong password", "it is rejected"),
+    ("Locked account", "it is refused"),
+];
 
 fn has(list: &[String], needle: &str) -> bool {
     list.iter().any(|l| l.contains(needle))
@@ -86,5 +122,124 @@ fn gate_028_manifest_lockfile_and_ci_changes_pass() {
         "backend/uv.lock".into(),
     ];
     let r = evaluate(&i);
+    assert!(r.pass, "{:?}", r.failures);
+}
+
+// ---------- unidentified scenarios ----------
+
+#[test]
+fn gate_024_unidentified_scenarios_fail_and_known_ones_warn() {
+    let mut i = input();
+    i.unidentified = vec!["Logout clears session (openspec/specs/auth/spec.md:3)".into()];
+    i.unidentified_known = 3;
+    let r = evaluate(&i);
+    assert!(!r.pass);
+    assert!(
+        has(
+            &r.failures,
+            "unidentified Logout clears session (openspec/specs/auth/spec.md:3)"
+        ),
+        "{:?}",
+        r.failures
+    );
+    assert_eq!(
+        r.warnings
+            .iter()
+            .filter(|w| w.contains("without ID"))
+            .count(),
+        1
+    );
+    assert!(
+        has(&r.warnings, "3 scenarios without IDs"),
+        "{:?}",
+        r.warnings
+    );
+}
+
+#[test]
+fn gate_024_new_scenario_without_an_id_fails_the_gate() {
+    let repo = Repo::with_lib(ADD_OK);
+    repo.branch("feature");
+    repo.write(
+        "openspec/changes/logout/specs/auth/spec.md",
+        &no_id_spec(&[("Logout clears session", "the session is gone")]),
+    );
+    repo.commit("docs(spec): logout");
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    assert!(
+        has(
+            &r.failures,
+            "unidentified Logout clears session (openspec/changes/logout/specs/auth/spec.md:6)"
+        ),
+        "{:?}",
+        r.failures
+    );
+}
+
+#[test]
+fn gate_025_existing_scenarios_without_ids_only_warn_once() {
+    let repo = Repo::with_lib(ADD_BUG);
+    repo.write("openspec/specs/auth/spec.md", &no_id_spec(&THREE));
+    repo.commit("docs(spec): auth");
+    repo.branch("feature");
+    repo.add_change("math", &[("MATH-001", "Add numbers")]);
+    repo.write("tests/math.rs", ADD_TEST);
+    repo.write("src/lib.rs", ADD_OK);
+    repo.commit("feat(MATH-001): green");
+    let r = run(&opts(&repo)).unwrap();
+    assert!(r.pass, "{:?}", r.failures);
+    let no_id: Vec<&String> = r
+        .warnings
+        .iter()
+        .filter(|w| w.contains("without ID"))
+        .collect();
+    assert_eq!(no_id, ["3 scenarios without IDs"]);
+}
+
+#[test]
+fn gate_025_rewording_a_scenario_without_an_id_fails() {
+    let repo = Repo::with_lib(ADD_OK);
+    repo.write("openspec/specs/auth/spec.md", &no_id_spec(&THREE));
+    repo.commit("docs(spec): auth");
+    repo.branch("feature");
+    let mut edited = THREE;
+    edited[1].1 = "it is rejected with code 401";
+    repo.write("openspec/specs/auth/spec.md", &no_id_spec(&edited));
+    repo.commit("docs(spec): reword");
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    assert!(
+        has(&r.failures, "unidentified Wrong password"),
+        "{:?}",
+        r.failures
+    );
+    assert!(
+        has(&r.warnings, "2 scenarios without IDs"),
+        "{:?}",
+        r.warnings
+    );
+}
+
+#[test]
+fn gate_025_moving_or_copying_a_scenario_without_an_id_is_not_a_change() {
+    let repo = Repo::with_lib(ADD_OK);
+    repo.write(
+        "openspec/changes/auth/specs/auth/spec.md",
+        &no_id_spec(&THREE[..1]),
+    );
+    repo.write("openspec/specs/auth/spec.md", &no_id_spec(&THREE[1..]));
+    repo.commit("docs(spec): auth");
+    repo.branch("feature");
+    // Archive: the delta's scenario moves into specs/, and a MODIFIED copy of another
+    // appears in a new change.
+    repo.git(&["rm", "-q", "-r", "openspec/changes/auth"]);
+    repo.write("openspec/specs/auth/spec.md", &no_id_spec(&THREE));
+    repo.write(
+        "openspec/changes/lockout/specs/auth/spec.md",
+        &no_id_spec(&THREE[2..]),
+    );
+    repo.commit("docs(openspec): archive auth");
+    let r = run(&opts(&repo)).unwrap();
     assert!(r.pass, "{:?}", r.failures);
 }

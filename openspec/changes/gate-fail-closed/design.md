@@ -25,8 +25,9 @@ Replace "is it `*.rs`?" with "is it on the non-source list?". The list is small 
 - *Alternative:* keep the extension list and add `.ts`, `.py` and so on. Rejected: an extension nobody listed is a silent pass again.
 - *Why manifests are non-source:* Dependabot and lockfile-only PRs must not need a hand-written exemption. Dependency bumps that break the code are caught by decision 4 only when they also touch source. Otherwise they rely on the project's own test job. Recorded as a risk.
 
-### 2. Unidentified scenarios are matched by text, as a multiset
-`fingerprints` also emits scenarios without IDs, keyed by text (heading name plus step lines, collapsed, the same as today). For each unidentified scenario at head, look for an equal text among all base scenarios, identified or not. Count matches as a multiset, so duplicating an existing scenario still adds one. No match means the scenario is new or edited, and it fails as `unidentified`. Matched ones are counted into one warning.
+### 2. Unidentified scenarios are matched by text, as a set
+`spec::scenario_texts` returns every scenario with its normalised text (heading name plus step lines, collapsed, the same as fingerprints). The gate builds the set of texts on base, both identified and not. An unidentified scenario at head whose text is not in that set is new or edited, and it fails as `unidentified`. The rest are counted into one warning.
+- Set, not multiset: OpenSpec's `## MODIFIED Requirements` copies unchanged scenarios verbatim into the delta. Counting copies would fail them.
 - This keeps GATE-002's property: moving a scenario from a delta into `specs/` on archive is not a change.
 - *Alternative:* match by heading name only. Rejected: rewording a THEN line would pass unseen.
 

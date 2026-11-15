@@ -27,6 +27,8 @@ fn input() -> Input {
         base: BTreeMap::new(),
         allow_unverifiable: false,
         spec_root: "openspec".into(),
+        unidentified: vec![],
+        unidentified_known: 0,
     }
 }
 
