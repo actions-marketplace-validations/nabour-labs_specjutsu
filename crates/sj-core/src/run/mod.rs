@@ -1,5 +1,7 @@
 //! `sj test`: choose the tests in scope, run them, and join results to scenario IDs.
 
+pub mod suite;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::OnceLock;

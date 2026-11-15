@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. Suite keys and invocations (sj-core)
 
-- [ ] 1.1 `command`, `report` and `env` on `Suite`, the `junit` runner, their validation and `to_toml` (design decision 1). Build the per-runner `Invocation` from design decision 2 (RUN-014, RUN-015). Verify: `crates/sj-core/tests/invocation.rs` checks the argv, cwd and env for vitest under pnpm, yarn and npm lockfiles; Jest's env; Playwright's `file:line`; pytest with and without `uv.lock` (in the package and in a parent); a `command` override on vitest; and `junit` through the shell. Config tests reject `junit` without `command`/`report` and `report` on vitest, and round-trip the new keys.
+- [x] 1.1 `command`, `report` and `env` on `Suite`, the `junit` runner, their validation and `to_toml` (design decision 1). Build the per-runner `Invocation` from design decision 2 (RUN-014, RUN-015). Verify: `crates/sj-core/tests/invocation.rs` checks the argv, cwd and env for vitest under pnpm, yarn and npm lockfiles; Jest's env; Playwright's `file:line`; pytest with and without `uv.lock` (in the package and in a parent); a `command` override on vitest; and `junit` through the shell. Config tests reject `junit` without `command`/`report` and `report` on vitest, and round-trip the new keys.
 
 ## 2. JUnit reports (sj-runners + sj-core)
 

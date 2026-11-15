@@ -3,6 +3,7 @@
 //! Parsing happens in two stages. Raw structs reject unknown keys with their position, then
 //! validation turns them into the typed model and names the package in every error.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
@@ -43,6 +44,7 @@ impl Mode {
 pub enum Runner {
     Cargo,
     Jest,
+    Junit,
     Playwright,
     Pytest,
     Vitest,
@@ -50,9 +52,10 @@ pub enum Runner {
 
 impl Runner {
     /// Every known runner, in alphabetical order.
-    pub const ALL: [Runner; 5] = [
+    pub const ALL: [Runner; 6] = [
         Runner::Cargo,
         Runner::Jest,
+        Runner::Junit,
         Runner::Playwright,
         Runner::Pytest,
         Runner::Vitest,
@@ -62,6 +65,7 @@ impl Runner {
         match self {
             Runner::Cargo => "cargo",
             Runner::Jest => "jest",
+            Runner::Junit => "junit",
             Runner::Playwright => "playwright",
             Runner::Pytest => "pytest",
             Runner::Vitest => "vitest",
@@ -78,6 +82,24 @@ pub struct Suite {
     pub runner: Runner,
     /// Globs relative to the repository root.
     pub tests: Vec<String>,
+    /// Replaces the runner's launcher (built-in runners) or is the whole command (`junit`).
+    pub command: Option<String>,
+    /// `junit` only: the report the command writes, relative to the package directory.
+    pub report: Option<String>,
+    /// Extra environment for the run.
+    pub env: BTreeMap<String, String>,
+}
+
+impl Suite {
+    pub fn new(runner: Runner, tests: Vec<String>) -> Suite {
+        Suite {
+            runner,
+            tests,
+            command: None,
+            report: None,
+            env: BTreeMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -124,6 +146,10 @@ struct RawSuite {
     runner: String,
     #[serde(default)]
     tests: Vec<String>,
+    command: Option<String>,
+    report: Option<String>,
+    #[serde(default)]
+    env: BTreeMap<String, String>,
 }
 
 /// Load `<root>/specjutsu.toml`, or the defaults for `root` when it does not exist.
@@ -144,10 +170,7 @@ impl Config {
             vec![Package {
                 path: ".".into(),
                 sources: vec!["**/*.rs".into()],
-                suites: vec![Suite {
-                    runner: Runner::Cargo,
-                    tests: vec!["**/*.rs".into()],
-                }],
+                suites: vec![Suite::new(Runner::Cargo, vec!["**/*.rs".into()])],
             }]
         } else {
             Vec::new()
@@ -209,9 +232,22 @@ impl Config {
                             Runner::known_list()
                         )
                     })?;
+                let what = format!("{FILE}: package {}: {} suite", p.path, s.runner);
+                match (runner, &s.command, &s.report) {
+                    (Runner::Junit, None, _) => bail!("{what} needs `command`"),
+                    (Runner::Junit, _, None) => bail!("{what} needs `report`"),
+                    (Runner::Junit, _, _) | (_, _, None) => {}
+                    (_, _, Some(_)) => bail!("{what}: `report` is only for the junit runner"),
+                }
+                if let Some(r) = &s.report {
+                    check_path(r, false).map_err(|why| anyhow::anyhow!("{what}: report {why}"))?;
+                }
                 suites.push(Suite {
                     runner,
                     tests: s.tests,
+                    command: s.command,
+                    report: s.report,
+                    env: s.env,
                 });
             }
             packages.push(Package {
@@ -249,6 +285,20 @@ impl Config {
                     quote(s.runner.as_str()),
                     list(&s.tests)
                 ));
+                if let Some(c) = &s.command {
+                    out.push_str(&format!("command = {}\n", quote(c)));
+                }
+                if let Some(r) = &s.report {
+                    out.push_str(&format!("report = {}\n", quote(r)));
+                }
+                if !s.env.is_empty() {
+                    let pairs: Vec<String> = s
+                        .env
+                        .iter()
+                        .map(|(k, v)| format!("{} = {}", quote(k), quote(v)))
+                        .collect();
+                    out.push_str(&format!("env = {{ {} }}\n", pairs.join(", ")));
+                }
             }
         }
         out

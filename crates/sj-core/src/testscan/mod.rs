@@ -208,6 +208,13 @@ pub fn scan_project(root: &Path, config: &Config) -> Result<Scan> {
             Runner::Vitest | Runner::Jest | Runner::Playwright => scan_js,
             Runner::Pytest if rel.ends_with(".py") => scan_python,
             Runner::Pytest => continue,
+            // A generic JUnit suite can hold any language: pick by extension.
+            Runner::Junit => match rel.rsplit('.').next() {
+                Some("rs") => scan_rust,
+                Some("py") => scan_python,
+                Some("ts" | "tsx" | "js" | "jsx" | "mts" | "cts" | "mjs" | "cjs") => scan_js,
+                _ => continue,
+            },
         };
         let Ok(content) = std::fs::read_to_string(path) else {
             continue;
@@ -253,6 +260,8 @@ fn default_globs(root: &Path, pkg: &Package, runner: Runner) -> Vec<String> {
     };
     match runner {
         Runner::Cargo => vec![under("**/*.rs")],
+        // No sensible default: a junit suite lists its test files.
+        Runner::Junit => Vec::new(),
         Runner::Vitest | Runner::Jest => vec![under("**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}")],
         Runner::Pytest => vec![under("**/test_*.py"), under("**/*_test.py")],
         Runner::Playwright => {
