@@ -1,5 +1,6 @@
 //! specjutsu core: spec parsing, trace engine gate, test runs and the evidence ledger.
 
+pub mod config;
 pub mod gate;
 pub mod git;
 pub mod ledger;

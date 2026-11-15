@@ -4,8 +4,8 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. Config model and loading (sj-core + sj-cli)
 
-- [ ] 1.1 Add `sj_core::config` with the two-stage parse, validation, `default_for` and `package_for` (design decisions 1–4), plus the `toml` workspace dependency (CONF-001, CONF-002, CONF-003, CONF-004, CONF-005). Verify: `crates/sj-core/tests/config.rs` loads the CONF-001 file, the default with and without a root `Cargo.toml`, rejects `jestt` naming `apps/web` and the known runners, rejects `spec_rot`, and resolves `apps/api/src/x.ts`, `apps/admin/src/y.ts` and `apps-admin/z.ts`.
-- [ ] 1.2 Load the config first in `trace`, `gate`, `test` and `ledger`, with `--spec-root` overriding it (CONF-001, CONF-003, CONF-004). Verify: `crates/sj-cli/tests/config_cmd.rs` shows `sj trace` using `spec_root = "specs"` from the file and `--spec-root` beating it, and every one of the four commands exiting 2 on the `jestt` and `spec_rot` files. Existing CLI tests stay green.
+- [x] 1.1 Add `sj_core::config` with the two-stage parse, validation, `default_for` and `package_for` (design decisions 1–4), plus the `toml` workspace dependency (CONF-001, CONF-002, CONF-003, CONF-004, CONF-005). Verify: `crates/sj-core/tests/config.rs` loads the CONF-001 file, the default with and without a root `Cargo.toml`, rejects `jestt` naming `apps/web` and the known runners, rejects `spec_rot`, and resolves `apps/api/src/x.ts`, `apps/admin/src/y.ts` and `apps-admin/z.ts`.
+- [x] 1.2 Load the config first in `trace`, `gate`, `test` and `ledger`, with `--spec-root` overriding it (CONF-001, CONF-003, CONF-004). Verify: `crates/sj-cli/tests/config_cmd.rs` shows `sj trace` using `spec_root = "specs"` from the file and `--spec-root` beating it, and every one of the four commands exiting 2 on the `jestt` and `spec_rot` files. Existing CLI tests stay green.
 
 ## 2. sj init (sj-cli)
 

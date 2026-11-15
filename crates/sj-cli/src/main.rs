@@ -19,9 +19,9 @@ enum Command {
         /// Repository root (defaults to the current directory).
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        /// Spec root relative to the repository root.
-        #[arg(long, default_value = "openspec")]
-        spec_root: PathBuf,
+        /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
         /// Print JSON instead of the compact report.
         #[arg(long)]
         json: bool,
@@ -39,8 +39,8 @@ enum Command {
         since: Option<String>,
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        #[arg(long, default_value = "openspec")]
-        spec_root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
         /// Warn instead of failing when a test cannot be overlaid on base.
         #[arg(long)]
         allow_unverifiable: bool,
@@ -53,8 +53,8 @@ enum Command {
         scope: Option<String>,
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        #[arg(long, default_value = "openspec")]
-        spec_root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,
         /// Do not write the run to the evidence ledger.
@@ -92,6 +92,7 @@ fn run() -> Result<ExitCode> {
             allow_unverifiable,
             json,
         } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
             let report = match (base, since) {
                 (_, Some(since)) => sj_core::gate::history(&root, &since)?,
                 (Some(base), None) => sj_core::gate::run(&sj_core::gate::Options {
@@ -128,14 +129,21 @@ fn run() -> Result<ExitCode> {
             spec_root,
             json,
             no_ledger,
-        } => test_cmd(scope, root, spec_root, json, no_ledger),
-        Command::Ledger { id, root, json } => ledger_cmd(id, root, json),
+        } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
+            test_cmd(scope, root, spec_root, json, no_ledger)
+        }
+        Command::Ledger { id, root, json } => {
+            sj_core::config::load(&root)?;
+            ledger_cmd(id, root, json)
+        }
         Command::Trace {
             root,
             spec_root,
             json,
             strict,
         } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
             let scenarios = sj_core::spec::load_scenarios(&root.join(&spec_root))?;
             let tests = sj_core::testscan::scan_tree(&root)?;
             let report = sj_core::trace::build_report(&scenarios, &tests);
@@ -151,6 +159,12 @@ fn run() -> Result<ExitCode> {
             })
         }
     }
+}
+
+/// Load the project file (failing on a bad one) and pick the spec root: the flag, then the file.
+fn spec_root_for(root: &Path, flag: Option<PathBuf>) -> Result<PathBuf> {
+    let config = sj_core::config::load(root)?;
+    Ok(flag.unwrap_or_else(|| PathBuf::from(config.spec_root)))
 }
 
 fn test_cmd(
