@@ -61,7 +61,13 @@ fn gate_027_non_source_list() {
     ] {
         assert!(!is_impl_file(f, "openspec"), "{f} should be non-source");
     }
-    for f in ["src/lib.rs", "web/app.ts", "scripts/build.sh", "Makefile", "backend/src/diff.py"] {
+    for f in [
+        "src/lib.rs",
+        "web/app.ts",
+        "scripts/build.sh",
+        "Makefile",
+        "backend/src/diff.py",
+    ] {
         assert!(is_impl_file(f, "openspec"), "{f} should be implementation");
     }
 }

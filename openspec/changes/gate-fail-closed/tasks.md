@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. File classification (sj-core)
 
-- [ ] 1.1 Replace `is_impl_file` with the fail-closed non-source list from design decision 1 (GATE-013, GATE-014, GATE-027, GATE-028). Verify: `evaluate` tests in `crates/sj-core/tests/gate.rs` for `web/app.ts` + `scripts/build.sh` (fails, both listed, sorted) and for `Cargo.toml` + `Cargo.lock` + `.github/workflows/ci.yml` (passes). Existing GATE-013 and GATE-014 tests stay green.
+- [x] 1.1 Replace `is_impl_file` with the fail-closed non-source list from design decision 1 (GATE-013, GATE-014, GATE-027, GATE-028). Verify: `evaluate` tests in `crates/sj-core/tests/gate.rs` for `web/app.ts` + `scripts/build.sh` (fails, both listed, sorted) and for `Cargo.toml` + `Cargo.lock` + `.github/workflows/ci.yml` (passes). Existing GATE-013 and GATE-014 tests stay green.
 
 ## 2. Unidentified scenarios (sj-core)
 

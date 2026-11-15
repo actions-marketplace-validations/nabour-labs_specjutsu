@@ -118,6 +118,8 @@ pub struct Input {
     /// Base results keyed by (scenario ID, test fn name).
     pub base: BTreeMap<(String, String), Red>,
     pub allow_unverifiable: bool,
+    /// Spec root relative to the repository root, forward slashes.
+    pub spec_root: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -260,7 +262,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         let impl_files: Vec<&str> = input
             .changed_files
             .iter()
-            .filter(|f| is_impl_file(f))
+            .filter(|f| is_impl_file(f, &input.spec_root))
             .map(String::as_str)
             .collect();
         if !impl_files.is_empty() {
@@ -316,12 +318,53 @@ fn is_test_support(rel: &str) -> bool {
     rel.split('/').rev().skip(1).any(|p| p == "tests")
 }
 
-/// A source file whose change needs a scenario or an exemption.
-pub fn is_impl_file(rel: &str) -> bool {
-    rel.ends_with(".rs")
-        && !rel
-            .split('/')
-            .any(|p| matches!(p, "tests" | "fixtures" | "target"))
+/// Extensions of documentation and media files.
+const DOC_EXTS: [&str; 11] = [
+    "md", "mdx", "txt", "rst", "png", "jpg", "jpeg", "gif", "svg", "webp", "ico",
+];
+
+/// Package manifests and lockfiles, by file name.
+const MANIFESTS: [&str; 12] = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "yarn.lock",
+    "pyproject.toml",
+    "uv.lock",
+    "go.mod",
+    "go.sum",
+    "Gemfile.lock",
+];
+
+/// A changed file that needs a scenario or an exemption. Fail-closed: everything is
+/// implementation unless it is a test, a spec, documentation or media, repository metadata,
+/// or a manifest or lockfile.
+pub fn is_impl_file(rel: &str, spec_root: &str) -> bool {
+    let root = spec_root.trim_end_matches('/');
+    if rel.strip_prefix(root).is_some_and(|r| r.starts_with('/')) {
+        return false;
+    }
+    if rel
+        .split('/')
+        .any(|p| matches!(p, "tests" | "fixtures" | "target"))
+    {
+        return false;
+    }
+    if rel.starts_with(".github/") {
+        return false;
+    }
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    if matches!(name, ".gitignore" | ".gitattributes")
+        || name.starts_with("LICENSE")
+        || MANIFESTS.contains(&name)
+    {
+        return false;
+    }
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
+    !ext.is_some_and(|e| DOC_EXTS.contains(&e.as_str()))
 }
 
 pub struct Options {
@@ -446,6 +489,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_run,
         base,
         allow_unverifiable: opts.allow_unverifiable,
+        spec_root,
     }))
 }
 
