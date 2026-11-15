@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="1" tests="5" time="0.020" timestamp="2026-11-15T00:00:00Z" hostname="host"><testcase classname="tests.test_inv" name="test_inv_002_removes_item" time="0.000"><failure message="AssertionError: expected 401, got 200&#10;assert 200 == 401">def test_inv_002_removes_item():
+&gt;       assert 200 == 401, "expected 401, got 200"
+E       AssertionError: expected 401, got 200
+E       assert 200 == 401
+
+tests/test_inv.py:4: AssertionError</failure></testcase><testcase classname="tests.test_inv.TestDiff" name="test_added" time="0.000" /><testcase classname="tests.test_inv" name="test_param[1]" time="0.000" /><testcase classname="tests.test_inv" name="test_param[2]" time="0.000" /><testcase classname="tests.test_inv" name="test_skipped" time="0.000"><skipped type="pytest.skip" message="later">/work/tests/test_inv.py:14: later</skipped></testcase></testsuite></testsuites>

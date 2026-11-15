@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="6" failures="2" errors="0" time="0.00485975">
+    <testsuite name="src/auth.test.ts" timestamp="2026-11-15T00:00:00Z" hostname="host" tests="5" failures="1" errors="0" skipped="1" time="0.00485975">
+        <testcase classname="src/auth.test.ts" name="AUTH-004 refresh &gt; issues a new token" time="0.0008295">
+        </testcase>
+        <testcase classname="src/auth.test.ts" name="AUTH-004 refresh &gt; rejects expired token" time="0.0028725">
+            <failure message="expected 200 to be 401 // Object.is equality" type="AssertionError">
+AssertionError: expected 200 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 200
+
+ ❯ src/auth.test.ts:3:51
+            </failure>
+        </testcase>
+        <testcase classname="src/auth.test.ts" name="AUTH-005 pending" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="src/auth.test.ts" name="case 1" time="0.000112625">
+        </testcase>
+        <testcase classname="src/auth.test.ts" name="case 2" time="0.000218292">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/broken.test.ts" timestamp="2026-11-15T00:00:00Z" hostname="host" tests="1" failures="1" errors="0" skipped="0" time="0">
+        <testcase classname="src/broken.test.ts" name="src/broken.test.ts" time="0">
+            <failure message="Cannot find module &apos;./nope&apos; imported from /work/src/broken.test.ts" type="Error">
+Error: Cannot find module &apos;./nope&apos; imported from /work/src/broken.test.ts
+ ❯ src/broken.test.ts:1:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: &apos;ERR_MODULE_NOT_FOUND&apos; }
+            </failure>
+        </testcase>
+    </testsuite>
+</testsuites>
