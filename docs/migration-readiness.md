@@ -157,14 +157,17 @@ whatever the exemption.
 ## Decision: replacement (Nov 14, 2026)
 
 Finding 5 is decided: **specjutsu replaces Superpowers, Spec Kit and OpenSpec** in the
-three projects. The README's "keep your spec tool" positioning and design principle 6
-need rewording to match; that is a docs follow-up. The spec *format* stays OpenSpec's, so
+three projects. The README, the website and design principle 6 have been reworded to
+match (PRs #7 and #8). The spec *format* stays OpenSpec's, so
 `openspec/` folders keep working and are read in place.
 
 ## Replacement roadmap (proposed OpenSpec changes)
 
-Each change is in `openspec/changes/<name>/` with a proposal and delta specs. Only
-`gate-fail-closed` also has its design and tasks. The others get theirs when picked up.
+Each change has a proposal and delta specs. Only `gate-fail-closed` also has its
+design and tasks, and it is the only one on `main`. The other ten are on the
+`spec/replacement-proposals` branch, because the gate fails any merged scenario that
+has no test. Each one comes to `main` in the same PR as its implementation, with its
+design and tasks written when it is picked up.
 
 | # | Change | Capability (prefix) | Delivers | Needed by |
 | --- | --- | --- | --- | --- |
