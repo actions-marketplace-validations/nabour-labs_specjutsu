@@ -20,7 +20,8 @@ pub struct Case {
     pub file: Option<String>,
     pub line: Option<usize>,
     pub outcome: CaseOutcome,
-    /// The failure's `message` attribute followed by its text; empty unless failed.
+    /// The failure's text, preceded by its `message` attribute when the text doesn't already
+    /// contain it; empty unless failed.
     pub message: String,
 }
 
@@ -34,6 +35,8 @@ pub fn parse(xml: &str) -> Result<Vec<Case>> {
     let mut current: Option<Case> = None;
     // Inside a <failure>/<error>: collect its text.
     let mut in_failure = false;
+    let mut attr = String::new();
+    let mut body_start = 0;
 
     loop {
         let event = reader
@@ -47,7 +50,8 @@ pub fn parse(xml: &str) -> Result<Vec<Case>> {
                     b"testcase" => current = Some(start_case(&e)?),
                     b"failure" | b"error" => {
                         if let Some(c) = current.as_mut() {
-                            fail(c, &e)?;
+                            fail(c, &e, &mut attr)?;
+                            body_start = c.message.len();
                             in_failure = true;
                         }
                     }
@@ -64,7 +68,9 @@ pub fn parse(xml: &str) -> Result<Vec<Case>> {
                 b"testcase" => cases.push(start_case(&e)?),
                 b"failure" | b"error" => {
                     if let Some(c) = current.as_mut() {
-                        fail(c, &e)?;
+                        fail(c, &e, &mut attr)?;
+                        let start = c.message.len();
+                        finish_failure(c, &mut attr, start);
                     }
                 }
                 b"skipped" => {
@@ -84,7 +90,12 @@ pub fn parse(xml: &str) -> Result<Vec<Case>> {
                             cases.push(c);
                         }
                     }
-                    b"failure" | b"error" => in_failure = false,
+                    b"failure" | b"error" => {
+                        if let Some(c) = current.as_mut() {
+                            finish_failure(c, &mut attr, body_start);
+                        }
+                        in_failure = false;
+                    }
                     _ => {}
                 }
             }
@@ -135,19 +146,24 @@ fn start_case(e: &BytesStart) -> Result<Case> {
     Ok(c)
 }
 
-fn fail(c: &mut Case, e: &BytesStart) -> Result<()> {
+fn fail(c: &mut Case, e: &BytesStart, attr: &mut String) -> Result<()> {
     c.outcome = CaseOutcome::Failed;
     for a in e.attributes() {
         let a = a.context("invalid attribute in JUnit XML")?;
         if a.key.local_name().as_ref() == b"message" {
-            let m = a.unescape_value()?;
-            if !m.is_empty() {
-                c.message.push_str(&m);
-                c.message.push('\n');
-            }
+            *attr = a.unescape_value()?.trim().to_string();
         }
     }
     Ok(())
+}
+
+/// Put the `message` attribute in front of the failure text unless the text repeats it.
+fn finish_failure(c: &mut Case, attr: &mut String, body_start: usize) {
+    let attr = std::mem::take(attr);
+    if attr.is_empty() || c.message[body_start..].contains(&attr) {
+        return;
+    }
+    c.message.insert_str(body_start, &format!("{attr}\n"));
 }
 
 fn push_text(c: Option<&mut Case>, text: &str) {

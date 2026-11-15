@@ -108,3 +108,20 @@ fn run_011_errors_count_as_failures() {
     assert!(cases[0].message.contains("collection failure"));
     assert!(cases[0].message.contains("ImportError"));
 }
+
+#[test]
+fn run_011_a_message_repeated_in_the_body_appears_once() {
+    let cases = parse(include_str!("data/vitest.xml")).unwrap();
+    let bad = case(&cases, "AUTH-004 refresh > rejects expired token");
+    assert_eq!(
+        bad.message.matches("expected 200 to be 401").count(),
+        1,
+        "{}",
+        bad.message
+    );
+    let xml = r#"<testsuite><testcase name="t"><failure message="boom"/></testcase>
+<testcase name="u"><failure message="short">longer body text</failure></testcase></testsuite>"#;
+    let cases = parse(xml).unwrap();
+    assert_eq!(cases[0].message, "boom");
+    assert_eq!(cases[1].message, "short\nlonger body text");
+}
