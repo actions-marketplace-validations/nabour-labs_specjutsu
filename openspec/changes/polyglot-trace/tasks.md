@@ -12,7 +12,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Suite discovery (sj-core)
 
-- [ ] 3.1 `testscan::scan_project` with ownership-first suite selection, longest-literal-prefix tie-breaking and per-runner defaults (design decision 1). Change the cargo glob in `Config::default_for` and `adopt` to `**/*.rs` (TRACE-007, TRACE-008). Verify: `crates/sj-core/tests/scan_project.rs` builds a temp tree with `apps/api` (vitest, default globs) holding `src/auth.test.ts` and `tests/unit/models.test.ts`, an `apps/app` e2e file claimed by Playwright, a pytest package, and `scripts/seed.ts` outside every suite, and checks package and suite on each test and nothing from `scripts/`.
+- [x] 3.1 `testscan::scan_project` with ownership-first suite selection, longest-literal-prefix tie-breaking and per-runner defaults (design decision 1). Change the cargo glob in `Config::default_for` and `adopt` to `**/*.rs` (TRACE-007, TRACE-008). Verify: `crates/sj-core/tests/scan_project.rs` builds a temp tree with `apps/api` (vitest, default globs) holding `src/auth.test.ts` and `tests/unit/models.test.ts`, an `apps/app` e2e file claimed by Playwright, a pytest package, and `scripts/seed.ts` outside every suite, and checks package and suite on each test and nothing from `scripts/`.
 
 ## 4. Report and CLI (sj-core + sj-cli)
 

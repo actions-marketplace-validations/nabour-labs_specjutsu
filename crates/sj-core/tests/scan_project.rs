@@ -236,6 +236,6 @@ fn trace_008_files_outside_every_suite_are_not_scanned() {
     );
     assert!(!files
         .iter()
-        .any(|f| f.ends_with("helpers.ts") || f.ends_with("jobs.py")));
+        .any(|f| f.ends_with("/helpers.ts") || f.ends_with("/jobs.py")));
     assert_eq!(scan.unsuited, ["packages/ui"]);
 }

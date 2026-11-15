@@ -14,7 +14,9 @@ use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::config::Runner;
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
+
+use crate::config::{Config, Package, Runner};
 
 /// A test found in source.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -108,6 +110,169 @@ pub fn scan_tree(root: &Path) -> Result<Vec<TestFn>> {
         }
     }
     Ok(out)
+}
+
+/// Tests found through the project config, and the packages that have source files but no suite.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Scan {
+    pub tests: Vec<TestFn>,
+    pub unsuited: Vec<String>,
+}
+
+/// Directories never searched for tests.
+const SKIP_DIRS: [&str; 6] = [
+    "target",
+    "node_modules",
+    ".venv",
+    "venv",
+    "fixtures",
+    ".git",
+];
+
+/// One suite's compiled globs, with the literal prefix length of each for tie-breaking.
+struct SuiteGlobs {
+    runner: Runner,
+    set: GlobSet,
+    prefixes: Vec<usize>,
+}
+
+/// Walk `root` once and scan every file that a suite of its owning package matches.
+///
+/// A file belongs to the package with the longest matching path. Within that package, the suite
+/// whose matching glob has the longest literal prefix wins; config order breaks ties.
+pub fn scan_project(root: &Path, config: &Config) -> Result<Scan> {
+    let mut suites: Vec<Vec<SuiteGlobs>> = Vec::with_capacity(config.packages.len());
+    let mut sources: Vec<GlobSet> = Vec::with_capacity(config.packages.len());
+    for p in &config.packages {
+        let mut v = Vec::new();
+        for s in &p.suites {
+            let globs = if s.tests.is_empty() {
+                default_globs(root, p, s.runner)
+            } else {
+                s.tests.clone()
+            };
+            let (set, prefixes) = compile(&globs)?;
+            v.push(SuiteGlobs {
+                runner: s.runner,
+                set,
+                prefixes,
+            });
+        }
+        suites.push(v);
+        sources.push(compile(&p.sources)?.0);
+    }
+
+    let mut scan = Scan::default();
+    let mut has_source = vec![false; config.packages.len()];
+    let walker = ignore::WalkBuilder::new(root)
+        .sort_by_file_path(|a, b| a.cmp(b))
+        .filter_entry(|e| {
+            e.depth() == 0
+                || !(e.file_type().is_some_and(|t| t.is_dir())
+                    && e.file_name()
+                        .to_str()
+                        .is_some_and(|n| SKIP_DIRS.contains(&n)))
+        })
+        .build();
+    for entry in walker {
+        let entry = entry?;
+        if !entry.file_type().is_some_and(|t| t.is_file()) {
+            continue;
+        }
+        let path = entry.path();
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let Some(pkg) = config.package_for(&rel) else {
+            continue;
+        };
+        let idx = config
+            .packages
+            .iter()
+            .position(|p| std::ptr::eq(p, pkg))
+            .unwrap_or_default();
+        if suites[idx].is_empty() {
+            if sources[idx].is_match(&rel) {
+                has_source[idx] = true;
+            }
+            continue;
+        }
+        let Some(runner) = pick_suite(&suites[idx], &rel) else {
+            continue;
+        };
+        let scanner: fn(&Path, &str) -> Vec<TestFn> = match runner {
+            Runner::Cargo if rel.ends_with(".rs") => scan_rust,
+            Runner::Cargo => continue,
+            Runner::Vitest | Runner::Jest | Runner::Playwright => scan_js,
+            Runner::Pytest if rel.ends_with(".py") => scan_python,
+            Runner::Pytest => continue,
+        };
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let rel_path = PathBuf::from(&rel);
+        for mut t in scanner(&rel_path, &content) {
+            t.package = Some(pkg.path.clone());
+            t.suite = Some(runner);
+            scan.tests.push(t);
+        }
+    }
+    scan.unsuited = config
+        .packages
+        .iter()
+        .zip(has_source)
+        .filter(|(_, has)| *has)
+        .map(|(p, _)| p.path.clone())
+        .collect();
+    Ok(scan)
+}
+
+fn pick_suite(suites: &[SuiteGlobs], rel: &str) -> Option<Runner> {
+    let mut best: Option<(usize, Runner)> = None;
+    for s in suites {
+        let longest = s.set.matches(rel).into_iter().map(|i| s.prefixes[i]).max();
+        if let Some(len) = longest {
+            if best.map_or(true, |(b, _)| len > b) {
+                best = Some((len, s.runner));
+            }
+        }
+    }
+    best.map(|(_, r)| r)
+}
+
+/// A runner's default test globs under a package, relative to the repository root.
+fn default_globs(root: &Path, pkg: &Package, runner: Runner) -> Vec<String> {
+    let under = |g: &str| {
+        if pkg.path == "." {
+            g.to_string()
+        } else {
+            format!("{}/{g}", pkg.path)
+        }
+    };
+    match runner {
+        Runner::Cargo => vec![under("**/*.rs")],
+        Runner::Vitest | Runner::Jest => vec![under("**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}")],
+        Runner::Pytest => vec![under("**/test_*.py"), under("**/*_test.py")],
+        Runner::Playwright => {
+            let test_dir = crate::adopt::config_file(root, &pkg.path, "playwright.config")
+                .and_then(|f| std::fs::read_to_string(f).ok())
+                .and_then(|t| crate::adopt::playwright_test_dir(&t))
+                .unwrap_or_else(|| "e2e".into());
+            vec![under(&format!("{test_dir}/**/*.spec.ts"))]
+        }
+    }
+}
+
+fn compile(globs: &[String]) -> Result<(GlobSet, Vec<usize>)> {
+    let mut b = GlobSetBuilder::new();
+    let mut prefixes = Vec::with_capacity(globs.len());
+    for g in globs {
+        b.add(GlobBuilder::new(g).literal_separator(true).build()?);
+        prefixes.push(g.find(['*', '?', '[', '{']).unwrap_or(g.len()));
+    }
+    Ok((b.build()?, prefixes))
 }
 
 /// Candidate IDs embedded in a test name: an alphabetic segment followed by a numeric segment,
