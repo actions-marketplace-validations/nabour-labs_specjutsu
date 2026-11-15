@@ -73,8 +73,7 @@ fn run_002_scope_argument_shaped_like_an_id_is_a_scenario() {
 fn run_003_scenario_without_tests_is_an_error() {
     let repo = fixture();
     let err = resolve(repo.path(), spec_root(), &Scope::Scenario("FOO-009".into()))
-        .err()
-        .expect("unmapped scenario must be an error");
+        .expect_err("unmapped scenario must be an error");
     assert!(
         err.to_string().contains("FOO-009 has no mapped test"),
         "{err}"
