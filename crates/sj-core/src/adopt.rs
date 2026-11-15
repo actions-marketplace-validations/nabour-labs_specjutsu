@@ -61,7 +61,7 @@ pub fn detect(root: &Path) -> Result<Detected> {
     if root.join("Cargo.toml").is_file() {
         found.entry(".".into()).or_default().push(Suite {
             runner: Runner::Cargo,
-            tests: vec!["**/tests/**/*.rs".into()],
+            tests: vec!["**/*.rs".into()],
         });
     }
 
@@ -278,7 +278,7 @@ fn js_suites(root: &Path, dir: &str) -> Result<Vec<Suite>> {
     Ok(suites)
 }
 
-fn config_file(root: &Path, dir: &str, stem: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn config_file(root: &Path, dir: &str, stem: &str) -> Option<std::path::PathBuf> {
     ["ts", "mts", "cts", "js", "mjs", "cjs"]
         .iter()
         .map(|ext| root.join(join(dir, &format!("{stem}.{ext}"))))
@@ -286,7 +286,7 @@ fn config_file(root: &Path, dir: &str, stem: &str) -> Option<std::path::PathBuf>
 }
 
 /// `testDir` when it is a plain string literal, without a leading `./` or trailing `/`.
-fn playwright_test_dir(config: &str) -> Option<String> {
+pub(crate) fn playwright_test_dir(config: &str) -> Option<String> {
     let re = regex::Regex::new(r#"testDir\s*:\s*['"`]([^'"`$]+)['"`]"#).ok()?;
     let d = re.captures(config)?.get(1)?.as_str();
     let d = d.trim_start_matches("./").trim_end_matches('/');

@@ -18,8 +18,8 @@ changes with OpenSpec.
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha. `sj trace` and `sj gate` work for OpenSpec specs and Rust
-tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
+**Status:** pre-alpha. `sj trace` maps OpenSpec scenarios to Rust, vitest, Jest,
+Playwright and pytest tests. `sj gate` and `sj test` run Rust tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
 
 ## Install
@@ -66,8 +66,39 @@ fn auth_003_rejects_expired_token() { /* ... */ }
 fn rejects_expired() { /* ... */ }
 ```
 
+In vitest, Jest and Playwright, put the ID in the test title, in an enclosing
+`describe` title (it then covers every test inside), or in a `// spec:` comment:
+
+```ts
+it("AUTH-003 rejects expired token", () => { /* ... */ })
+
+describe("AUTH-004 refresh", () => {
+  it("issues a new token", () => { /* ... */ })
+})
+
+// spec: CHAT-002, CHAT-003
+test("sends a message", async ({ page }) => { /* ... */ })
+```
+
+In pytest, use the function name, a marker, or a `# spec:` comment above the
+function or its `Test*` class:
+
+```python
+def test_inv_002_removes_item(): ...
+
+# spec: INV-003
+class TestDiff:
+    @pytest.mark.spec("INV-004")
+    def test_added(self): ...
+```
+
 `sj trace` reports which scenarios are covered, which have no test, and which
-tests point at scenarios that no longer exist.
+tests point at scenarios that no longer exist. It finds test files through each
+suite in `specjutsu.toml` (see [The project file](#the-project-file)), so each
+test in `--json` carries its `package` and `suite`, and `skipped` for
+`.skip`/`.todo`/`.fixme` and `@pytest.mark.skip`. A package with source files but
+no suite gets a `warn    no test suite: <path>` line. Titles built at runtime
+(variables, `${}` templates) are not read. Use a `// spec:` comment for those.
 
 ## How the gate works
 
@@ -139,9 +170,9 @@ errors, packages without a runner, runners that are not installed, and missing
 spec folders, one per line. It never installs anything: pytest is checked on
 `PATH` or with `uv run --no-sync`, and Node runners in `node_modules/.bin`.
 
-Today only `spec_root` changes what `trace`, `gate` and `test` do. They read the
-packages and suites when the TypeScript and Python runners land. Until then they
-still run `cargo test` at the root.
+`sj trace` reads the packages and suites. `sj gate` and `sj test` still look for
+Rust tests only and run `cargo test` at the root until the TypeScript and Python
+runners land.
 
 ## Test runs and the evidence ledger
 

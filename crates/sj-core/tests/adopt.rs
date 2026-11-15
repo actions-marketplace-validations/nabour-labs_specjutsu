@@ -148,7 +148,7 @@ fn conf_008_cargo_and_pytest_config_files() {
     let c = &d.config;
     let root = pkg(c, ".");
     assert_eq!(runners(root), [Runner::Cargo]);
-    assert_eq!(root.suites[0].tests, ["**/tests/**/*.rs"]);
+    assert_eq!(root.suites[0].tests, ["**/*.rs"]);
     assert_eq!(runners(pkg(c, "svc")), [Runner::Pytest]);
     assert_eq!(runners(pkg(c, "tool")), [Runner::Pytest]);
     // pytest-cov alone is a plugin, not pytest.

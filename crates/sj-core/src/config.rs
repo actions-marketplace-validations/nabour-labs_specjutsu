@@ -146,7 +146,7 @@ impl Config {
                 sources: vec!["**/*.rs".into()],
                 suites: vec![Suite {
                     runner: Runner::Cargo,
-                    tests: vec!["**/tests/**/*.rs".into()],
+                    tests: vec!["**/*.rs".into()],
                 }],
             }]
         } else {

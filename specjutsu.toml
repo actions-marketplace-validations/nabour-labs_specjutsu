@@ -8,4 +8,4 @@ sources = ["**/*.rs"]
 
 [[package.suite]]
 runner = "cargo"
-tests = ["**/tests/**/*.rs"]
+tests = ["**/*.rs"]

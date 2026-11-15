@@ -185,10 +185,16 @@ fn run() -> Result<ExitCode> {
             json,
             strict,
         } => {
-            let spec_root = spec_root_for(&root, spec_root)?;
+            let config = sj_core::config::load(&root)?;
+            let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
             let scenarios = sj_core::spec::load_scenarios(&root.join(&spec_root))?;
-            let tests = sj_core::testscan::scan_tree(&root)?;
-            let report = sj_core::trace::build_report(&scenarios, &tests);
+            let scan = sj_core::testscan::scan_project(&root, &config)?;
+            let mut report = sj_core::trace::build_report(&scenarios, &scan.tests);
+            report.warnings = scan
+                .unsuited
+                .iter()
+                .map(|p| format!("no test suite: {p}"))
+                .collect();
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
@@ -383,6 +389,9 @@ fn print_compact(r: &sj_core::trace::Report, root: &Path) {
         plural(r.orphans.len(), "orphan"),
         r.unidentified.len()
     );
+    for w in &r.warnings {
+        println!("warn    {w}");
+    }
     for g in &r.gaps {
         println!(
             "gap     {} {}  ({}:{})",
