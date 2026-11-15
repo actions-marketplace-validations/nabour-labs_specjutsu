@@ -8,7 +8,7 @@ contributions to the same rule the tool enforces.
 1. **Spec it.** Behaviour changes start as an OpenSpec change in
    `openspec/changes/<change>/`. Every scenario starts with a stable ID:
    `#### Scenario: TRACE-007 Short name`. One prefix per capability (TRACE,
-   GATE, LEDGER, RUN, ADAPT). Never reuse an ID.
+   GATE, LEDGER, RUN, CONF, IDS, SPEC, IMP, LOOP, ADAPT, SKILL, MIG). Never reuse an ID.
 2. **Red.** Write the failing test, with the ID in its name
    (`fn trace_007_short_name()`), and commit it: `test(TRACE-007): red`.
 3. **Green.** Implement, then commit: `feat(TRACE-007): green`.

@@ -6,6 +6,17 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `sj gate` fails closed. Every changed file is source unless it is a
+  test, spec, documentation, media, repository metadata or a manifest/lockfile, so
+  editing e.g. a shell script or a `.ts` file now needs a scenario or an exemption.
+- `sj gate` fails a new or edited scenario without an ID (`unidentified`), and
+  warns once with the count of existing ones.
+- `sj gate --base` exits 2 when the repository has no supported test runner (no
+  root `Cargo.toml`) instead of passing.
+- `sj gate` runs the full suite at head for every exemption kind when source
+  files change, not only for `refactor`.
+
 ### Added
 - `sj test [SCOPE]`: run `cargo test` for the workspace, one package or one
   scenario's mapped tests; failures-only output with scenario IDs and excerpts;

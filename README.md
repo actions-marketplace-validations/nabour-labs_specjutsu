@@ -74,7 +74,17 @@ scenario. Its core check is **red-on-base**: it checks out the base commit,
 overlays only the change's `tests/` files, and requires each new test to fail
 there. A test that passes on the old code didn't drive the change. Refactors and
 chores declare an exemption with a reason (`Exempt: refactor — <why>` in the
-change's `proposal.md`).
+change's `proposal.md`). An exempted change that edits source still has to pass
+the full test suite.
+
+The gate fails closed. Any changed file counts as source, so it needs a scenario
+or an exemption, unless it is a test, a spec, documentation or media (`*.md`,
+`*.txt`, images), repository metadata (`.github/`, `.gitignore`, `LICENSE`), or a
+manifest or lockfile (`Cargo.toml`, `package.json`, `pyproject.toml`, …). A new
+or edited scenario without an ID fails as `unidentified`. Existing scenarios
+without IDs are counted in one warning. The only supported runner today is
+`cargo`, so the gate exits 2 in a repository without a root `Cargo.toml`
+instead of passing changes it can't test.
 
 ## Test runs and the evidence ledger
 

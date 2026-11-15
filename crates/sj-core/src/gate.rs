@@ -118,6 +118,12 @@ pub struct Input {
     /// Base results keyed by (scenario ID, test fn name).
     pub base: BTreeMap<(String, String), Red>,
     pub allow_unverifiable: bool,
+    /// Spec root relative to the repository root, forward slashes.
+    pub spec_root: String,
+    /// Scenarios without an ID whose text is new at head: `<name> (<file>:<line>)`.
+    pub unidentified: Vec<String>,
+    /// Scenarios without an ID that already existed on base.
+    pub unidentified_known: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -159,6 +165,12 @@ pub fn evaluate(input: &Input) -> GateReport {
         }
     }
     let refactor = input.exemptions.iter().any(|e| e.kind == "refactor");
+    let touches_impl = input
+        .changed_files
+        .iter()
+        .any(|f| is_impl_file(f, &input.spec_root));
+    // GATE-029: any exemption that touches source still needs a green suite.
+    let full_suite = refactor || (!input.exemptions.is_empty() && touches_impl);
 
     // Head suite must build.
     if let Some(run) = &input.head_run {
@@ -166,7 +178,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             r.failures
                 .push("test suite failed to build at head".to_string());
         }
-        if refactor {
+        if full_suite {
             for t in &run.results {
                 if t.outcome == Outcome::Failed {
                     r.failures.push(format!("failing {}", t.path));
@@ -252,6 +264,17 @@ pub fn evaluate(input: &Input) -> GateReport {
         }
     }
 
+    for u in &input.unidentified {
+        r.failures.push(format!("unidentified {u}"));
+    }
+    if input.unidentified_known > 0 {
+        r.warnings.push(if input.unidentified_known == 1 {
+            "1 scenario without ID".to_string()
+        } else {
+            format!("{} scenarios without IDs", input.unidentified_known)
+        });
+    }
+
     for o in &input.trace.orphans {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
@@ -260,7 +283,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         let impl_files: Vec<&str> = input
             .changed_files
             .iter()
-            .filter(|f| is_impl_file(f))
+            .filter(|f| is_impl_file(f, &input.spec_root))
             .map(String::as_str)
             .collect();
         if !impl_files.is_empty() {
@@ -316,12 +339,53 @@ fn is_test_support(rel: &str) -> bool {
     rel.split('/').rev().skip(1).any(|p| p == "tests")
 }
 
-/// A source file whose change needs a scenario or an exemption.
-pub fn is_impl_file(rel: &str) -> bool {
-    rel.ends_with(".rs")
-        && !rel
-            .split('/')
-            .any(|p| matches!(p, "tests" | "fixtures" | "target"))
+/// Extensions of documentation and media files.
+const DOC_EXTS: [&str; 11] = [
+    "md", "mdx", "txt", "rst", "png", "jpg", "jpeg", "gif", "svg", "webp", "ico",
+];
+
+/// Package manifests and lockfiles, by file name.
+const MANIFESTS: [&str; 12] = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "yarn.lock",
+    "pyproject.toml",
+    "uv.lock",
+    "go.mod",
+    "go.sum",
+    "Gemfile.lock",
+];
+
+/// A changed file that needs a scenario or an exemption. Fail-closed: everything is
+/// implementation unless it is a test, a spec, documentation or media, repository metadata,
+/// or a manifest or lockfile.
+pub fn is_impl_file(rel: &str, spec_root: &str) -> bool {
+    let root = spec_root.trim_end_matches('/');
+    if rel.strip_prefix(root).is_some_and(|r| r.starts_with('/')) {
+        return false;
+    }
+    if rel
+        .split('/')
+        .any(|p| matches!(p, "tests" | "fixtures" | "target"))
+    {
+        return false;
+    }
+    if rel.starts_with(".github/") {
+        return false;
+    }
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    if matches!(name, ".gitignore" | ".gitattributes")
+        || name.starts_with("LICENSE")
+        || MANIFESTS.contains(&name)
+    {
+        return false;
+    }
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
+    !ext.is_some_and(|e| DOC_EXTS.contains(&e.as_str()))
 }
 
 pub struct Options {
@@ -335,6 +399,14 @@ pub struct Options {
 /// Gather inputs from git and the runner (including red-on-base), then evaluate.
 pub fn run(opts: &Options) -> Result<GateReport> {
     let root = &opts.root;
+    // GATE-026: never pass a repository the gate cannot test.
+    if !root.join("Cargo.toml").is_file() {
+        anyhow::bail!(
+            "no supported test runner found in {} (supported: cargo); \
+             sj gate cannot verify this repository",
+            root.display()
+        );
+    }
     let git = Git::new(root);
     let base_sha = git.resolve(&opts.base)?;
     let head_sha = git.resolve("HEAD")?;
@@ -343,15 +415,41 @@ pub fn run(opts: &Options) -> Result<GateReport> {
 
     // Classification: base from git objects, head from the working tree.
     let mut base_fps = Vec::new();
+    let mut base_texts: BTreeSet<String> = BTreeSet::new();
     for path in git.ls_tree(&mb)? {
         if spec::is_spec_path(&path, &spec_root) {
-            base_fps.extend(spec::fingerprints(&git.show(&mb, &path)?));
+            let content = git.show(&mb, &path)?;
+            base_fps.extend(spec::fingerprints(&content));
+            base_texts.extend(
+                spec::scenario_texts(Path::new(&path), &content)
+                    .into_iter()
+                    .map(|(_, t)| t),
+            );
         }
     }
     let head_spec_root = root.join(&opts.spec_root);
     let mut head_fps = Vec::new();
+    // Scenarios without an ID: new text fails, text already on base only counts (GATE-024/025).
+    let mut unidentified = Vec::new();
+    let mut unidentified_known = 0;
     for file in spec::discover_spec_files(&head_spec_root)? {
-        head_fps.extend(spec::fingerprints(&std::fs::read_to_string(&file)?));
+        let content = std::fs::read_to_string(&file)?;
+        head_fps.extend(spec::fingerprints(&content));
+        for (s, text) in spec::scenario_texts(&file, &content) {
+            if s.id.is_some() {
+                continue;
+            }
+            if base_texts.contains(&text) {
+                unidentified_known += 1;
+            } else {
+                let rel = file
+                    .strip_prefix(root)
+                    .unwrap_or(&file)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                unidentified.push(format!("{} ({rel}:{})", s.name, s.line));
+            }
+        }
     }
     let mut changes = classify(&base_fps, &head_fps);
 
@@ -399,7 +497,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     let refactor = exemptions.iter().any(|e| e.kind == "refactor");
     let skip_red = refactor || exemptions.iter().any(|e| e.kind == "spike");
 
-    let head_run = if !targets.is_empty() || refactor {
+    let touches_impl = changed_files.iter().any(|f| is_impl_file(f, &spec_root));
+    let head_run = if !targets.is_empty() || refactor || (!exemptions.is_empty() && touches_impl) {
         Some(cargo_test(root, &["--workspace", "--no-fail-fast"], None)?)
     } else {
         None
@@ -446,6 +545,9 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_run,
         base,
         allow_unverifiable: opts.allow_unverifiable,
+        spec_root,
+        unidentified,
+        unidentified_known,
     }))
 }
 
