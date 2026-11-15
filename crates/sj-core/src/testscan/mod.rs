@@ -1,8 +1,10 @@
 //! Test discovery: per-language scanners that find test functions and the scenario IDs they name.
 
 mod js;
+mod python;
 
 pub use js::scan_js;
+pub use python::scan_python;
 
 use std::path::{Path, PathBuf};
 

@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. Python scanner (sj-core)
 
-- [ ] 2.1 `testscan::scan_python` from design decision 4 (TRACE-013, TRACE-014). Verify: `crates/sj-core/tests/scan_python.rs` covers module-level and class methods, `async def`, a non-`Test` class (ignored), the marker with several IDs, a comment above the class, and `@pytest.mark.skip`.
+- [x] 2.1 `testscan::scan_python` from design decision 4 (TRACE-013, TRACE-014). Verify: `crates/sj-core/tests/scan_python.rs` covers module-level and class methods, `async def`, a non-`Test` class (ignored), the marker with several IDs, a comment above the class, and `@pytest.mark.skip`.
 
 ## 3. Suite discovery (sj-core)
 
