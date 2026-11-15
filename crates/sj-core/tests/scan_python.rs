@@ -114,3 +114,21 @@ fn trace_014_class_marker_applies_to_methods() {
     assert_eq!(names(&tests), ["TestCart::test_a", "TestCart::test_b"]);
     assert!(tests.iter().all(|t| t.comment_ids == ["INV-010"]));
 }
+
+#[test]
+fn trace_014_brackets_inside_decorator_strings_do_not_hide_later_tests() {
+    let src = r#"
+@pytest.mark.parametrize(
+    "body",
+    [b"{not json", b"[]", json.dumps({"a": "(x"}).encode()],  # a ] comment
+    ids=["not-json", "not-object", "no-request-id"],
+)
+def test_malformed(body):
+    pass
+
+
+def test_after():
+    pass
+"#;
+    assert_eq!(names(&scan(src)), ["test_malformed", "test_after"]);
+}

@@ -172,12 +172,26 @@ fn opens_docstring(t: &str) -> Option<&'static str> {
         .find(|q| t.matches(q).count() % 2 == 1)
 }
 
+/// Bracket balance of one line, ignoring brackets in string literals and after `#`.
 fn balance(s: &str) -> i32 {
-    s.chars().fold(0, |d, c| match c {
-        '(' | '[' | '{' => d + 1,
-        ')' | ']' | '}' => d - 1,
-        _ => d,
-    })
+    let mut depth = 0;
+    let mut quote: Option<char> = None;
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(_), '\\') => {
+                chars.next();
+            }
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(c),
+            (None, '#') => break,
+            (None, '(' | '[' | '{') => depth += 1,
+            (None, ')' | ']' | '}') => depth -= 1,
+            _ => {}
+        }
+    }
+    depth
 }
 
 fn indent_of(line: &str) -> usize {
