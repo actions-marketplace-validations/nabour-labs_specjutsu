@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. JUnit reports (sj-runners + sj-core)
 
-- [ ] 2.1 `sj_runners::junit::parse` with `quick-xml`, and `match_cases` from design decision 3 (RUN-011, RUN-013). Verify: `crates/sj-runners/tests/junit.rs` parses the captured vitest, pytest (xunit1 and xunit2) and Playwright samples in `tests/data/` (failure, skipped, CDATA, the file-level vitest error). `crates/sj-core/tests/match_cases.rs` joins them to traced tests, covering `.each` placeholders, pytest parameters and classes, a path-suffix match, and a file-level error turning selected tests into `build-failed`.
+- [x] 2.1 `sj_runners::junit::parse` with `quick-xml`, and `match_cases` from design decision 3 (RUN-011, RUN-013). Verify: `crates/sj-runners/tests/junit.rs` parses the captured vitest, pytest (xunit1 and xunit2) and Playwright samples in `tests/data/` (failure, skipped, CDATA, the file-level vitest error). `crates/sj-core/tests/match_cases.rs` joins them to traced tests, covering `.each` placeholders, pytest parameters and classes, a path-suffix match, and a file-level error turning selected tests into `build-failed`.
 
 ## 3. sj test across suites (sj-core + sj-cli)
 

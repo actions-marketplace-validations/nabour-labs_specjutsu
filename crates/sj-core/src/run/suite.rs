@@ -258,3 +258,277 @@ fn rel_to(cwd: &Path, root: &Path, file: &Path) -> String {
 fn split(cmd: &str) -> Vec<String> {
     cmd.split_whitespace().map(String::from).collect()
 }
+
+/// A traced test's (or a loose case's) result in one suite run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum JoinedOutcome {
+    Passed,
+    Failed,
+    Skipped,
+    BuildFailed,
+}
+
+/// One result: a traced test (`test` is its index) or a case no traced test claimed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Joined {
+    pub test: Option<usize>,
+    /// `<file>::<name>` (repository-relative for traced tests, as reported otherwise).
+    pub path: String,
+    pub outcome: JoinedOutcome,
+    pub message: Option<String>,
+}
+
+/// One title segment of a traced test: exact, or a pattern for `.each` placeholders.
+enum Seg {
+    Exact(String),
+    Pattern(regex::Regex),
+}
+
+impl Seg {
+    fn new(s: &str) -> Seg {
+        let p = title_pattern(s);
+        if p == regex::escape(s) {
+            Seg::Exact(s.to_string())
+        } else {
+            regex::Regex::new(&format!("^{p}$")).map_or(Seg::Exact(s.to_string()), Seg::Pattern)
+        }
+    }
+
+    fn matches(&self, s: &str) -> bool {
+        match self {
+            Seg::Exact(e) => e == s,
+            Seg::Pattern(r) => r.is_match(s),
+        }
+    }
+}
+
+struct Traced {
+    /// Path components without the extension for pytest (`tests/test_inv` → [tests, test_inv]).
+    file: Vec<String>,
+    segs: Vec<Seg>,
+}
+
+/// Join a suite's JUnit cases to its traced tests. Several cases for one test (`.each`,
+/// parametrize) aggregate: any failure fails it, otherwise any pass passes it. A file that
+/// failed to load (a case named after the file) turns the traced tests in it into build
+/// failures.
+pub fn match_cases(
+    runner: Runner,
+    traced: &[TestFn],
+    cases: &[sj_runners::junit::Case],
+) -> Vec<Joined> {
+    use sj_runners::junit::CaseOutcome;
+
+    let pytest = runner == Runner::Pytest;
+    let index: Vec<Traced> = traced
+        .iter()
+        .map(|t| {
+            let f = t.file.to_string_lossy().replace('\\', "/");
+            let f = if pytest {
+                f.trim_end_matches(".py").to_string()
+            } else {
+                f
+            };
+            let sep = if pytest { "::" } else { " > " };
+            Traced {
+                file: f.split('/').map(String::from).collect(),
+                segs: t.name.split(sep).map(Seg::new).collect(),
+            }
+        })
+        .collect();
+    // Basename → traced indices, so a case is only compared with tests in its own file.
+    let mut by_base: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (i, t) in index.iter().enumerate() {
+        if let Some(b) = t.file.last() {
+            by_base.entry(b.as_str()).or_default().push(i);
+        }
+    }
+
+    let mut results: BTreeMap<usize, (JoinedOutcome, Option<String>)> = BTreeMap::new();
+    let mut loose: Vec<Joined> = Vec::new();
+    let mut file_errors: Vec<(Vec<String>, String)> = Vec::new();
+
+    for c in cases {
+        let outcome = match c.outcome {
+            CaseOutcome::Passed => JoinedOutcome::Passed,
+            CaseOutcome::Failed => JoinedOutcome::Failed,
+            CaseOutcome::Skipped => JoinedOutcome::Skipped,
+        };
+        if let Some(file) = file_level_error(runner, c) {
+            file_errors.push((file, c.message.clone()));
+            continue;
+        }
+        let (file, titles) = case_key(runner, c);
+        let hit = candidates(&by_base, &file, pytest).into_iter().find(|&i| {
+            let t = &index[i];
+            if pytest {
+                // [module…, classes…, func] as a component suffix either way.
+                let mut want: Vec<&str> = t.file.iter().map(String::as_str).collect();
+                want.extend(t.segs.iter().map(|s| match s {
+                    Seg::Exact(e) => e.as_str(),
+                    Seg::Pattern(_) => "",
+                }));
+                let got: Vec<&str> = file
+                    .iter()
+                    .map(String::as_str)
+                    .chain(titles.iter().map(String::as_str))
+                    .collect();
+                got.len() >= 2 && (ends_with(&want, &got) || ends_with(&got, &want))
+            } else {
+                let fa: Vec<&str> = t.file.iter().map(String::as_str).collect();
+                let fb: Vec<&str> = file.iter().map(String::as_str).collect();
+                let same_file = file.is_empty() || ends_with(&fa, &fb) || ends_with(&fb, &fa);
+                let full = t.segs.len() == titles.len()
+                    && t.segs.iter().zip(&titles).all(|(s, x)| s.matches(x));
+                // A generic report may only carry the leaf title.
+                let leaf = runner == Runner::Junit
+                    && titles.len() == 1
+                    && t.segs.last().is_some_and(|s| s.matches(&titles[0]));
+                same_file && (full || leaf)
+            }
+        });
+        let message = (outcome == JoinedOutcome::Failed).then(|| c.message.clone());
+        match hit {
+            Some(i) => {
+                let e = results.entry(i).or_insert((outcome, message.clone()));
+                if rank(outcome) > rank(e.0) {
+                    *e = (outcome, message);
+                }
+            }
+            None => loose.push(Joined {
+                test: None,
+                path: format!("{}::{}", c.file.as_deref().unwrap_or(&c.classname), c.name),
+                outcome,
+                message,
+            }),
+        }
+    }
+
+    let mut out = Vec::new();
+    let mut claimed = vec![false; file_errors.len()];
+    for (i, t) in traced.iter().enumerate() {
+        let path = format!(
+            "{}::{}",
+            t.file.to_string_lossy().replace('\\', "/"),
+            t.name
+        );
+        if let Some((outcome, message)) = results.remove(&i) {
+            out.push(Joined {
+                test: Some(i),
+                path,
+                outcome,
+                message,
+            });
+            continue;
+        }
+        let fa: Vec<&str> = index[i].file.iter().map(String::as_str).collect();
+        if let Some(k) = file_errors.iter().position(|(f, _)| {
+            let fb: Vec<&str> = f.iter().map(String::as_str).collect();
+            ends_with(&fa, &fb) || ends_with(&fb, &fa)
+        }) {
+            claimed[k] = true;
+            out.push(Joined {
+                test: Some(i),
+                path,
+                outcome: JoinedOutcome::BuildFailed,
+                message: Some(file_errors[k].1.clone()),
+            });
+        }
+    }
+    out.extend(loose);
+    for ((file, message), used) in file_errors.into_iter().zip(claimed) {
+        if !used {
+            out.push(Joined {
+                test: None,
+                path: file.join("/"),
+                outcome: JoinedOutcome::BuildFailed,
+                message: Some(message),
+            });
+        }
+    }
+    out
+}
+
+/// Failed beats passed beats skipped when several cases fold into one test.
+fn rank(o: JoinedOutcome) -> u8 {
+    match o {
+        JoinedOutcome::Skipped => 0,
+        JoinedOutcome::Passed => 1,
+        JoinedOutcome::Failed => 2,
+        JoinedOutcome::BuildFailed => 3,
+    }
+}
+
+/// A case that stands for a whole file failing to load: vitest names it after the file, and
+/// pytest reports a collection error with an empty classname and the dotted module as name.
+fn file_level_error(runner: Runner, c: &sj_runners::junit::Case) -> Option<Vec<String>> {
+    use sj_runners::junit::CaseOutcome;
+    if c.outcome != CaseOutcome::Failed {
+        return None;
+    }
+    let file = c.file.as_deref().unwrap_or(&c.classname);
+    match runner {
+        Runner::Pytest if c.classname.is_empty() && !c.name.is_empty() => {
+            Some(c.name.split('.').map(String::from).collect())
+        }
+        Runner::Vitest | Runner::Jest | Runner::Playwright
+            if !file.is_empty() && c.name == file =>
+        {
+            Some(file.split('/').map(String::from).collect())
+        }
+        _ => None,
+    }
+}
+
+/// A case's file components and title segments.
+fn case_key(runner: Runner, c: &sj_runners::junit::Case) -> (Vec<String>, Vec<String>) {
+    let split = |s: &str, sep: &str| -> Vec<String> {
+        if s.is_empty() {
+            Vec::new()
+        } else {
+            s.split(sep).map(String::from).collect()
+        }
+    };
+    match runner {
+        Runner::Pytest => {
+            let name = c.name.split('[').next().unwrap_or(&c.name).to_string();
+            (split(&c.classname, "."), vec![name])
+        }
+        Runner::Playwright => (split(&c.classname, "/"), split(&c.name, " › ")),
+        Runner::Jest => {
+            let file = c.file.as_deref().map(|f| split(f, "/")).unwrap_or_default();
+            let mut titles = split(&c.classname, " > ");
+            titles.push(c.name.clone());
+            (file, titles)
+        }
+        Runner::Vitest => (split(&c.classname, "/"), split(&c.name, " > ")),
+        Runner::Junit | Runner::Cargo => {
+            let file = c.file.as_deref().map(|f| split(f, "/")).unwrap_or_default();
+            (file, vec![c.name.clone()])
+        }
+    }
+}
+
+/// Traced tests worth comparing with a case: those whose file basename appears in the case's
+/// file (or, for pytest, any of its dotted components). With no file, every test.
+fn candidates(by_base: &BTreeMap<&str, Vec<usize>>, file: &[String], pytest: bool) -> Vec<usize> {
+    let mut out: Vec<usize> = if pytest {
+        file.iter()
+            .filter_map(|c| by_base.get(c.as_str()))
+            .flatten()
+            .copied()
+            .collect()
+    } else if let Some(b) = file.last() {
+        by_base.get(b.as_str()).cloned().unwrap_or_default()
+    } else {
+        by_base.values().flatten().copied().collect()
+    };
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+fn ends_with(long: &[&str], short: &[&str]) -> bool {
+    !short.is_empty() && long.len() >= short.len() && long[long.len() - short.len()..] == *short
+}

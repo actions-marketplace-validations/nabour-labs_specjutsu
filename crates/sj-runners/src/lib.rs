@@ -1,4 +1,4 @@
-//! Test-runner adapters. `cargo test` first; pytest, jest/vitest, go, junit, dotnet, phpunit and
-//! rspec follow.
+//! Test-runner adapters: `cargo test` (libtest output) and JUnit XML reports for everything else.
 
 pub mod cargo;
+pub mod junit;
