@@ -28,4 +28,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 5. Self-hosting
 
-- [ ] 5.1 Run `sj test` and `sj ledger` on this repo. Verify: `sj test` exits 0 with one summary line, `sj test GATE-004` runs only the GATE-004 tests, and `sj trace --strict` and `sj gate --base origin/main` pass with the new scenarios.
+- [x] 5.1 Run `sj test` and `sj ledger` on this repo. Verify: `sj test` exits 0 with one summary line, `sj test GATE-004` runs only the GATE-004 tests, and `sj trace --strict` and `sj gate --base origin/main` pass with the new scenarios.
