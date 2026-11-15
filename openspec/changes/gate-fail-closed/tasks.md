@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. Unidentified scenarios (sj-core)
 
-- [ ] 2.1 Fingerprint scenarios without IDs and match head against base by text as a set; fail each unmatched one as `unidentified <name> (<file>:<line>)` and add one `N scenarios without IDs` warning for the matched ones (GATE-024, GATE-025). Verify: fixture-repo tests in `crates/sj-core/tests/gate_fail_closed.rs` covering a new unidentified scenario, three unchanged ones (one warning line), a reworded THEN line, and an unidentified scenario moved from a change delta into `specs/` (still unchanged, GATE-002).
+- [x] 2.1 Fingerprint scenarios without IDs and match head against base by text as a set; fail each unmatched one as `unidentified <name> (<file>:<line>)` and add one `N scenarios without IDs` warning for the matched ones (GATE-024, GATE-025). Verify: fixture-repo tests in `crates/sj-core/tests/gate_fail_closed.rs` covering a new unidentified scenario, three unchanged ones (one warning line), a reworded THEN line, and an unidentified scenario moved from a change delta into `specs/` (still unchanged, GATE-002).
 
 ## 3. Runner check and exempted suites (sj-core + sj-cli)
 

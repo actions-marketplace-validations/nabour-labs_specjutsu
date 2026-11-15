@@ -120,6 +120,10 @@ pub struct Input {
     pub allow_unverifiable: bool,
     /// Spec root relative to the repository root, forward slashes.
     pub spec_root: String,
+    /// Scenarios without an ID whose text is new at head: `<name> (<file>:<line>)`.
+    pub unidentified: Vec<String>,
+    /// Scenarios without an ID that already existed on base.
+    pub unidentified_known: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -254,6 +258,17 @@ pub fn evaluate(input: &Input) -> GateReport {
         }
     }
 
+    for u in &input.unidentified {
+        r.failures.push(format!("unidentified {u}"));
+    }
+    if input.unidentified_known > 0 {
+        r.warnings.push(if input.unidentified_known == 1 {
+            "1 scenario without ID".to_string()
+        } else {
+            format!("{} scenarios without IDs", input.unidentified_known)
+        });
+    }
+
     for o in &input.trace.orphans {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
@@ -386,15 +401,41 @@ pub fn run(opts: &Options) -> Result<GateReport> {
 
     // Classification: base from git objects, head from the working tree.
     let mut base_fps = Vec::new();
+    let mut base_texts: BTreeSet<String> = BTreeSet::new();
     for path in git.ls_tree(&mb)? {
         if spec::is_spec_path(&path, &spec_root) {
-            base_fps.extend(spec::fingerprints(&git.show(&mb, &path)?));
+            let content = git.show(&mb, &path)?;
+            base_fps.extend(spec::fingerprints(&content));
+            base_texts.extend(
+                spec::scenario_texts(Path::new(&path), &content)
+                    .into_iter()
+                    .map(|(_, t)| t),
+            );
         }
     }
     let head_spec_root = root.join(&opts.spec_root);
     let mut head_fps = Vec::new();
+    // Scenarios without an ID: new text fails, text already on base only counts (GATE-024/025).
+    let mut unidentified = Vec::new();
+    let mut unidentified_known = 0;
     for file in spec::discover_spec_files(&head_spec_root)? {
-        head_fps.extend(spec::fingerprints(&std::fs::read_to_string(&file)?));
+        let content = std::fs::read_to_string(&file)?;
+        head_fps.extend(spec::fingerprints(&content));
+        for (s, text) in spec::scenario_texts(&file, &content) {
+            if s.id.is_some() {
+                continue;
+            }
+            if base_texts.contains(&text) {
+                unidentified_known += 1;
+            } else {
+                let rel = file
+                    .strip_prefix(root)
+                    .unwrap_or(&file)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                unidentified.push(format!("{} ({rel}:{})", s.name, s.line));
+            }
+        }
     }
     let mut changes = classify(&base_fps, &head_fps);
 
@@ -490,6 +531,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         base,
         allow_unverifiable: opts.allow_unverifiable,
         spec_root,
+        unidentified,
+        unidentified_known,
     }))
 }
 

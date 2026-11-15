@@ -123,30 +123,36 @@ pub struct Fingerprint {
     pub text: String,
 }
 
+/// Every scenario in one spec file with its normalised text: heading name plus step lines,
+/// whitespace-collapsed, blank lines dropped (fenced code skipped). The ID is not part of the text.
+pub fn scenario_texts(file: &Path, content: &str) -> Vec<(Scenario, String)> {
+    let lines: Vec<&str> = content.lines().collect();
+    parse_scenarios(file, content)
+        .into_iter()
+        .map(|s| {
+            let mut parts = vec![collapse(&s.name)];
+            for line in lines.iter().skip(s.line) {
+                let t = line.trim_start();
+                if t.starts_with('#') || t.starts_with("```") || t.starts_with("~~~") {
+                    break;
+                }
+                let c = collapse(line);
+                if !c.is_empty() {
+                    parts.push(c);
+                }
+            }
+            let text = parts.join("\n");
+            (s, text)
+        })
+        .collect()
+}
+
 /// Fingerprint every identified scenario in one spec file (fenced code skipped).
 pub fn fingerprints(content: &str) -> Vec<Fingerprint> {
-    let scenarios = parse_scenarios(Path::new(""), content);
-    let lines: Vec<&str> = content.lines().collect();
-    let mut out = Vec::new();
-    for s in &scenarios {
-        let Some(id) = &s.id else { continue };
-        let mut parts = vec![collapse(&s.name)];
-        for line in lines.iter().skip(s.line) {
-            let t = line.trim_start();
-            if t.starts_with('#') || t.starts_with("```") || t.starts_with("~~~") {
-                break;
-            }
-            let c = collapse(line);
-            if !c.is_empty() {
-                parts.push(c);
-            }
-        }
-        out.push(Fingerprint {
-            id: id.clone(),
-            text: parts.join("\n"),
-        });
-    }
-    out
+    scenario_texts(Path::new(""), content)
+        .into_iter()
+        .filter_map(|(s, text)| s.id.map(|id| Fingerprint { id, text }))
+        .collect()
 }
 
 fn collapse(s: &str) -> String {
