@@ -52,7 +52,7 @@
   a { color: var(--cyan); text-decoration: none; }
   a:hover { text-decoration: underline; }
   code, pre { font-family: var(--mono); }
-  img { max-width: 100%; display: block; }
+  img { max-width: 100%; height: auto; display: block; }
   .wrap { max-width: var(--max); margin: 0 auto; padding: 0 20px; }
   .grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
@@ -66,7 +66,7 @@
   nav.top .wrap { display: flex; align-items: center; gap: 24px; height: 62px; }
   .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 800; letter-spacing: -0.02em; font-size: 19px; }
   .brand:hover { text-decoration: none; }
-  .brand img { width: 34px; height: 34px; border-radius: 8px; background: #fff; object-fit: cover; }
+  .brand img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; border: 1px solid var(--line); }
   .nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 15px; }
   .nav-links a { color: var(--muted); }
   .nav-links a:hover { color: var(--text); text-decoration: none; }
@@ -215,10 +215,19 @@
   .checks li strong { color: var(--text); }
 
   /* quickstart */
-  .qs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
-  .qs > div { min-width: 0; }
-  .qs pre.code { margin: 0; height: 100%; }
-  .qs h3 { font-size: 15px; font-family: var(--mono); color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .qs {
+    display: grid; gap: 18px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "install run" "install gate";
+  }
+  .qs-card { min-width: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .qs-card.qs-install { grid-area: install; }
+  .qs-card.qs-run { grid-area: run; }
+  .qs-card.qs-gate { grid-area: gate; }
+  .qs-card h3 { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: 0 0 4px; }
+  .qs-card h3 .num { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--grad); color: #0b0716; font: 700 12px var(--mono); flex-shrink: 0; }
+  .qs-card p { margin: 0 0 14px; font-size: 14.5px; color: var(--muted); }
+  .qs-card pre.code { margin: 0; flex: 1; }
 
   /* roadmap */
   .road { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -233,7 +242,7 @@
 
   /* final cta */
   .final { text-align: center; padding: 100px 0 110px; position: relative; }
-  .final .mark { width: 120px; height: 120px; border-radius: 26px; margin: 0 auto 26px; background: #fff; object-fit: cover; box-shadow: 0 0 60px rgba(217,70,239,.45); }
+  .final .mark { width: 120px; height: 120px; border-radius: 26px; margin: 0 auto 26px; object-fit: cover; border: 1px solid var(--line); box-shadow: 0 0 60px rgba(217,70,239,.45); }
   footer { border-top: 1px solid var(--line); padding: 28px 0; color: var(--muted); font-size: 14px; }
   footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
   footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
@@ -241,6 +250,7 @@
 
   @media (max-width: 920px) {
     .gap-grid, .pillars, .steps, .rob, .agents, .qs { grid-template-columns: minmax(0, 1fr); }
+    .qs { grid-template-areas: "install" "run" "gate"; }
     .moat { grid-template-columns: 1fr 1fr; }
     .road { grid-template-columns: 1fr 1fr; }
     .nav-links { display: none; }
@@ -254,6 +264,8 @@
     .install code { font-size: 12.5px; }
     .lane { flex-wrap: wrap; }
     .lane .label { width: auto; }
+    .qs-card { padding: 14px; }
+    .qs-card pre.code { padding: 12px; font-size: 12px; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -535,26 +547,37 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
     <h2>From install to a blocking gate<br>in a few minutes.</h2>
     <p class="section-lede">Prebuilt binaries for macOS, Linux and Windows are on the <a href="https://github.com/nabour-labs/specjutsu/releases">releases page</a>, or build from source.</p>
     <div class="qs">
-      <div>
-        <h3>1 · install</h3>
-<pre class="code"><span class="c-m"># from source (needs Rust)</span>
-cargo install --git https://github.com/nabour-labs/specjutsu \
-  --tag v0.2.0 specjutsu
+      <div class="qs-card qs-install">
+        <h3><span class="num">1</span>Install</h3>
+        <p>One binary, no runtime. Pick your platform from the release, or build it.</p>
+<pre class="code"><span class="c-m"># prebuilt binary (macOS arm64 shown)</span>
+gh release download v0.2.0 \
+  -R nabour-labs/specjutsu \
+  -p 'sj-aarch64-apple-darwin.tar.gz'
+tar -xzf sj-aarch64-apple-darwin.tar.gz
+install sj-aarch64-apple-darwin/sj ~/.local/bin/
 
-<span class="c-m"># or grab a binary</span>
-gh release download v0.2.0 -R nabour-labs/specjutsu \
-  -p 'sj-aarch64-apple-darwin.tar.gz'</pre>
+<span class="c-m"># or from source (needs Rust)</span>
+cargo install --tag v0.2.0 \
+  --git https://github.com/nabour-labs/specjutsu \
+  specjutsu
+
+<span class="c-m"># check it</span>
+sj --version</pre>
       </div>
-      <div>
-        <h3>2 · run</h3>
-<pre class="code"><span class="c-m"># map scenario IDs to tests; list gaps</span>
-sj trace
-sj trace --json
-
-<span class="c-m"># tested, red on base, green on head</span>
-sj gate --base origin/main</pre>
-        <h3 style="margin-top:18px">3 · gate every PR</h3>
-<pre class="code"><span class="c-k">- run:</span> sj gate --base origin/${{ github.base_ref }}</pre>
+      <div class="qs-card qs-run">
+        <h3><span class="num">2</span>Trace locally</h3>
+        <p>See which scenarios have tests and which don't.</p>
+<pre class="code">sj trace          <span class="c-m"># list gaps and orphans</span>
+sj trace --json   <span class="c-m"># for tools and agents</span></pre>
+      </div>
+      <div class="qs-card qs-gate">
+        <h3><span class="num">3</span>Gate every PR</h3>
+        <p>Blocks merges that can't prove red-on-base, then green.</p>
+<pre class="code"><span class="c-m"># .github/workflows/ci.yml</span>
+<span class="c-k">- uses:</span> actions/checkout@v4
+  <span class="c-k">with:</span> { fetch-depth: 0 }
+<span class="c-k">- run:</span> sj gate --base origin/${{ github.base_ref }}</pre>
       </div>
     </div>
   </div>
