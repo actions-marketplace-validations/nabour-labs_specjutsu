@@ -5,14 +5,18 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
+use crate::config::Runner;
 use crate::spec::Scenario;
 use crate::testscan::TestFn;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct TestRef {
     pub name: String,
     pub file: PathBuf,
     pub line: usize,
+    pub package: Option<String>,
+    pub suite: Option<Runner>,
+    pub skipped: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -70,10 +74,18 @@ pub fn build_report(scenarios: &[Scenario], tests: &[TestFn]) -> Report {
             name: t.name.clone(),
             file: t.file.clone(),
             line: t.line,
+            package: t.package.clone(),
+            suite: t.suite,
+            skipped: t.skipped,
         };
         let mut ids: Vec<(String, bool)> =
             t.comment_ids.iter().map(|i| (i.clone(), true)).collect();
-        ids.extend(ids_in_name_deduped(&t.name, &t.comment_ids));
+        ids.extend(
+            t.name_ids
+                .iter()
+                .filter(|id| !t.comment_ids.contains(id))
+                .map(|id| (id.clone(), false)),
+        );
         for (id, explicit) in ids {
             if let Some(k) = known.get(id.as_str()) {
                 links.entry(k).or_default().push(tref.clone());
@@ -101,12 +113,4 @@ pub fn build_report(scenarios: &[Scenario], tests: &[TestFn]) -> Report {
         }
     }
     report
-}
-
-fn ids_in_name_deduped(name: &str, already: &[String]) -> Vec<(String, bool)> {
-    crate::testscan::ids_in_name(name)
-        .into_iter()
-        .filter(|id| !already.contains(id))
-        .map(|id| (id, false))
-        .collect()
 }

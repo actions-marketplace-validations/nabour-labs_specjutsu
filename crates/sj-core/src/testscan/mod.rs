@@ -1,4 +1,8 @@
-//! Rust test discovery: test functions and their `// spec: ID` comments.
+//! Test discovery: per-language scanners that find test functions and the scenario IDs they name.
+
+mod js;
+
+pub use js::scan_js;
 
 use std::path::{Path, PathBuf};
 
@@ -8,14 +12,25 @@ use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
 
-/// A test function found in source.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+use crate::config::Runner;
+
+/// A test found in source.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct TestFn {
+    /// Function name (Rust, pytest `Class::func`) or titles joined with ` > ` (JS/TS).
     pub name: String,
     pub file: PathBuf,
     pub line: usize,
-    /// IDs named in `// spec: ID` comments directly above the test.
+    /// Explicit IDs: `spec:` comments above the test and `@pytest.mark.spec` markers.
     pub comment_ids: Vec<String>,
+    /// Implicit IDs read from the name or titles; they only count as orphans for known prefixes.
+    pub name_ids: Vec<String>,
+    /// Marked skip/todo/fixme (or inside a skipped group).
+    pub skipped: bool,
+    /// Owning package path, when found through the project config.
+    pub package: Option<String>,
+    /// Suite runner, when found through the project config.
+    pub suite: Option<Runner>,
 }
 
 /// Find test functions (`fn` items carrying a `#[...test...]` attribute) in one Rust file.
@@ -58,6 +73,8 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
                     file: file.to_path_buf(),
                     line: i + 1,
                     comment_ids: std::mem::take(&mut pending_ids),
+                    name_ids: ids_in_name(&c[1]),
+                    ..TestFn::default()
                 });
             }
         }

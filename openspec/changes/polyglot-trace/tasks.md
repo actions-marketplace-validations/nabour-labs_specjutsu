@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. JS/TS scanner (sj-core)
 
-- [ ] 1.1 Extend `TestFn` with `name_ids`, `skipped`, `package` and `suite`, and switch `build_report` to `name_ids` (design decision 2). Add `testscan::scan_js` with the tokenizer and call stack from design decision 3 (TRACE-009, TRACE-010, TRACE-011, TRACE-012). Verify: `crates/sj-core/tests/scan_js.rs` covers the four scenarios plus `test.describe`, `.each`, `.only`, nested describes, a JSX file, a regex literal containing `it(`, a template literal with `${}` and a commented-out test. The existing TRACE-001..006 and GATE tests stay green.
+- [x] 1.1 Extend `TestFn` with `name_ids`, `skipped`, `package` and `suite`, and switch `build_report` to `name_ids` (design decision 2). Add `testscan::scan_js` with the tokenizer and call stack from design decision 3 (TRACE-009, TRACE-010, TRACE-011, TRACE-012). Verify: `crates/sj-core/tests/scan_js.rs` covers the four scenarios plus `test.describe`, `.each`, `.only`, nested describes, a JSX file, a regex literal containing `it(`, a template literal with `${}` and a commented-out test. The existing TRACE-001..006 and GATE tests stay green.
 
 ## 2. Python scanner (sj-core)
 

@@ -37,6 +37,7 @@ fn tref(name: &str) -> TestRef {
         name: name.into(),
         file: PathBuf::from("tests/auth.rs"),
         line: 1,
+        ..TestRef::default()
     }
 }
 
