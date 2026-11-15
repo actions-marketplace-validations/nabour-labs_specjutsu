@@ -165,6 +165,12 @@ pub fn evaluate(input: &Input) -> GateReport {
         }
     }
     let refactor = input.exemptions.iter().any(|e| e.kind == "refactor");
+    let touches_impl = input
+        .changed_files
+        .iter()
+        .any(|f| is_impl_file(f, &input.spec_root));
+    // GATE-029: any exemption that touches source still needs a green suite.
+    let full_suite = refactor || (!input.exemptions.is_empty() && touches_impl);
 
     // Head suite must build.
     if let Some(run) = &input.head_run {
@@ -172,7 +178,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             r.failures
                 .push("test suite failed to build at head".to_string());
         }
-        if refactor {
+        if full_suite {
             for t in &run.results {
                 if t.outcome == Outcome::Failed {
                     r.failures.push(format!("failing {}", t.path));
@@ -393,6 +399,14 @@ pub struct Options {
 /// Gather inputs from git and the runner (including red-on-base), then evaluate.
 pub fn run(opts: &Options) -> Result<GateReport> {
     let root = &opts.root;
+    // GATE-026: never pass a repository the gate cannot test.
+    if !root.join("Cargo.toml").is_file() {
+        anyhow::bail!(
+            "no supported test runner found in {} (supported: cargo); \
+             sj gate cannot verify this repository",
+            root.display()
+        );
+    }
     let git = Git::new(root);
     let base_sha = git.resolve(&opts.base)?;
     let head_sha = git.resolve("HEAD")?;
@@ -483,7 +497,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     let refactor = exemptions.iter().any(|e| e.kind == "refactor");
     let skip_red = refactor || exemptions.iter().any(|e| e.kind == "spike");
 
-    let head_run = if !targets.is_empty() || refactor {
+    let touches_impl = changed_files.iter().any(|f| is_impl_file(f, &spec_root));
+    let head_run = if !targets.is_empty() || refactor || (!exemptions.is_empty() && touches_impl) {
         Some(cargo_test(root, &["--workspace", "--no-fail-fast"], None)?)
     } else {
         None

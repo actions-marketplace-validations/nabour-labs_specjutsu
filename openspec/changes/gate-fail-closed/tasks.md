@@ -12,8 +12,8 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Runner check and exempted suites (sj-core + sj-cli)
 
-- [ ] 3.1 Return an error from `gate::run` when the root has no `Cargo.toml`, before any git call (GATE-026). Verify: `crates/sj-cli/tests/gate_fail_closed.rs` runs `sj gate --base main` in a git repo with only `package.json` and asserts exit 2 and `cargo` in stderr. `sj gate --since` in the same repo still exits 0.
-- [ ] 3.2 Run the full head suite and fail on failing tests whenever an exemption is declared and implementation files changed (GATE-029). Verify: a fixture with `Exempt: chore — …`, an edit to `src/lib.rs` and a failing test fails with `failing <path>`. The GATE-015 refactor test stays green.
+- [x] 3.1 Return an error from `gate::run` when the root has no `Cargo.toml`, before any git call (GATE-026). Verify: `crates/sj-cli/tests/gate_fail_closed.rs` runs `sj gate --base main` in a git repo with only `package.json` and asserts exit 2 and `cargo` in stderr. `sj gate --since` in the same repo still exits 0.
+- [x] 3.2 Run the full head suite and fail on failing tests whenever an exemption is declared and implementation files changed (GATE-029). Verify: a fixture with `Exempt: chore — …`, an edit to `src/lib.rs` and a failing test fails with `failing <path>`. The GATE-015 refactor test stays green.
 
 ## 4. Docs and self-hosting
 
