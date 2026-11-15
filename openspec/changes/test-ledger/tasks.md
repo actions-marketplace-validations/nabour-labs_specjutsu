@@ -1,11 +1,11 @@
 # Tasks
 
-Each task is two commits: the failing test first (`test(IDs): red`), then the code (`feat(IDs): green`). Tests go under each crate's `tests/` directory so the gate can overlay them on base.
+Each task group lands as two commits: the failing tests first (`test(IDs): red`), then the code (`feat(IDs): green`). Tests go under each crate's `tests/` directory so the gate can overlay them on base.
 
 ## 1. Cargo runner (sj-runners)
 
-- [ ] 1.1 Build check with `cargo test --no-run`, collecting the `error` lines and the `-->` line after each (capped) when it fails (RUN-008). Verify: `crates/sj-runners/tests/` covers a fixture crate that does not compile, reports a build failure with an `error` line, and reports no results.
-- [ ] 1.2 Parse libtest `---- <path> stdout ----` sections into per-test failure text, keeping `Run` backward-compatible for the gate (RUN-006). Verify: the libtest sample tests in `crates/sj-runners/tests/libtest.rs` pass, and `cargo test -p sj-core --test gate` stays green.
+- [x] 1.1 Build check with `cargo test --no-run`, collecting the `error` lines and the `-->` line after each (capped) when it fails (RUN-008). Verify: `crates/sj-runners/tests/` covers a fixture crate that does not compile, reports a build failure with an `error` line, and reports no results.
+- [x] 1.2 Parse libtest `---- <path> stdout ----` sections into per-test failure text, keeping `Run` backward-compatible for the gate (RUN-006). Verify: the libtest sample tests in `crates/sj-runners/tests/libtest.rs` pass, and `cargo test -p sj-core --test gate` stays green.
 
 ## 2. Test runs (sj-core)
 

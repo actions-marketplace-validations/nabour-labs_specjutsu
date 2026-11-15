@@ -30,7 +30,10 @@ fn run_006_failure_sections_are_parsed_per_test() {
     let text = &f["gate_004_untested"];
     assert!(text.starts_with("thread 'gate_004_untested' panicked"));
     assert!(text.contains("right: 2"));
-    assert!(!text.contains("failures:"), "section must stop at the summary: {text}");
+    assert!(
+        !text.contains("failures:"),
+        "section must stop at the summary: {text}"
+    );
     assert!(!text.ends_with('\n'));
 }
 
@@ -65,7 +68,11 @@ fn run_008_compile_failure_is_a_build_failure_not_an_empty_run() {
     w("tests/t.rs", "#[test]\nfn t() {\n    nope();\n}\n");
     let d = cargo_test_detailed(dir.path(), &["--workspace"], &[]).unwrap();
     assert!(d.build_failed);
-    assert!(d.build_errors.iter().any(|l| l.starts_with("error")), "{:?}", d.build_errors);
+    assert!(
+        d.build_errors.iter().any(|l| l.starts_with("error")),
+        "{:?}",
+        d.build_errors
+    );
     assert!(d.run.results.is_empty());
     assert!(!d.run.success);
 }
