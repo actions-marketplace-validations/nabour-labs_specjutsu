@@ -18,7 +18,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. sj doctor (sj-core + sj-cli)
 
-- [ ] 4.1 `sj doctor` with the findings and side-effect-free runner probes from design decision 7, including `PATHEXT` on Windows (CONF-011). Verify: a CLI test with `PATH` pointing at an empty directory and a `python/worker` pytest package prints `missing runner pytest (python/worker)` and exits 1. A fixture with a valid config, both spec-root folders and no packages prints `doctor: ok` and exits 0.
+- [x] 4.1 `sj doctor` with the findings and side-effect-free runner probes from design decision 7, including `PATHEXT` on Windows (CONF-011). Verify: a CLI test with `PATH` pointing at an empty directory and a `python/worker` pytest package prints `missing runner pytest (python/worker)` and exits 1. A fixture with a valid config, both spec-root folders and no packages prints `doctor: ok` and exits 0.
 
 ## 5. Docs and self-hosting
 

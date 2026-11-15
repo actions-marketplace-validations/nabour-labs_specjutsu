@@ -80,6 +80,11 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Check the setup: project file, packages, runner executables and spec folders.
+    Doctor {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
         /// Report only this scenario ID.
@@ -153,6 +158,18 @@ fn run() -> Result<ExitCode> {
             test_cmd(scope, root, spec_root, json, no_ledger)
         }
         Command::Init { root, force } => init_cmd(&root, force),
+        Command::Doctor { root } => {
+            let problems = sj_core::doctor::check(&root);
+            if problems.is_empty() {
+                println!("doctor: ok");
+                return Ok(ExitCode::SUCCESS);
+            }
+            println!("doctor: {}", plural(problems.len(), "problem"));
+            for p in &problems {
+                println!("{p}");
+            }
+            Ok(ExitCode::from(1))
+        }
         Command::Adopt {
             root,
             dry_run,
