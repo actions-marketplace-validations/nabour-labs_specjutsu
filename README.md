@@ -6,9 +6,17 @@ specjutsu is an open-source, single-binary CLI that makes AI coding agents prove
 their work: every spec scenario gets a test, every test fails first, and CI
 refuses anything unproven.
 
-> Keep your spec tool. specjutsu proves the code matches it.
+> One tool from spec to proof. Bring your OpenSpec folders; specjutsu takes it from there.
 
-**Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/): what it does, how it compares to Spec Kit, OpenSpec and Superpowers, and the roadmap.
+specjutsu is built to replace the OpenSpec, Spec Kit and Superpowers stack with
+one binary. Its spec format is OpenSpec's, so existing `openspec/` folders work
+unchanged. Today it adds the proof layer (`sj trace`, `sj gate`). Authoring
+commands and agent skills are on the roadmap; until they land, keep writing
+changes with OpenSpec.
+
+**Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/) ·
+**[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
+change, CI setup, agent setup and the command reference.
 
 **Status:** pre-alpha. `sj trace` and `sj gate` work for OpenSpec specs and Rust
 tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
