@@ -10,7 +10,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 ## 2. Test runs (sj-core)
 
 - [ ] 2.1 Resolve the scope: a scenario ID maps to test names through the trace mapping, an ID with no tests is an error, anything else is a package (RUN-002, RUN-003, RUN-004). Verify: `crates/sj-core/tests/run.rs` tests on a fixture repo.
-- [ ] 2.2 Run in scope with the exact post-filter, and join each result to its scenario IDs into a runner-neutral `TestRun` (RUN-001, RUN-002). Verify: in a fixture where `foo_001` and `foo_001_extra` both exist, `FOO-001` returns only the mapped test.
+- [ ] 2.2 Run in scope with the exact post-filter, and join each result to its scenario IDs into a runner-neutral `TestRun` (RUN-001, RUN-002). Verify: in a fixture where `foo_001_adds` and `xfoo_001_adds` both exist (the libtest filter matches both), `FOO-001` returns only `foo_001_adds`.
 - [ ] 2.3 Excerpt truncation at 20 lines with a truncated marker (RUN-007). Verify: a unit test on a 50-line failure.
 
 ## 3. Ledger (sj-core)
