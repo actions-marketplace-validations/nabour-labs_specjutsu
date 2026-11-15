@@ -1,7 +1,7 @@
 # gate Specification
 
 ## Purpose
-TBD - created by archiving change gate-red-on-base. Update Purpose after archive.
+Block a change unless every scenario it adds or modifies has a test that fails on the base code and passes at head, and every other behaviour change carries a scenario or an explicit, reasoned exemption.
 
 ## Requirements
 
