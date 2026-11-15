@@ -8,6 +8,8 @@ refuses anything unproven.
 
 > Keep your spec tool. specjutsu proves the code matches it.
 
+**Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/): what it does, how it compares to Spec Kit, OpenSpec and Superpowers, and the roadmap.
+
 **Status:** pre-alpha. `sj trace` and `sj gate` work for OpenSpec specs and Rust
 tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
