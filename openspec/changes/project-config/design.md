@@ -50,7 +50,7 @@ Stage one deserialises into raw structs with `#[serde(deny_unknown_fields)]` and
 - *Alternative:* a serde enum for `runner`. Rejected: its error names the variant but not the package.
 
 ### 3. One loader, called first by every command
-`config::load(root) -> Result<Config>` returns `Config::default_for(root)` when the file is missing: spec root `openspec`, mode `guided`, and one root package with a `cargo` suite (`tests = ["**/tests/**/*.rs"]`, `sources = ["**/*.rs"]`) when `<root>/Cargo.toml` exists, otherwise no packages (CONF-002). `trace`, `gate`, `test` and `ledger` call it before doing any work, so a broken file fails all of them the same way (CONF-003). `init` and `adopt` don't call it, since they create the file. `doctor` calls it and reports the error as a finding instead of exiting 2.
+`config::load(root) -> Result<Config>` returns `Config::default_for(root)` when the file is missing: spec root `openspec`, mode `guided`, and one root package with a `cargo` suite (`tests = ["**/tests/**/*.rs"]`, `sources = ["**/*.rs"]`) when `<root>/Cargo.toml` exists, otherwise no packages (CONF-002). `trace`, `gate`, `test` and `ledger` call it before doing any work, so a broken file fails all of them the same way (CONF-003). `init` and `adopt` don't call it, since they create the file. `init` writes `default_for(root)`, so running it in a Rust repo keeps the `cargo` suite instead of replacing it with an empty package list. `doctor` calls it and reports the error as a finding instead of exiting 2.
 - `--spec-root` becomes `Option<PathBuf>`. Precedence: the flag, then the config, then `openspec`. CI scripts that pass the flag keep working.
 
 ### 4. Ownership by longest path prefix, on path components

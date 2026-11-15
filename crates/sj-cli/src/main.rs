@@ -61,6 +61,14 @@ enum Command {
         #[arg(long)]
         no_ledger: bool,
     },
+    /// Start a project: write specjutsu.toml and create the spec folders.
+    Init {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// Replace an existing specjutsu.toml.
+        #[arg(long)]
+        force: bool,
+    },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
         /// Report only this scenario ID.
@@ -133,6 +141,7 @@ fn run() -> Result<ExitCode> {
             let spec_root = spec_root_for(&root, spec_root)?;
             test_cmd(scope, root, spec_root, json, no_ledger)
         }
+        Command::Init { root, force } => init_cmd(&root, force),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -159,6 +168,28 @@ fn run() -> Result<ExitCode> {
             })
         }
     }
+}
+
+fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
+    use sj_core::config::{Config, FILE};
+
+    let file = root.join(FILE);
+    if file.exists() && !force {
+        anyhow::bail!("{FILE} already exists; pass --force to replace it");
+    }
+    let config = Config::default_for(root);
+    std::fs::write(&file, config.to_toml())?;
+    let spec_root = root.join(&config.spec_root);
+    for dir in ["specs", "changes"] {
+        std::fs::create_dir_all(spec_root.join(dir))?;
+    }
+    println!(
+        "init: wrote {FILE} (spec root {}, mode {}, {})",
+        config.spec_root,
+        config.mode.as_str(),
+        plural(config.packages.len(), "package")
+    );
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Load the project file (failing on a bad one) and pick the spec root: the flag, then the file.

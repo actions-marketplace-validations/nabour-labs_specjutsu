@@ -9,7 +9,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. sj init (sj-cli)
 
-- [ ] 2.1 `sj init [--force]` writes the minimal config through `Config::to_toml` and creates `<spec_root>/specs/` and `<spec_root>/changes/` (CONF-006, CONF-007). Verify: CLI tests in a temp git repo for the fresh case (file contents, both folders, exit 0) and the existing-file case (bytes unchanged, exit 2, `--force` in stderr). A round-trip test shows `to_toml` output parses back to the same `Config`.
+- [x] 2.1 `sj init [--force]` writes `Config::default_for(root)` through `Config::to_toml` (three lines in an empty repo, plus the root `cargo` package when a `Cargo.toml` exists) and creates `<spec_root>/specs/` and `<spec_root>/changes/` (CONF-006, CONF-007). Verify: CLI tests in a temp git repo for the fresh case (file contents, both folders, exit 0) and the existing-file case (bytes unchanged, exit 2, `--force` in stderr). A round-trip test shows `to_toml` output parses back to the same `Config`.
 
 ## 3. sj adopt (sj-core + sj-cli)
 

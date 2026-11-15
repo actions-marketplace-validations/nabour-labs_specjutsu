@@ -229,6 +229,31 @@ impl Config {
         })
     }
 
+    /// Render the project file: fixed key order, one table per package and suite.
+    pub fn to_toml(&self) -> String {
+        let mut out = format!(
+            "schema = {}\nspec_root = {}\nmode = {}\n",
+            self.schema,
+            quote(&self.spec_root),
+            quote(self.mode.as_str())
+        );
+        for p in &self.packages {
+            out.push_str(&format!(
+                "\n[[package]]\npath = {}\nsources = {}\n",
+                quote(&p.path),
+                list(&p.sources)
+            ));
+            for s in &p.suites {
+                out.push_str(&format!(
+                    "\n[[package.suite]]\nrunner = {}\ntests = {}\n",
+                    quote(s.runner.as_str()),
+                    list(&s.tests)
+                ));
+            }
+        }
+        out
+    }
+
     /// The package that owns `rel` (a forward-slash path relative to the repository root): the
     /// one whose path is the longest prefix of `rel`, compared per path component.
     pub fn package_for(&self, rel: &str) -> Option<&Package> {
@@ -237,6 +262,15 @@ impl Config {
             .filter(|p| owns(&p.path, rel))
             .max_by_key(|p| if p.path == "." { 0 } else { p.path.len() + 1 })
     }
+}
+
+fn quote(s: &str) -> String {
+    toml::Value::String(s.to_owned()).to_string()
+}
+
+fn list(items: &[String]) -> String {
+    let quoted: Vec<String> = items.iter().map(|s| quote(s)).collect();
+    format!("[{}]", quoted.join(", "))
 }
 
 fn owns(pkg: &str, rel: &str) -> bool {
