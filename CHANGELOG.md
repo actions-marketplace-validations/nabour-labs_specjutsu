@@ -15,12 +15,21 @@ All notable changes are recorded here. The format follows
   editing e.g. a shell script or a `.ts` file now needs a scenario or an exemption.
 - `sj gate` fails a new or edited scenario without an ID (`unidentified`), and
   warns once with the count of existing ones.
-- `sj gate --base` exits 2 when the repository has no supported test runner (no
-  root `Cargo.toml`) instead of passing.
+- `sj gate --base` exits 2 when no test suite is configured (no suites in
+  `specjutsu.toml` and no root `Cargo.toml`) instead of passing, and suggests
+  `sj adopt`.
+- With `specjutsu.toml`, a package's `sources` decide which of its files need a
+  scenario. Files in the package outside them no longer do.
 - `sj gate` runs the full suite at head for every exemption kind when source
   files change, not only for `refactor`.
 
 ### Added
+- `sj gate` proves red-on-base for vitest, Jest, Playwright, pytest and `junit`
+  suites. It overlays changed files matching each suite's `tests` and `support`
+  globs on base, runs the suite's `setup` there first, and records a test file that
+  fails to load as `red:compile`. Suites can set `red_on_base = "skip"` with a
+  `reason`, reported as `unverifiable`. The head run covers every suite. A top-level
+  `non_source` list extends the built-in non-source files.
 - `sj test` runs vitest, Jest, Playwright, pytest and generic `junit` suites from
   `specjutsu.toml`, reading results from JUnit XML. Scopes: a scenario ID (its
   tests in every suite), a package path, or `<package>:<runner>`. Suites run in

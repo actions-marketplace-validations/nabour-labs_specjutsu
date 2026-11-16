@@ -77,6 +77,26 @@ impl Runner {
     }
 }
 
+/// Whether the gate runs a suite's target tests on the base code.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RedOnBase {
+    #[default]
+    Run,
+    Skip,
+}
+
+impl RedOnBase {
+    pub const ALL: [RedOnBase; 2] = [RedOnBase::Run, RedOnBase::Skip];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RedOnBase::Run => "run",
+            RedOnBase::Skip => "skip",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Suite {
     pub runner: Runner,
@@ -88,6 +108,13 @@ pub struct Suite {
     pub report: Option<String>,
     /// Extra environment for the run.
     pub env: BTreeMap<String, String>,
+    /// Run in the base package directory before the gate's first base run of this suite.
+    pub setup: Option<String>,
+    /// Root-relative globs of helpers and fixtures the gate overlays on base with the tests.
+    pub support: Vec<String>,
+    pub red_on_base: RedOnBase,
+    /// Why red-on-base is skipped (required with `red_on_base = "skip"`).
+    pub reason: Option<String>,
 }
 
 impl Suite {
@@ -98,6 +125,10 @@ impl Suite {
             command: None,
             report: None,
             env: BTreeMap::new(),
+            setup: None,
+            support: Vec::new(),
+            red_on_base: RedOnBase::Run,
+            reason: None,
         }
     }
 }
@@ -117,6 +148,8 @@ pub struct Config {
     /// Forward-slash path relative to the repository root.
     pub spec_root: String,
     pub mode: Mode,
+    /// Root-relative globs of files that never need a scenario, on top of the built-in list.
+    pub non_source: Vec<String>,
     pub packages: Vec<Package>,
 }
 
@@ -126,6 +159,8 @@ struct RawConfig {
     schema: Option<u32>,
     spec_root: Option<String>,
     mode: Option<String>,
+    #[serde(default)]
+    non_source: Vec<String>,
     #[serde(default, rename = "package")]
     packages: Vec<RawPackage>,
 }
@@ -150,6 +185,11 @@ struct RawSuite {
     report: Option<String>,
     #[serde(default)]
     env: BTreeMap<String, String>,
+    setup: Option<String>,
+    #[serde(default)]
+    support: Vec<String>,
+    red_on_base: Option<String>,
+    reason: Option<String>,
 }
 
 /// Load `<root>/specjutsu.toml`, or the defaults for `root` when it does not exist.
@@ -179,6 +219,7 @@ impl Config {
             schema: SCHEMA,
             spec_root: DEFAULT_SPEC_ROOT.into(),
             mode: Mode::default(),
+            non_source: Vec::new(),
             packages,
         }
     }
@@ -242,12 +283,37 @@ impl Config {
                 if let Some(r) = &s.report {
                     check_path(r, false).map_err(|why| anyhow::anyhow!("{what}: report {why}"))?;
                 }
+                let red_on_base = match s.red_on_base.as_deref() {
+                    None => RedOnBase::Run,
+                    Some(v) => RedOnBase::ALL
+                        .into_iter()
+                        .find(|x| x.as_str() == v)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "{what}: unknown red_on_base `{v}` (known: {})",
+                                RedOnBase::ALL.map(RedOnBase::as_str).join(", ")
+                            )
+                        })?,
+                };
+                match (red_on_base, &s.reason) {
+                    (RedOnBase::Skip, None) => {
+                        bail!("{what}: red_on_base = \"skip\" needs a `reason`")
+                    }
+                    (RedOnBase::Run, Some(_)) => {
+                        bail!("{what}: `reason` is only for red_on_base = \"skip\"")
+                    }
+                    _ => {}
+                }
                 suites.push(Suite {
                     runner,
                     tests: s.tests,
                     command: s.command,
                     report: s.report,
                     env: s.env,
+                    setup: s.setup,
+                    support: s.support,
+                    red_on_base,
+                    reason: s.reason,
                 });
             }
             packages.push(Package {
@@ -261,6 +327,7 @@ impl Config {
             schema,
             spec_root,
             mode,
+            non_source: raw.non_source,
             packages,
         })
     }
@@ -273,6 +340,9 @@ impl Config {
             quote(&self.spec_root),
             quote(self.mode.as_str())
         );
+        if !self.non_source.is_empty() {
+            out.push_str(&format!("non_source = {}\n", list(&self.non_source)));
+        }
         for p in &self.packages {
             out.push_str(&format!(
                 "\n[[package]]\npath = {}\nsources = {}\n",
@@ -298,6 +368,21 @@ impl Config {
                         .map(|(k, v)| format!("{} = {}", quote(k), quote(v)))
                         .collect();
                     out.push_str(&format!("env = {{ {} }}\n", pairs.join(", ")));
+                }
+                if let Some(c) = &s.setup {
+                    out.push_str(&format!("setup = {}\n", quote(c)));
+                }
+                if !s.support.is_empty() {
+                    out.push_str(&format!("support = {}\n", list(&s.support)));
+                }
+                if s.red_on_base != RedOnBase::Run {
+                    out.push_str(&format!(
+                        "red_on_base = {}\n",
+                        quote(s.red_on_base.as_str())
+                    ));
+                }
+                if let Some(r) = &s.reason {
+                    out.push_str(&format!("reason = {}\n", quote(r)));
                 }
             }
         }

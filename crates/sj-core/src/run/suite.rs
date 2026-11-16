@@ -667,3 +667,19 @@ fn shell_args(command: &mut std::process::Command, runner: Runner, args: &[Strin
 fn shell_args(command: &mut std::process::Command, _runner: Runner, args: &[String]) {
     command.args(args);
 }
+
+/// `cmd` through the platform shell: `sh -c`, or `cmd /S /C` with the command passed verbatim
+/// on Windows.
+pub(crate) fn shell(cmd: &str) -> std::process::Command {
+    let program = if cfg!(windows) { "cmd" } else { "sh" };
+    let mut c = std::process::Command::new(program);
+    shell_args(
+        &mut c,
+        Runner::Junit,
+        &[
+            if cfg!(windows) { "/C" } else { "-c" }.to_string(),
+            cmd.to_string(),
+        ],
+    );
+    c
+}

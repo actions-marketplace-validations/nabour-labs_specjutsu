@@ -24,6 +24,7 @@ fn input() -> Input {
         spec_root: "openspec".into(),
         unidentified: vec![],
         unidentified_known: 0,
+        ..Input::default()
     }
 }
 
