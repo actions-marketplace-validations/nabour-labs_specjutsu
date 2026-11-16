@@ -70,6 +70,7 @@ pub fn path(root: &Path) -> PathBuf {
 
 /// Records for a finished run. A build failure is recorded only against the tests a scenario
 /// scope selected; a package or workspace build failure is not evidence for any one scenario.
+/// When only some suites failed to build, their selected tests are recorded alongside the rest.
 pub fn records_for(run: &TestRun, run_id: &str, ts: u64, tree: &str) -> Vec<Record> {
     let make = |test: &str, ids: &[String], result| Record {
         v: FORMAT,
@@ -89,6 +90,11 @@ pub fn records_for(run: &TestRun, run_id: &str, ts: u64, tree: &str) -> Vec<Reco
         run.tests
             .iter()
             .map(|t| make(&t.path, &t.ids, t.result.into()))
+            .chain(
+                run.partial_build_failed
+                    .iter()
+                    .map(|(name, ids)| make(name, ids, LedgerResult::BuildFailed)),
+            )
             .collect()
     }
 }

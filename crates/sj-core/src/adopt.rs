@@ -52,17 +52,17 @@ pub fn detect(root: &Path) -> Result<Detected> {
         }
         let entry = found.entry(dir.clone()).or_default();
         if has_pytest(root, dir, &doc) {
-            entry.push(Suite {
-                runner: Runner::Pytest,
-                tests: vec![prefix(dir, "**/test_*.py"), prefix(dir, "**/*_test.py")],
-            });
+            entry.push(Suite::new(
+                Runner::Pytest,
+                vec![prefix(dir, "**/test_*.py"), prefix(dir, "**/*_test.py")],
+            ));
         }
     }
     if root.join("Cargo.toml").is_file() {
-        found.entry(".".into()).or_default().push(Suite {
-            runner: Runner::Cargo,
-            tests: vec!["**/*.rs".into()],
-        });
+        found
+            .entry(".".into())
+            .or_default()
+            .push(Suite::new(Runner::Cargo, vec!["**/*.rs".into()]));
     }
 
     let mut notes = Vec::new();
@@ -259,10 +259,7 @@ fn js_suites(root: &Path, dir: &str) -> Result<Vec<Suite>> {
         (Runner::Jest, "jest", "jest.config"),
     ] {
         if has_dep(dep) || has_config(stem) {
-            suites.push(Suite {
-                runner,
-                tests: vec![prefix(dir, JS_TESTS)],
-            });
+            suites.push(Suite::new(runner, vec![prefix(dir, JS_TESTS)]));
         }
     }
     if has_dep("@playwright/test") || has_config("playwright.config") {
@@ -270,10 +267,10 @@ fn js_suites(root: &Path, dir: &str) -> Result<Vec<Suite>> {
             .and_then(|f| std::fs::read_to_string(f).ok())
             .and_then(|t| playwright_test_dir(&t))
             .unwrap_or_else(|| "e2e".into());
-        suites.push(Suite {
-            runner: Runner::Playwright,
-            tests: vec![prefix(dir, &format!("{test_dir}/**"))],
-        });
+        suites.push(Suite::new(
+            Runner::Playwright,
+            vec![prefix(dir, &format!("{test_dir}/**"))],
+        ));
     }
     Ok(suites)
 }

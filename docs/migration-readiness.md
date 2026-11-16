@@ -163,18 +163,20 @@ match (PRs #7 and #8). The spec *format* stays OpenSpec's, so
 
 ## Replacement roadmap (proposed OpenSpec changes)
 
-Each change has a proposal and delta specs. Only `gate-fail-closed` also has its
-design and tasks, and it is the only one on `main`. The other ten are on the
-`spec/replacement-proposals` branch, because the gate fails any merged scenario that
-has no test. Each one comes to `main` in the same PR as its implementation, with its
-design and tasks written when it is picked up.
+Each change has a proposal and delta specs. Changes 0–2 are done and archived under
+`openspec/changes/archive/`. The rest wait on the `spec/replacement-proposals` branch,
+because the gate fails any merged scenario that has no test. Each one comes to `main`
+in the same PR as its implementation, with its design and tasks written when it is
+picked up. `polyglot-runners` was split in two when picked up: `sj test` across runners
+(3), and the gate's per-suite red-on-base (3b).
 
 | # | Change | Capability (prefix) | Delivers | Needed by |
 | --- | --- | --- | --- | --- |
 | 0 | `gate-fail-closed` | gate (GATE-024…029) | Gate fails on unknown file types, unidentified scenarios, no runner; exempt changes still run tests | all |
 | 1 | `project-config` | config (CONF) | `specjutsu.toml`, packages with suites, `init`, `adopt`, `doctor` | all |
 | 2 | `polyglot-trace` | trace (TRACE-007…) | vitest/Jest/Playwright/pytest test discovery and ID links | all |
-| 3 | `polyglot-runners` | run (RUN-011…), gate (GATE-030…035) | JUnit-XML runners, per-suite setup, glob overlay, e2e red-on-base policy | all |
+| 3 | `polyglot-runners` | run (RUN-011…017) | `sj test` across vitest, Jest, Playwright, pytest and JUnit suites; scopes by scenario, package or suite | all |
+| 3b | `polyglot-gate` | gate (GATE-030…035, 038) | Per-suite red-on-base with test/support overlay and base `setup`, e2e red-on-base policy, source-glob classification, `non_source` | all |
 | 4 | `scenario-ids` | ids (IDS), gate (GATE-036, 037) | `sj ids --write` for 7,800 scenarios; ID-only commits pass the gate | all |
 | 5 | `spec-authoring` | authoring (SPEC) | `sj spec new/list/validate/check/archive`: replaces the OpenSpec CLI, Spec Kit clarify/analyze | all |
 | 6 | `speckit-import` | import (IMP) | Spec Kit features → OpenSpec layout, constitution → `principles.md` | P2 |
@@ -183,9 +185,9 @@ design and tasks written when it is picked up.
 | 9 | `workflow-skills` | skills (SKILL) | 9 `sj-*` skills covering every Superpowers/OpenSpec/Spec Kit workflow | all |
 | 10 | `tool-migration` | migration (MIG) | `sj migrate --from openspec\|speckit\|superpowers` | all |
 
-Prerequisites: `trace-engine` is archived (done). `test-ledger` is complete and must be
-archived before `polyglot-runners` and `agent-loop`.
+Prerequisites: `trace-engine`, `test-ledger`, `gate-fail-closed`, `project-config` and
+`polyglot-trace` are archived. `polyglot-gate` needs `polyglot-runners`.
 
-**Migration order:** `FridgeSense` (OpenSpec + pytest + vitest, smallest) after 0–5 and
+**Migration order:** `FridgeSense` (OpenSpec + pytest + vitest, smallest) after 0–5 (with 3b) and
 7–10 → `ellesmere.ai` (adds monorepo scale and Superpowers removal) → `chrome-agent`
 (adds change 6).

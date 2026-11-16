@@ -1,0 +1,41 @@
+<testsuites id="" name="" tests="3" failures="1" skipped="1" errors="0" time="0.34257699999999996">
+<testsuite name="e2e/chat.spec.ts" timestamp="2026-11-15T00:00:00Z" hostname="host" tests="3" failures="1" skipped="1" time="0.005" errors="0">
+<testcase name="CHAT-001 chat › sends a message" classname="e2e/chat.spec.ts" time="0.003">
+</testcase>
+<testcase name="CHAT-001 chat › fails" classname="e2e/chat.spec.ts" time="0.002">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|test-results/e2e-chat-CHAT-001-chat-fails/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+<![CDATA[  e2e/chat.spec.ts:4:7 › CHAT-001 chat › fails ─────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 401
+    Received: 200
+
+      2 | test.describe("CHAT-001 chat", () => {
+      3 |   test("sends a message", async () => { expect(1).toBe(1) })
+    > 4 |   test("fails", async () => { expect(200).toBe(401) })
+        |                                           ^
+      5 | })
+      6 | test.skip("later", async () => {})
+      7 |
+        at /work/e2e/chat.spec.ts:4:43
+
+    Error Context: test-results/e2e-chat-CHAT-001-chat-fails/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="later" classname="e2e/chat.spec.ts">
+<properties>
+<property name="skip" value="">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+</testsuites>

@@ -61,6 +61,8 @@ fn runner_available(root: &Path, pkg: &Package, runner: Runner) -> bool {
     };
     match runner {
         Runner::Cargo => on_path("cargo").is_some(),
+        // An arbitrary shell command: nothing to probe.
+        Runner::Junit => true,
         Runner::Vitest | Runner::Jest | Runner::Playwright => {
             let bin = match runner {
                 Runner::Vitest => "vitest",

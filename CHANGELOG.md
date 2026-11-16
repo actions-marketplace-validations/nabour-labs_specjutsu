@@ -21,6 +21,13 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `sj test` runs vitest, Jest, Playwright, pytest and generic `junit` suites from
+  `specjutsu.toml`, reading results from JUnit XML. Scopes: a scenario ID (its
+  tests in every suite), a package path, or `<package>:<runner>`. Suites run in
+  their package directory through the project's package manager (`pnpm exec`,
+  `yarn`, `npx --no-install`) or `uv run`, and accept `command` and `env`. A suite
+  without a report, or a test file that fails to load, is a build failure. The
+  summary names failed suites, and `--json` gains `suites`.
 - `sj trace` finds vitest, Jest, Playwright and pytest tests through each suite's
   globs in `specjutsu.toml`, linked by title, `describe` title, `// spec:` /
   `# spec:` comment, pytest function name or `@pytest.mark.spec`. Test entries in
