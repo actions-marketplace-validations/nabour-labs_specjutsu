@@ -9,7 +9,9 @@ use regex::Regex;
 use serde::Serialize;
 use sj_runners::cargo::{cargo_test, Outcome, Run};
 
+use crate::config::{Config, RedOnBase, Runner};
 use crate::git::Git;
+use crate::run::suite::{self, JoinedOutcome, Pick};
 use crate::spec::{self, Fingerprint};
 use crate::testscan;
 use crate::trace::{self, Report};
@@ -126,6 +128,32 @@ pub struct Input {
     pub unidentified_known: usize,
     /// Which changed files are implementation files.
     pub classifier: Classifier,
+    /// Head results of non-Cargo tests, keyed by (repository-relative file, test name).
+    pub head_other: BTreeMap<(String, String), Outcome>,
+    /// Failing non-Cargo results at head, as `<file>::<name>` (for the full-suite rules).
+    pub head_failing: Vec<String>,
+    /// Non-Cargo suites that failed to build at head: `<package>:<runner>`.
+    pub head_build_failed: Vec<String>,
+    /// Why a target test is unverifiable on base (`red_on_base = "skip"`), keyed like `base`.
+    pub reasons: BTreeMap<(String, String), String>,
+}
+
+/// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
+/// keep their ID, TRACE-009).
+fn label(id: &str, name: &str) -> String {
+    if name.starts_with(id) {
+        name.to_string()
+    } else {
+        format!("{id} {name}")
+    }
+}
+
+fn test_key(t: &trace::TestRef) -> (String, String) {
+    (t.file.to_string_lossy().replace('\\', "/"), t.name.clone())
+}
+
+fn is_cargo(t: &trace::TestRef) -> bool {
+    matches!(t.suite, None | Some(Runner::Cargo))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -188,6 +216,15 @@ pub fn evaluate(input: &Input) -> GateReport {
             }
         }
     }
+    for s in &input.head_build_failed {
+        r.failures
+            .push(format!("test suite failed to build at head ({s})"));
+    }
+    if full_suite {
+        for path in &input.head_failing {
+            r.failures.push(format!("failing {path}"));
+        }
+    }
 
     // Added / modified scenarios.
     let targets: Vec<&String> = input
@@ -204,22 +241,28 @@ pub fn evaluate(input: &Input) -> GateReport {
         let mut ok = true;
         let mut weakest: Option<Red> = None;
         for t in &m.tests {
-            let head = input.head_run.as_ref().and_then(|run| run.outcome(&t.name));
+            let head = if is_cargo(t) {
+                input.head_run.as_ref().and_then(|run| run.outcome(&t.name))
+            } else {
+                input.head_other.get(&test_key(t)).copied()
+            };
+            let what = label(id, &t.name);
             match head {
                 Some(Outcome::Passed) => {}
                 Some(Outcome::Failed) => {
                     ok = false;
-                    r.failures.push(format!("failing {id} {}", t.name));
+                    r.failures.push(format!("failing {what}"));
                 }
                 _ => {
                     ok = false;
-                    r.failures.push(format!("not-run {id} {}", t.name));
+                    r.failures.push(format!("not-run {what}"));
                 }
             }
             if skip_red {
                 continue;
             }
-            match input.base.get(&(id.to_string(), t.name.clone())) {
+            let key = (id.to_string(), t.name.clone());
+            match input.base.get(&key) {
                 Some(red @ (Red::Assert | Red::Compile)) => {
                     if weakest != Some(Red::Compile) {
                         weakest = Some(*red);
@@ -227,13 +270,15 @@ pub fn evaluate(input: &Input) -> GateReport {
                 }
                 Some(Red::Green) => {
                     ok = false;
-                    r.failures.push(format!("green-on-base {id} {}", t.name));
+                    r.failures.push(format!("green-on-base {what}"));
                 }
                 Some(Red::Unverifiable) => {
-                    let msg = format!(
-                        "unverifiable {id} {} (inline test; move it to tests/ so it can run on base)",
-                        t.name
-                    );
+                    let msg = match input.reasons.get(&key) {
+                        Some(reason) => format!("unverifiable {what} ({reason})"),
+                        None => format!(
+                            "unverifiable {what} (inline test; move it to tests/ so it can run on base)"
+                        ),
+                    };
                     if input.allow_unverifiable {
                         r.warnings.push(msg);
                     } else {
@@ -243,7 +288,7 @@ pub fn evaluate(input: &Input) -> GateReport {
                 }
                 Some(Red::NotRun) | None => {
                     ok = false;
-                    r.failures.push(format!("not-run-on-base {id} {}", t.name));
+                    r.failures.push(format!("not-run-on-base {what}"));
                 }
             }
         }
@@ -483,22 +528,35 @@ pub struct Options {
     pub allow_unverifiable: bool,
 }
 
-/// Gather inputs from git and the runner (including red-on-base), then evaluate.
+/// Gather inputs from git and the runners (including red-on-base), then evaluate.
 pub fn run(opts: &Options) -> Result<GateReport> {
     let root = &opts.root;
+    let config = crate::config::load(root)?;
     // GATE-026: never pass a repository the gate cannot test.
-    if !root.join("Cargo.toml").is_file() {
+    if config.packages.iter().all(|p| p.suites.is_empty()) {
         anyhow::bail!(
-            "no supported test runner found in {} (supported: cargo); \
-             sj gate cannot verify this repository",
-            root.display()
+            "no test suite configured in {} (supported runners: {}); \
+             run `sj adopt` to write {}",
+            root.display(),
+            Runner::ALL.map(Runner::as_str).join(", "),
+            crate::config::FILE
         );
     }
+    let has_cargo = config
+        .packages
+        .iter()
+        .any(|p| p.suites.iter().any(|s| s.runner == Runner::Cargo));
     let git = Git::new(root);
     let base_sha = git.resolve(&opts.base)?;
     let head_sha = git.resolve("HEAD")?;
     let mb = git.merge_base(&base_sha, &head_sha)?;
     let spec_root = opts.spec_root.to_string_lossy().replace('\\', "/");
+    // Package sources are a declaration only when the project file exists (GATE-035).
+    let classifier = if root.join(crate::config::FILE).is_file() {
+        Classifier::new(&config, &spec_root)?
+    } else {
+        Classifier::builtin(&spec_root)
+    };
 
     // Classification: base from git objects, head from the working tree.
     let mut base_fps = Vec::new();
@@ -541,11 +599,11 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     let mut changes = classify(&base_fps, &head_fps);
 
     let scenarios = spec::load_scenarios(&head_spec_root)?;
-    let tests = testscan::scan_tree(root)?;
-    let report = trace::build_report(&scenarios, &tests);
+    let scan = testscan::scan_project(root, &config)?;
+    let report = trace::build_report(&scenarios, &scan.tests);
 
     // GATE-023: unchanged scenarios that gain their first test are in scope.
-    let base_mapped = base_mapped_ids(&git, &mb, &spec_root)?;
+    let base_mapped = base_mapped_ids(&git, root, &config, &mb, &spec_root)?;
     for m in &report.mapped {
         if let Some(c) = changes.get_mut(&m.id) {
             if *c == Change::Unchanged && !base_mapped.contains(&m.id) {
@@ -583,47 +641,155 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         .collect();
     let refactor = exemptions.iter().any(|e| e.kind == "refactor");
     let skip_red = refactor || exemptions.iter().any(|e| e.kind == "spike");
+    let touches_impl = changed_files.iter().any(|f| classifier.is_impl(f));
+    let full_suite = refactor || (!exemptions.is_empty() && touches_impl);
+    let need_head = !targets.is_empty() || full_suite;
 
-    let touches_impl = changed_files.iter().any(|f| is_impl_file(f, &spec_root));
-    let head_run = if !targets.is_empty() || refactor || (!exemptions.is_empty() && touches_impl) {
+    // Target tests, by the suite that runs them: (package index, suite index) → (ID, test).
+    let mut by_suite: BTreeMap<(usize, usize), Vec<(String, testscan::TestFn)>> = BTreeMap::new();
+    let mut cargo_jobs: Vec<(String, String, String)> = Vec::new();
+    let rel = |p: &Path| -> String {
+        p.strip_prefix(root)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
+    for m in report.mapped.iter().filter(|m| targets.contains(&&m.id)) {
+        for t in &m.tests {
+            if is_cargo(t) {
+                cargo_jobs.push((m.id.clone(), t.name.clone(), rel(&t.file)));
+                continue;
+            }
+            let Some(at) = suite_of(&config, t.package.as_deref(), t.suite) else {
+                continue;
+            };
+            if let Some(full) = scan
+                .tests
+                .iter()
+                .find(|x| x.file == t.file && x.name == t.name)
+            {
+                by_suite
+                    .entry(at)
+                    .or_default()
+                    .push((m.id.clone(), full.clone()));
+            }
+        }
+    }
+    let traced_in = |(pi, si): (usize, usize)| -> Vec<testscan::TestFn> {
+        let (pkg, s) = (&config.packages[pi], &config.packages[pi].suites[si]);
+        scan.tests
+            .iter()
+            .filter(|t| {
+                t.package.as_deref() == Some(pkg.path.as_str()) && t.suite == Some(s.runner)
+            })
+            .cloned()
+            .collect()
+    };
+
+    // Head runs.
+    let head_run = if need_head && has_cargo {
         Some(cargo_test(root, &["--workspace", "--no-fail-fast"], None)?)
     } else {
         None
     };
-
-    let mut base = BTreeMap::new();
-    if !skip_red && !targets.is_empty() {
-        let rel = |p: &Path| -> String {
-            p.strip_prefix(root)
-                .unwrap_or(p)
-                .to_string_lossy()
-                .replace('\\', "/")
-        };
-        // (scenario, test name, test file) for every target test.
-        let mut jobs: Vec<(String, String, String)> = Vec::new();
-        for m in report.mapped.iter().filter(|m| targets.contains(&&m.id)) {
-            for t in &m.tests {
-                jobs.push((m.id.clone(), t.name.clone(), rel(&t.file)));
+    let mut head_other = BTreeMap::new();
+    let mut head_failing = Vec::new();
+    let mut head_build_failed = Vec::new();
+    if need_head {
+        for (pi, pkg) in config.packages.iter().enumerate() {
+            for (si, s) in pkg.suites.iter().enumerate() {
+                if s.runner == Runner::Cargo {
+                    continue;
+                }
+                let pick = if full_suite {
+                    Pick::All
+                } else if let Some(jobs) = by_suite.get(&(pi, si)) {
+                    Pick::Tests(jobs.iter().map(|(_, t)| t.clone()).collect())
+                } else {
+                    continue;
+                };
+                let traced = traced_in((pi, si));
+                let res = suite::run_suite(root, pkg, s, &traced, &pick)?;
+                if res.no_report {
+                    head_build_failed.push(format!("{}:{}", pkg.path, s.runner.as_str()));
+                    continue;
+                }
+                for j in res.joined {
+                    let outcome = match j.outcome {
+                        JoinedOutcome::Passed => Outcome::Passed,
+                        JoinedOutcome::Failed | JoinedOutcome::BuildFailed => Outcome::Failed,
+                        JoinedOutcome::Skipped => Outcome::Ignored,
+                    };
+                    if outcome == Outcome::Failed {
+                        head_failing.push(j.path.clone());
+                    }
+                    if let Some(i) = j.test {
+                        let t = &traced[i];
+                        head_other.insert(
+                            (t.file.to_string_lossy().replace('\\', "/"), t.name.clone()),
+                            outcome,
+                        );
+                    }
+                }
             }
         }
-        for (id, name, file) in &jobs {
+    }
+
+    // Red-on-base.
+    let mut base = BTreeMap::new();
+    let mut reasons = BTreeMap::new();
+    if !skip_red && !targets.is_empty() {
+        for (id, name, file) in &cargo_jobs {
             if !is_test_file(file) {
                 base.insert((id.clone(), name.clone()), Red::Unverifiable);
             }
         }
+        let mut suite_jobs = Vec::new();
+        for (&(pi, si), jobs) in &by_suite {
+            let s = &config.packages[pi].suites[si];
+            if s.red_on_base == RedOnBase::Skip {
+                for (id, t) in jobs {
+                    let key = (id.clone(), t.name.clone());
+                    base.insert(key.clone(), Red::Unverifiable);
+                    reasons.insert(key, s.reason.clone().unwrap_or_default());
+                }
+            } else {
+                suite_jobs.push(SuiteJob {
+                    at: (pi, si),
+                    traced: traced_in((pi, si)),
+                    jobs: jobs.clone(),
+                });
+            }
+        }
+        let overlay_globs = {
+            let mut g = Vec::new();
+            for p in &config.packages {
+                for s in &p.suites {
+                    if s.runner != Runner::Cargo {
+                        g.extend(s.tests.iter().cloned());
+                    }
+                    g.extend(s.support.iter().cloned());
+                }
+            }
+            globset(&g)?
+        };
         let overlay: Vec<&String> = changed_files
             .iter()
-            .filter(|f| is_test_support(f) && root.join(f).is_file())
+            .filter(|f| {
+                (is_test_support(f) || overlay_globs.is_match(f.as_str())) && root.join(f).is_file()
+            })
             .collect();
-        let verifiable: Vec<&(String, String, String)> =
-            jobs.iter().filter(|(_, _, f)| is_test_file(f)).collect();
-        if !verifiable.is_empty() {
-            let results = run_on_base(&git, root, &mb, &overlay, &verifiable)?;
+        let verifiable: Vec<&(String, String, String)> = cargo_jobs
+            .iter()
+            .filter(|(_, _, f)| is_test_file(f))
+            .collect();
+        if !verifiable.is_empty() || !suite_jobs.is_empty() {
+            let results =
+                run_on_base(&git, root, &config, &mb, &overlay, &verifiable, &suite_jobs)?;
             base.extend(results);
         }
     }
 
-    let classifier = Classifier::builtin(&spec_root);
     Ok(evaluate(&Input {
         changes,
         trace: report,
@@ -637,28 +803,56 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         unidentified,
         unidentified_known,
         classifier,
+        head_other,
+        head_failing,
+        head_build_failed,
+        reasons,
     }))
 }
 
+/// The (package, suite) indexes of a traced test's suite.
+fn suite_of(
+    config: &Config,
+    package: Option<&str>,
+    runner: Option<Runner>,
+) -> Option<(usize, usize)> {
+    let (package, runner) = (package?, runner?);
+    let pi = config.packages.iter().position(|p| p.path == package)?;
+    let si = config.packages[pi]
+        .suites
+        .iter()
+        .position(|s| s.runner == runner)?;
+    Some((pi, si))
+}
+
+/// Target tests of one non-Cargo suite to run on base.
+struct SuiteJob {
+    at: (usize, usize),
+    /// Every traced test of the suite (what its report is joined to).
+    traced: Vec<testscan::TestFn>,
+    /// (scenario ID, target test).
+    jobs: Vec<(String, testscan::TestFn)>,
+}
+
 /// Scenario IDs that already had a linked test at `rev`, read from git objects.
-fn base_mapped_ids(git: &Git, rev: &str, spec_root: &str) -> Result<BTreeSet<String>> {
+fn base_mapped_ids(
+    git: &Git,
+    root: &Path,
+    config: &Config,
+    rev: &str,
+    spec_root: &str,
+) -> Result<BTreeSet<String>> {
     let mut scenarios = Vec::new();
-    let mut tests = Vec::new();
-    for path in git.ls_tree(rev)? {
-        if spec::is_spec_path(&path, spec_root) {
+    let paths = git.ls_tree(rev)?;
+    for path in &paths {
+        if spec::is_spec_path(path, spec_root) {
             scenarios.extend(spec::parse_scenarios(
-                Path::new(&path),
-                &git.show(rev, &path)?,
-            ));
-        } else if path.ends_with(".rs")
-            && !path.split('/').any(|p| matches!(p, "target" | "fixtures"))
-        {
-            tests.extend(testscan::scan_rust(
-                Path::new(&path),
-                &git.show(rev, &path)?,
+                Path::new(path),
+                &git.show(rev, path)?,
             ));
         }
     }
+    let tests = testscan::scan_listed(root, config, &paths, |p| git.show(rev, p))?;
     Ok(trace::build_report(&scenarios, &tests)
         .mapped
         .into_iter()
@@ -666,14 +860,19 @@ fn base_mapped_ids(git: &Git, rev: &str, spec_root: &str) -> Result<BTreeSet<Str
         .collect())
 }
 
-/// Check out `rev` in a temporary worktree, overlay the change's test files, and run each test
-/// target that holds a scenario test.
+/// Lines of output kept from a failing base `setup`.
+const SETUP_ERROR_LINES: usize = 20;
+
+/// Check out `rev` in a temporary worktree, overlay the change's test files, and run each Cargo
+/// test target and each non-Cargo suite that holds a scenario test.
 fn run_on_base(
     git: &Git,
     root: &Path,
+    config: &Config,
     rev: &str,
     overlay: &[&String],
     jobs: &[&(String, String, String)],
+    suite_jobs: &[SuiteJob],
 ) -> Result<BTreeMap<(String, String), Red>> {
     let tmp = tempfile::tempdir().context("creating temp dir for base checkout")?;
     let wt = tmp.path().join("base");
@@ -717,12 +916,83 @@ fn run_on_base(
             };
             out.insert((id.clone(), name.clone()), red);
         }
+
+        // Non-Cargo suites: setup once per (package, command), then the target tests.
+        let mut set_up: BTreeSet<(String, String)> = BTreeSet::new();
+        for job in suite_jobs {
+            let (pi, si) = job.at;
+            let pkg = &config.packages[pi];
+            let s = &pkg.suites[si];
+            if let Some(cmd) = &s.setup {
+                if set_up.insert((pkg.path.clone(), cmd.clone())) {
+                    run_setup(&wt, pkg, s, cmd)?;
+                }
+            }
+            let picked: Vec<testscan::TestFn> = job.jobs.iter().map(|(_, t)| t.clone()).collect();
+            let res = suite::run_suite(&wt, pkg, s, &job.traced, &Pick::Tests(picked))?;
+            let failed_early = res.no_report || !res.exit_ok;
+            for (id, t) in &job.jobs {
+                let joined = res.joined.iter().find(|j| {
+                    j.test.is_some_and(|i| {
+                        job.traced[i].file == t.file && job.traced[i].name == t.name
+                    })
+                });
+                let red = match joined.map(|j| j.outcome) {
+                    Some(JoinedOutcome::Passed) => Red::Green,
+                    Some(JoinedOutcome::Failed) => Red::Assert,
+                    Some(JoinedOutcome::BuildFailed) => Red::Compile,
+                    Some(JoinedOutcome::Skipped) => Red::NotRun,
+                    None if failed_early => Red::Compile,
+                    None => Red::NotRun,
+                };
+                out.insert((id.clone(), t.name.clone()), red);
+            }
+        }
         Ok(out)
     })();
     let cleanup = git.worktree_remove(&wt);
     let out = result?;
     cleanup?;
     Ok(out)
+}
+
+/// Run a suite's `setup` in the base worktree's package directory. A failure is an environment
+/// error carrying the command's last lines (GATE-032).
+fn run_setup(
+    wt: &Path,
+    pkg: &crate::config::Package,
+    s: &crate::config::Suite,
+    cmd: &str,
+) -> Result<()> {
+    let dir = suite::package_dir(wt, pkg);
+    let out = suite::shell(cmd)
+        .current_dir(&dir)
+        .envs(&s.env)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .with_context(|| {
+            format!(
+                "cannot run setup `{cmd}` for {}:{}",
+                pkg.path,
+                s.runner.as_str()
+            )
+        })?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let lines: Vec<&str> = text.lines().collect();
+    let tail = lines[lines.len().saturating_sub(SETUP_ERROR_LINES)..].join("\n");
+    anyhow::bail!(
+        "setup `{cmd}` failed on base for {}:{} ({})\n{tail}",
+        pkg.path,
+        s.runner.as_str(),
+        out.status
+    )
 }
 
 /// `crates/sj-core/tests/gate.rs` → (`crates/sj-core`, `gate`); `tests/math.rs` → (``, `math`).

@@ -141,27 +141,7 @@ struct SuiteGlobs {
 /// A file belongs to the package with the longest matching path. Within that package, the suite
 /// whose matching glob has the longest literal prefix wins; config order breaks ties.
 pub fn scan_project(root: &Path, config: &Config) -> Result<Scan> {
-    let mut suites: Vec<Vec<SuiteGlobs>> = Vec::with_capacity(config.packages.len());
-    let mut sources: Vec<GlobSet> = Vec::with_capacity(config.packages.len());
-    for p in &config.packages {
-        let mut v = Vec::new();
-        for s in &p.suites {
-            let globs = if s.tests.is_empty() {
-                default_globs(root, p, s.runner)
-            } else {
-                s.tests.clone()
-            };
-            let (set, prefixes) = compile(&globs)?;
-            v.push(SuiteGlobs {
-                runner: s.runner,
-                set,
-                prefixes,
-            });
-        }
-        suites.push(v);
-        sources.push(compile(&p.sources)?.0);
-    }
-
+    let placer = Placer::new(root, config)?;
     let mut scan = Scan::default();
     let mut has_source = vec![false; config.packages.len()];
     let walker = ignore::WalkBuilder::new(root)
@@ -185,45 +165,14 @@ pub fn scan_project(root: &Path, config: &Config) -> Result<Scan> {
             .unwrap_or(path)
             .to_string_lossy()
             .replace('\\', "/");
-        let Some(pkg) = config.package_for(&rel) else {
-            continue;
-        };
-        let idx = config
-            .packages
-            .iter()
-            .position(|p| std::ptr::eq(p, pkg))
-            .unwrap_or_default();
-        if suites[idx].is_empty() {
-            if sources[idx].is_match(&rel) {
-                has_source[idx] = true;
+        match placer.place(&rel) {
+            Place::None => {}
+            Place::Source(idx) => has_source[idx] = true,
+            Place::Test(..) => {
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    scan.tests.extend(placer.scan(&rel, &content));
+                }
             }
-            continue;
-        }
-        let Some(runner) = pick_suite(&suites[idx], &rel) else {
-            continue;
-        };
-        let scanner: fn(&Path, &str) -> Vec<TestFn> = match runner {
-            Runner::Cargo if rel.ends_with(".rs") => scan_rust,
-            Runner::Cargo => continue,
-            Runner::Vitest | Runner::Jest | Runner::Playwright => scan_js,
-            Runner::Pytest if rel.ends_with(".py") => scan_python,
-            Runner::Pytest => continue,
-            // A generic JUnit suite can hold any language: pick by extension.
-            Runner::Junit => match rel.rsplit('.').next() {
-                Some("rs") => scan_rust,
-                Some("py") => scan_python,
-                Some("ts" | "tsx" | "js" | "jsx" | "mts" | "cts" | "mjs" | "cjs") => scan_js,
-                _ => continue,
-            },
-        };
-        let Ok(content) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let rel_path = PathBuf::from(&rel);
-        for mut t in scanner(&rel_path, &content) {
-            t.package = Some(pkg.path.clone());
-            t.suite = Some(runner);
-            scan.tests.push(t);
         }
     }
     scan.unsuited = config
@@ -234,6 +183,123 @@ pub fn scan_project(root: &Path, config: &Config) -> Result<Scan> {
         .map(|(p, _)| p.path.clone())
         .collect();
     Ok(scan)
+}
+
+/// Scan listed repository-relative files (for example from a git tree) as [`scan_project`]
+/// would, reading each matched file with `read`. Skipped directories are skipped here too.
+pub fn scan_listed(
+    root: &Path,
+    config: &Config,
+    paths: &[String],
+    mut read: impl FnMut(&str) -> Result<String>,
+) -> Result<Vec<TestFn>> {
+    let placer = Placer::new(root, config)?;
+    let mut tests = Vec::new();
+    for rel in paths {
+        if rel.split('/').rev().skip(1).any(|d| SKIP_DIRS.contains(&d)) {
+            continue;
+        }
+        if let Place::Test(..) = placer.place(rel) {
+            tests.extend(placer.scan(rel, &read(rel)?));
+        }
+    }
+    Ok(tests)
+}
+
+enum Place {
+    None,
+    /// A file of package `idx` with no suite; counts towards `unsuited` when it is a source.
+    Source(usize),
+    Test(usize, Runner, fn(&Path, &str) -> Vec<TestFn>),
+}
+
+/// Compiled suite and source globs: which suite, if any, scans a file.
+struct Placer<'a> {
+    config: &'a Config,
+    suites: Vec<Vec<SuiteGlobs>>,
+    sources: Vec<GlobSet>,
+}
+
+impl<'a> Placer<'a> {
+    fn new(root: &Path, config: &'a Config) -> Result<Placer<'a>> {
+        let mut suites: Vec<Vec<SuiteGlobs>> = Vec::with_capacity(config.packages.len());
+        let mut sources: Vec<GlobSet> = Vec::with_capacity(config.packages.len());
+        for p in &config.packages {
+            let mut v = Vec::new();
+            for s in &p.suites {
+                let globs = if s.tests.is_empty() {
+                    default_globs(root, p, s.runner)
+                } else {
+                    s.tests.clone()
+                };
+                let (set, prefixes) = compile(&globs)?;
+                v.push(SuiteGlobs {
+                    runner: s.runner,
+                    set,
+                    prefixes,
+                });
+            }
+            suites.push(v);
+            sources.push(compile(&p.sources)?.0);
+        }
+        Ok(Placer {
+            config,
+            suites,
+            sources,
+        })
+    }
+
+    fn place(&self, rel: &str) -> Place {
+        let Some(pkg) = self.config.package_for(rel) else {
+            return Place::None;
+        };
+        let idx = self
+            .config
+            .packages
+            .iter()
+            .position(|p| std::ptr::eq(p, pkg))
+            .unwrap_or_default();
+        if self.suites[idx].is_empty() {
+            return if self.sources[idx].is_match(rel) {
+                Place::Source(idx)
+            } else {
+                Place::None
+            };
+        }
+        let Some(runner) = pick_suite(&self.suites[idx], rel) else {
+            return Place::None;
+        };
+        let scanner: fn(&Path, &str) -> Vec<TestFn> = match runner {
+            Runner::Cargo if rel.ends_with(".rs") => scan_rust,
+            Runner::Cargo => return Place::None,
+            Runner::Vitest | Runner::Jest | Runner::Playwright => scan_js,
+            Runner::Pytest if rel.ends_with(".py") => scan_python,
+            Runner::Pytest => return Place::None,
+            // A generic JUnit suite can hold any language: pick by extension.
+            Runner::Junit => match rel.rsplit('.').next() {
+                Some("rs") => scan_rust,
+                Some("py") => scan_python,
+                Some("ts" | "tsx" | "js" | "jsx" | "mts" | "cts" | "mjs" | "cjs") => scan_js,
+                _ => return Place::None,
+            },
+        };
+        Place::Test(idx, runner, scanner)
+    }
+
+    fn scan(&self, rel: &str, content: &str) -> Vec<TestFn> {
+        let Place::Test(idx, runner, scanner) = self.place(rel) else {
+            return Vec::new();
+        };
+        let pkg = &self.config.packages[idx];
+        scanner(Path::new(rel), content)
+            .into_iter()
+            .map(|mut t| {
+                t.package = Some(pkg.path.clone());
+                t.suite = Some(runner);
+                t
+            })
+            .collect()
+    }
 }
 
 fn pick_suite(suites: &[SuiteGlobs], rel: &str) -> Option<Runner> {

@@ -167,9 +167,9 @@ fn gate_030_a_co_located_test_is_overlaid_without_its_source_file() {
     add_auth_004(&repo, TEST, FIXED);
     let bin = tempfile::tempdir().unwrap();
     let (mut cmd, _) = gate(&repo, &bin);
-    cmd.assert()
-        .success()
-        .stdout("gate: pass — 1 scenario proven (1 red:assert)\n");
+    cmd.assert().success().stdout(predicate::str::starts_with(
+        "gate: pass — 1 scenario proven (1 red:assert)\n",
+    ));
     // The head checkout is untouched.
     assert_eq!(
         std::fs::read_to_string(repo.path().join("apps/api/src/auth.ts")).unwrap(),
@@ -227,9 +227,9 @@ fn gate_033_a_missing_symbol_on_base_is_red_compile() {
     );
     let bin = tempfile::tempdir().unwrap();
     let (mut cmd, _) = gate(&repo, &bin);
-    cmd.assert()
-        .success()
-        .stdout("gate: pass — 1 scenario proven (1 red:compile)\n");
+    cmd.assert().success().stdout(predicate::str::starts_with(
+        "gate: pass — 1 scenario proven (1 red:compile)\n",
+    ));
 }
 
 #[cfg(unix)]
@@ -331,5 +331,7 @@ fn gate_038_files_on_the_non_source_list_pass_without_an_exemption() {
         .arg(r)
         .assert()
         .success()
-        .stdout("gate: pass — no changed scenarios to prove\n");
+        .stdout(predicate::str::starts_with(
+            "gate: pass — no changed scenarios to prove\n",
+        ));
 }

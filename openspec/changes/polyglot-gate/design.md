@@ -29,7 +29,7 @@ See proposal.md (Why). Today `gate::run` refuses a repository without a root `Ca
 `skip` without a `reason` is a config error. `reason` without `skip` is also an error, because it would be silently ignored. `Config` gains `non_source: Vec<String>` (root-relative globs). `to_toml` writes each key only when set, and the round-trip test covers them.
 
 ### 2. Head runs per suite
-`HeadRun { cargo: Option<Run>, other: BTreeMap<(file, name), Outcome>, failing: Vec<String>, build_failed: Vec<String> }` replaces `Option<Run>` in `gate::Input`.
+`gate::Input` keeps `head_run: Option<Run>` for Cargo and gains `head_other: BTreeMap<(file, name), Outcome>`, `head_failing: Vec<String>` and `head_build_failed: Vec<String>` for the other suites. `Input` derives `Default`, so existing callers only add `..Input::default()`.
 - **Cargo suites:** the gate runs `cargo test --workspace --no-fail-fast` once, as today, when the config has a Cargo suite.
 - **Non-Cargo suites:** the gate runs `run_suite` with `Pick::Tests` for the suites that hold target tests. With a full-suite rule (refactor, or an exemption touching source) it runs every non-Cargo suite with `Pick::All`.
 - A non-Cargo suite with no report adds `test suite failed to build at head (<package>:<runner>)`.
@@ -44,7 +44,7 @@ One base worktree serves every suite. The overlay is the changed files that exis
 
 Cargo targets keep today's path, including `Unverifiable` for inline tests.
 
-The `Input.base` value becomes `(Red, Option<String>)`, so `unverifiable` can carry a reason:
+`Input.reasons`, keyed like `Input.base`, lets `unverifiable` carry a reason:
 - **With a reason:** `unverifiable CHAT-002 sends a message (needs staging API)`.
 - **Without one:** keeps today's inline-test hint.
 
@@ -52,8 +52,8 @@ The `Input.base` value becomes `(Red, Option<String>)`, so `unverifiable` can ca
 Gate lines use `<ID> <name>`. JS and Python test names keep their ID (TRACE-009), which would print `CHAT-002 CHAT-002 sends a message`. A label helper prints the name alone when it already starts with the ID. Rust names (`chat_002_…`) never do, so their output is unchanged.
 
 ### 5. Classification
-`is_impl_file(rel, spec_root)` stays as the built-in rule. A new `Classifier` built from the config decides, for each file:
-1. **Not implementation** when the built-in rule says so, or the file matches `non_source`, or it matches any suite's `tests` or `support` globs.
+`is_impl_file(rel, spec_root)` stays as the built-in rule. A new `Classifier` built from the config decides, for each file. It is used only when `specjutsu.toml` exists, since the default config's `sources` are a guess, not a declaration:
+1. **Not implementation** when the built-in rule says so, or the file matches `non_source`, or it matches a non-Cargo suite's `tests` globs or any suite's `support` globs. A Cargo suite's `tests` (`**/*.rs`) is left out because Rust tests sit inline, and the built-in `tests/` rule covers Cargo.
 2. **Otherwise, by owning package** (`Config::package_for`): if that package has non-empty `sources`, the file is implementation only when it matches them (GATE-035).
 3. **Otherwise, implementation.** This keeps the rule fail-closed for packages that declare no sources, including the default Cargo package.
 
@@ -65,7 +65,7 @@ Gate lines use `<ID> <name>`. JS and Python test names keep their ID (TRACE-009)
 That is an environment error, exit 2 (GATE-026).
 
 ### 7. Tracing
-`gate::run` traces with `scan_project` so non-Cargo tests map. `base_mapped_ids` (GATE-023) also scans `.ts`/`.js`/`.py` files from git objects through `scan_js`/`scan_python` when they match a suite's `tests` globs.
+`gate::run` traces with `scan_project` so non-Cargo tests map. `base_mapped_ids` (GATE-023) scans the base tree from git objects through a new `testscan::scan_listed`, which shares `scan_project`'s per-file placement.
 
 ## Risks / Trade-offs
 

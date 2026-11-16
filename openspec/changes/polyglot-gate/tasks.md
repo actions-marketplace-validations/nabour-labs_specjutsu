@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. The gate across suites (sj-core + sj-cli)
 
-- [ ] 2.1 Config-driven gate: no-suite error, `scan_project` tracing, `HeadRun`, per-suite overlay, setup and base runs, the reason on `unverifiable`, and failure labels (design decisions 2–4, 6, 7) (GATE-026, GATE-030..035, GATE-038). Verify: `crates/sj-cli/tests/gate_polyglot.rs` uses a fake `pnpm` (Unix) that fails a test unless the checked-out `src/auth.ts` exports `refreshToken`, and fails without a report unless `pnpm install` ran first. It covers:
+- [x] 2.1 Config-driven gate: no-suite error, `scan_project` tracing, per-suite head results, per-suite overlay, setup and base runs, the reason on `unverifiable`, and failure labels (design decisions 2–4, 6, 7) (GATE-026, GATE-030..035, GATE-038). Verify: `crates/sj-cli/tests/gate_polyglot.rs` uses a fake `pnpm` (Unix) that fails a test unless the checked-out `src/auth.ts` exports `refreshToken`, and fails without a report unless `pnpm install` ran first. It covers:
   - GATE-030: the overlay without the source file, `red:assert`.
   - GATE-031: `setup` ran once before the base run.
   - GATE-032: a failing setup exits 2 with its output.
