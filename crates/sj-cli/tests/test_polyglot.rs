@@ -305,7 +305,7 @@ fn run_014_the_generic_junit_runner_runs_any_command() {
     repo.git(&["init", "-q", "-b", "main"]);
     let r = repo.path();
     let command = if cfg!(windows) {
-        r"if not exist build mkdir build && copy /Y report.src.xml build\junit.xml >NUL"
+        r#"(if not exist "build" mkdir "build") && copy /Y "report.src.xml" "build\junit.xml" >NUL"#
     } else {
         "mkdir -p build && cp report.src.xml build/junit.xml"
     };

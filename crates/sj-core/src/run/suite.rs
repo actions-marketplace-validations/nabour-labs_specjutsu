@@ -589,8 +589,9 @@ pub fn run_suite(
     // Resolve through PATH (and PATHEXT on Windows, where `pnpm` is `pnpm.cmd`).
     let program =
         crate::doctor::on_path(&inv.program).unwrap_or_else(|| PathBuf::from(&inv.program));
-    let out = std::process::Command::new(&program)
-        .args(&inv.args)
+    let mut command = std::process::Command::new(&program);
+    shell_args(&mut command, suite.runner, &inv.args);
+    let out = command
         .current_dir(&inv.cwd)
         .envs(&inv.env)
         .stdin(std::process::Stdio::null())
@@ -644,4 +645,25 @@ pub fn run_suite(
     }
     result.joined = joined;
     Ok(result)
+}
+
+/// Adds the invocation's arguments. On Windows a `junit` command goes to
+/// `cmd /S /C` verbatim: Rust's argument quoting would escape any `"` in it
+/// in a way cmd.exe does not read.
+#[cfg(windows)]
+fn shell_args(command: &mut std::process::Command, runner: Runner, args: &[String]) {
+    use std::os::windows::process::CommandExt;
+    match (runner, args.split_last()) {
+        (Runner::Junit, Some((cmd, flags))) => {
+            command.arg("/S").args(flags).raw_arg(format!("\"{cmd}\""));
+        }
+        _ => {
+            command.args(args);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn shell_args(command: &mut std::process::Command, _runner: Runner, args: &[String]) {
+    command.args(args);
 }
