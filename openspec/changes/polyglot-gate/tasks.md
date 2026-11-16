@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. Config keys and classification (sj-core)
 
-- [ ] 1.1 `setup`, `support`, `red_on_base`, `reason` and `non_source` with validation and `to_toml` (design decision 1). Add the `Classifier` from design decision 5 (GATE-034, GATE-035, GATE-038). Verify: `crates/sj-core/tests/config.rs` round-trips the keys and rejects `skip` without `reason` and `reason` without `skip`. `crates/sj-core/tests/gate.rs` checks the classifier: package sources, a file outside them, `non_source`, test globs, and the fallback for empty `sources`.
+- [x] 1.1 `setup`, `support`, `red_on_base`, `reason` and `non_source` with validation and `to_toml` (design decision 1). Add the `Classifier` from design decision 5 (GATE-034, GATE-035, GATE-038). Verify: `crates/sj-core/tests/config.rs` round-trips the keys and rejects `skip` without `reason` and `reason` without `skip`. `crates/sj-core/tests/gate.rs` checks the classifier: package sources, a file outside them, `non_source`, test globs, and the fallback for empty `sources`.
 
 ## 2. The gate across suites (sj-core + sj-cli)
 

@@ -93,6 +93,7 @@ pub fn detect(root: &Path) -> Result<Detected> {
             schema: SCHEMA,
             spec_root: DEFAULT_SPEC_ROOT.into(),
             mode: Default::default(),
+            non_source: Vec::new(),
             packages,
         },
         notes,

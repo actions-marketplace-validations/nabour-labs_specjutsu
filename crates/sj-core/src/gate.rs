@@ -105,7 +105,7 @@ fn is_main(base: &str) -> bool {
 }
 
 /// Everything the gate rules need, gathered by [`run`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Input {
     pub changes: BTreeMap<String, Change>,
     pub trace: Report,
@@ -124,6 +124,8 @@ pub struct Input {
     pub unidentified: Vec<String>,
     /// Scenarios without an ID that already existed on base.
     pub unidentified_known: usize,
+    /// Which changed files are implementation files.
+    pub classifier: Classifier,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -168,7 +170,7 @@ pub fn evaluate(input: &Input) -> GateReport {
     let touches_impl = input
         .changed_files
         .iter()
-        .any(|f| is_impl_file(f, &input.spec_root));
+        .any(|f| input.classifier.is_impl_under(f, &input.spec_root));
     // GATE-029: any exemption that touches source still needs a green suite.
     let full_suite = refactor || (!input.exemptions.is_empty() && touches_impl);
 
@@ -283,7 +285,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         let impl_files: Vec<&str> = input
             .changed_files
             .iter()
-            .filter(|f| is_impl_file(f, &input.spec_root))
+            .filter(|f| input.classifier.is_impl_under(f, &input.spec_root))
             .map(String::as_str)
             .collect();
         if !impl_files.is_empty() {
@@ -386,6 +388,91 @@ pub fn is_impl_file(rel: &str, spec_root: &str) -> bool {
     }
     let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
     !ext.is_some_and(|e| DOC_EXTS.contains(&e.as_str()))
+}
+
+/// Decides which changed files need a scenario: the built-in rule, refined by the project
+/// file's `non_source` list, its suites' test and support globs, and its packages' `sources`.
+#[derive(Debug, Clone, Default)]
+pub struct Classifier {
+    spec_root: String,
+    /// `non_source`, plus the `tests` and `support` globs of non-Cargo suites. A Cargo suite's
+    /// `tests` covers every `.rs` file, since Rust tests can sit inline; the built-in
+    /// `tests/` rule handles Cargo instead.
+    never: Option<globset::GlobSet>,
+    /// (package path, its `sources`) for packages that declare sources.
+    packages: Vec<(String, globset::GlobSet)>,
+    /// Every package path, to find a file's owner.
+    owners: Vec<String>,
+}
+
+fn globset(globs: &[String]) -> Result<globset::GlobSet> {
+    let mut b = globset::GlobSetBuilder::new();
+    for g in globs {
+        b.add(
+            globset::GlobBuilder::new(g)
+                .literal_separator(true)
+                .build()
+                .with_context(|| format!("specjutsu.toml: bad glob `{g}`"))?,
+        );
+    }
+    Ok(b.build()?)
+}
+
+impl Classifier {
+    pub fn new(config: &crate::config::Config, spec_root: &str) -> Result<Classifier> {
+        let mut never = config.non_source.clone();
+        for p in &config.packages {
+            for s in &p.suites {
+                if s.runner != crate::config::Runner::Cargo {
+                    never.extend(s.tests.iter().cloned());
+                }
+                never.extend(s.support.iter().cloned());
+            }
+        }
+        let mut packages = Vec::new();
+        for p in config.packages.iter().filter(|p| !p.sources.is_empty()) {
+            packages.push((p.path.clone(), globset(&p.sources)?));
+        }
+        Ok(Classifier {
+            spec_root: spec_root.to_string(),
+            never: Some(globset(&never)?),
+            packages,
+            owners: config.packages.iter().map(|p| p.path.clone()).collect(),
+        })
+    }
+
+    /// The built-in rule alone, for a repository without a project file (whose default
+    /// package `sources` are a guess, not a declaration).
+    pub fn builtin(spec_root: &str) -> Classifier {
+        Classifier {
+            spec_root: spec_root.to_string(),
+            ..Classifier::default()
+        }
+    }
+
+    /// Whether `rel` (repository-relative, forward slashes) needs a scenario or an exemption.
+    pub fn is_impl(&self, rel: &str) -> bool {
+        self.is_impl_under(rel, &self.spec_root)
+    }
+
+    fn is_impl_under(&self, rel: &str, spec_root: &str) -> bool {
+        if !is_impl_file(rel, spec_root) || self.never.as_ref().is_some_and(|g| g.is_match(rel)) {
+            return false;
+        }
+        let owns =
+            |pkg: &str| pkg == "." || rel.strip_prefix(pkg).is_some_and(|r| r.starts_with('/'));
+        let owner = self.owners.iter().filter(|p| owns(p)).max_by_key(|p| {
+            if *p == "." {
+                0
+            } else {
+                p.len() + 1
+            }
+        });
+        match owner.and_then(|o| self.packages.iter().find(|(p, _)| p == o)) {
+            Some((_, sources)) => sources.is_match(rel),
+            None => true,
+        }
+    }
 }
 
 pub struct Options {
@@ -536,6 +623,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         }
     }
 
+    let classifier = Classifier::builtin(&spec_root);
     Ok(evaluate(&Input {
         changes,
         trace: report,
@@ -548,6 +636,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         spec_root,
         unidentified,
         unidentified_known,
+        classifier,
     }))
 }
 
