@@ -225,3 +225,64 @@ fn conf_003_junit_suites_need_a_command_and_a_report() {
     );
     assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
 }
+
+const GATE_KEYS: &str = r#"schema = 1
+non_source = ["infra/**", "*.tf"]
+
+[[package]]
+path = "apps/app"
+sources = ["apps/app/src/**"]
+
+[[package.suite]]
+runner = "vitest"
+tests = ["apps/app/src/**/*.test.ts"]
+setup = "pnpm install --frozen-lockfile"
+support = ["apps/app/test/**"]
+
+[[package.suite]]
+runner = "playwright"
+tests = ["apps/app/e2e/**"]
+red_on_base = "skip"
+reason = "needs staging API"
+"#;
+
+#[test]
+fn gate_034_suites_declare_setup_support_and_a_red_on_base_policy() {
+    let c = load_text(GATE_KEYS).unwrap();
+    let [vitest, pw] = &c.packages[0].suites[..] else {
+        panic!("two suites")
+    };
+    assert_eq!(
+        vitest.setup.as_deref(),
+        Some("pnpm install --frozen-lockfile")
+    );
+    assert_eq!(vitest.support, vec!["apps/app/test/**".to_string()]);
+    assert_eq!(vitest.red_on_base, config::RedOnBase::Run);
+    assert_eq!(pw.red_on_base, config::RedOnBase::Skip);
+    assert_eq!(pw.reason.as_deref(), Some("needs staging API"));
+    assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
+}
+
+#[test]
+fn gate_034_skip_needs_a_reason_and_a_reason_needs_skip() {
+    let suite = |body: &str| {
+        format!(
+            "schema = 1\n\n[[package]]\npath = \"web\"\nsources = []\n\n[[package.suite]]\n\
+             runner = \"playwright\"\ntests = []\n{body}"
+        )
+    };
+    let e = err_text(&suite("red_on_base = \"skip\"\n"));
+    assert!(e.contains("web") && e.contains("reason"), "{e}");
+    let e = err_text(&suite("reason = \"slow\"\n"));
+    assert!(e.contains("reason") && e.contains("skip"), "{e}");
+    let e = err_text(&suite("red_on_base = \"sometimes\"\n"));
+    assert!(e.contains("sometimes") && e.contains("run, skip"), "{e}");
+}
+
+#[test]
+fn gate_038_non_source_is_a_top_level_list() {
+    let c = load_text(GATE_KEYS).unwrap();
+    assert_eq!(c.non_source, vec!["infra/**".to_string(), "*.tf".into()]);
+    let dir = tempfile::tempdir().unwrap();
+    assert!(Config::default_for(dir.path()).non_source.is_empty());
+}

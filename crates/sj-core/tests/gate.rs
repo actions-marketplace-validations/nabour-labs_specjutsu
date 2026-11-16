@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use sj_core::gate::{
-    classify, evaluate, expand_ids, history, parse_exemptions, run, Change, Exemption, Input,
-    Options, Red,
+    classify, evaluate, expand_ids, history, parse_exemptions, run, Change, Classifier, Exemption,
+    Input, Options, Red,
 };
 use sj_core::spec::{fingerprints, Scenario};
 use sj_core::trace::{Mapped, Orphan, Report, TestRef};
@@ -29,6 +29,7 @@ fn input() -> Input {
         spec_root: "openspec".into(),
         unidentified: vec![],
         unidentified_known: 0,
+        ..Input::default()
     }
 }
 
@@ -514,4 +515,71 @@ fn gate_022_green_without_an_earlier_red_fails() {
         "{:?}",
         r.failures
     );
+}
+
+// ---------- source classification (polyglot-gate) ----------
+
+const CLASSIFIED: &str = r#"schema = 1
+non_source = ["infra/**"]
+
+[[package]]
+path = "backend"
+sources = ["backend/src/**/*.py"]
+
+[[package.suite]]
+runner = "pytest"
+tests = ["backend/src/**/test_*.py"]
+support = ["backend/conftest.py"]
+
+[[package]]
+path = "tools"
+sources = []
+"#;
+
+fn classifier() -> Classifier {
+    Classifier::new(
+        &sj_core::config::Config::parse(CLASSIFIED).unwrap(),
+        "openspec",
+    )
+    .unwrap()
+}
+
+#[test]
+fn gate_035_package_sources_decide_what_is_implementation() {
+    let c = classifier();
+    assert!(c.is_impl("backend/src/diff.py"));
+    // In the package but outside its sources.
+    assert!(!c.is_impl("backend/notebooks/explore.py"));
+    assert!(!c.is_impl("backend/scripts/seed.py"));
+    // Tests and support files are never implementation, even under sources.
+    assert!(!c.is_impl("backend/src/test_diff.py"));
+    assert!(!c.is_impl("backend/conftest.py"));
+    // A package without sources, and files outside every package, use the built-in rule.
+    assert!(c.is_impl("tools/build.sh"));
+    assert!(!c.is_impl("tools/README.md"));
+    assert!(c.is_impl("scripts/release.sh"));
+    assert!(!c.is_impl("openspec/specs/gate/spec.md"));
+}
+
+#[test]
+fn gate_038_non_source_globs_extend_the_built_in_list() {
+    let c = classifier();
+    assert!(!c.is_impl("infra/main.tf"));
+    assert!(!c.is_impl("infra/modules/db/main.tf"));
+    assert!(c.is_impl("deploy/main.tf"));
+}
+
+#[test]
+fn gate_035_evaluate_lists_only_source_files_as_unspecified() {
+    let mut i = input();
+    i.classifier = classifier();
+    i.changed_files = vec![
+        "backend/notebooks/explore.py".into(),
+        "backend/src/diff.py".into(),
+    ];
+    let r = evaluate(&i);
+    assert_eq!(r.failures, vec!["unspecified change: backend/src/diff.py"]);
+
+    i.changed_files = vec!["infra/main.tf".into()];
+    assert!(evaluate(&i).pass);
 }
