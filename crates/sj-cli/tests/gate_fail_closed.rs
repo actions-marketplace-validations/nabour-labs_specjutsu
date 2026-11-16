@@ -27,8 +27,11 @@ fn gate_026_repository_with_no_supported_runner_is_an_environment_error() {
         .arg(repo.path())
         .assert()
         .code(2)
-        .stderr(predicate::str::contains("no supported test runner"))
-        .stderr(predicate::str::contains("cargo"));
+        .stderr(predicate::str::contains("no test suite configured"))
+        .stderr(predicate::str::contains(
+            "cargo, jest, junit, playwright, pytest, vitest",
+        ))
+        .stderr(predicate::str::contains("sj adopt"));
 
     Command::cargo_bin("sj")
         .unwrap()
