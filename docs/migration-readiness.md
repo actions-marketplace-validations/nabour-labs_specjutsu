@@ -176,7 +176,7 @@ picked up. `polyglot-runners` was split in two when picked up: `sj test` across 
 | 1 | `project-config` | config (CONF) | `specjutsu.toml`, packages with suites, `init`, `adopt`, `doctor` | all |
 | 2 | `polyglot-trace` | trace (TRACE-007…) | vitest/Jest/Playwright/pytest test discovery and ID links | all |
 | 3 | `polyglot-runners` | run (RUN-011…017) | `sj test` across vitest, Jest, Playwright, pytest and JUnit suites; scopes by scenario, package or suite | all |
-| 3b | `polyglot-gate` | gate (GATE-030…035, 038) | Per-suite red-on-base with test/support overlay and base `setup`, e2e red-on-base policy, source-glob classification, `non_source` | all |
+| 3b | `polyglot-gate` | gate (GATE-026, 030…035, 038) | Per-suite red-on-base with test/support overlay and base `setup`, e2e red-on-base policy, source-glob classification, `non_source` | all |
 | 4 | `scenario-ids` | ids (IDS), gate (GATE-036, 037) | `sj ids --write` for 7,800 scenarios; ID-only commits pass the gate | all |
 | 5 | `spec-authoring` | authoring (SPEC) | `sj spec new/list/validate/check/archive`: replaces the OpenSpec CLI, Spec Kit clarify/analyze | all |
 | 6 | `speckit-import` | import (IMP) | Spec Kit features → OpenSpec layout, constitution → `principles.md` | P2 |
@@ -185,8 +185,8 @@ picked up. `polyglot-runners` was split in two when picked up: `sj test` across 
 | 9 | `workflow-skills` | skills (SKILL) | 9 `sj-*` skills covering every Superpowers/OpenSpec/Spec Kit workflow | all |
 | 10 | `tool-migration` | migration (MIG) | `sj migrate --from openspec\|speckit\|superpowers` | all |
 
-Prerequisites: `trace-engine`, `test-ledger`, `gate-fail-closed`, `project-config` and
-`polyglot-trace` are archived. `polyglot-gate` needs `polyglot-runners`.
+Prerequisites: `trace-engine`, `test-ledger`, `gate-fail-closed`, `project-config`,
+`polyglot-trace` and `polyglot-runners` are archived.
 
 **Migration order:** `FridgeSense` (OpenSpec + pytest + vitest, smallest) after 0–5 (with 3b) and
 7–10 → `ellesmere.ai` (adds monorepo scale and Superpowers removal) → `chrome-agent`

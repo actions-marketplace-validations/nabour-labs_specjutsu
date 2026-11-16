@@ -21,4 +21,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Docs and self-hosting
 
-- [ ] 3.1 README gate section on per-suite red-on-base, `setup`, `support`, `red_on_base`, and `non_source`, plus the CHANGELOG entry. Verify: built `sj gate --base origin/main` and `sj gate --since <root>` pass on this repo. `sj gate` on a scratch repo with a real vitest suite (chrome-agent's `node_modules`) proves a new test red-on-base.
+- [x] 3.1 README gate section on per-suite red-on-base, `setup`, `support`, `red_on_base`, and `non_source`, plus the CHANGELOG entry. Verify: built `sj gate --base origin/main` and `sj gate --since <root>` pass on this repo. `sj gate` on a scratch repo with a real vitest suite (chrome-agent's `node_modules`) proves a new test red-on-base.

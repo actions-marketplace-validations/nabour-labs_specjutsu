@@ -105,8 +105,10 @@ no suite gets a `warn    no test suite: <path>` line. Titles built at runtime
 `sj gate --base origin/main` fails a change when an added, modified or newly
 implemented scenario has no test, a test fails, or a test points at a missing
 scenario. Its core check is **red-on-base**: it checks out the base commit,
-overlays only the change's `tests/` files, and requires each new test to fail
-there. A test that passes on the old code didn't drive the change. Refactors and
+overlays only the change's test files, and requires each new test to fail
+there. It does this for every suite in `specjutsu.toml`: Cargo `tests/` files, and
+for other runners every changed file matching the suite's `tests` or `support`
+globs, so a co-located `auth.test.ts` runs against the base `auth.ts`. A test that passes on the old code didn't drive the change. Refactors and
 chores declare an exemption with a reason (`Exempt: refactor — <why>` in the
 change's `proposal.md`). An exempted change that edits source still has to pass
 the full test suite.
@@ -116,9 +118,37 @@ or an exemption, unless it is a test, a spec, documentation or media (`*.md`,
 `*.txt`, images), repository metadata (`.github/`, `.gitignore`, `LICENSE`), or a
 manifest or lockfile (`Cargo.toml`, `package.json`, `pyproject.toml`, …). A new
 or edited scenario without an ID fails as `unidentified`. Existing scenarios
-without IDs are counted in one warning. The only supported runner today is
-`cargo`, so the gate exits 2 in a repository without a root `Cargo.toml`
-instead of passing changes it can't test.
+without IDs are counted in one warning. With no test suite configured (no
+`specjutsu.toml` suites and no root `Cargo.toml`), the gate exits 2 and suggests
+`sj adopt` instead of passing changes it can't test.
+
+A base checkout has no installed dependencies, so a suite that needs them declares
+`setup`. The gate runs it once in the base package directory before that suite's
+base run, and a failing setup exits 2 with its last 20 lines. A suite that can't run
+on old code at all, such as end-to-end tests against a deployed API, says so:
+
+```toml
+[[package.suite]]
+runner = "vitest"
+tests = ["apps/api/src/**/*.test.ts"]
+setup = "pnpm install --frozen-lockfile"
+support = ["apps/api/test/fixtures/**"]
+
+[[package.suite]]
+runner = "playwright"
+tests = ["apps/app/e2e/**"]
+red_on_base = "skip"
+reason = "needs staging API"
+```
+
+A new test in a skipped suite fails as `unverifiable CHAT-002 sends a message
+(needs staging API)` unless the gate runs with `--allow-unverifiable`. Its head run
+is never skipped. A test file that fails to load on base, for example because it
+imports a function that doesn't exist yet, counts as `red:compile`.
+
+When a package declares `sources`, only changed files matching them need a scenario,
+and files elsewhere in that package don't. A top-level `non_source = ["infra/**"]`
+adds globs to the built-in non-source list.
 
 ## The project file
 
@@ -170,8 +200,7 @@ errors, packages without a runner, runners that are not installed, and missing
 spec folders, one per line. It never installs anything: pytest is checked on
 `PATH` or with `uv run --no-sync`, and Node runners in `node_modules/.bin`.
 
-`sj trace` and `sj test` read the packages and suites. `sj gate` still proves
-red-on-base with Cargo only, until per-suite red-on-base lands.
+`sj trace`, `sj test` and `sj gate` read the packages and suites.
 
 ## Test runs and the evidence ledger
 
