@@ -126,6 +126,18 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Local check before a PR: the gate's checks without red-on-base.
+    Verify {
+        /// Only this change (default: every open change).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        /// Base ref (default: origin/HEAD, origin/main, origin/master, main, master).
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Check off tasks in a change's tasks.md.
     Task {
         #[command(subcommand)]
@@ -307,6 +319,12 @@ fn run() -> Result<ExitCode> {
             base,
             json,
         } => next_cmd(change, &args, parallel, base, json),
+        Command::Verify {
+            change,
+            args,
+            base,
+            json,
+        } => verify_cmd(change, &args, base, json),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -730,6 +748,40 @@ fn next_cmd(
         Some(n) => print!("{}", next::render(&n)),
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn verify_cmd(
+    change: Option<String>,
+    args: &SpecArgs,
+    base: Option<String>,
+    json: bool,
+) -> Result<ExitCode> {
+    use sj_core::agent_loop::verify;
+    let spec_root = spec_root_for(&args.root, args.spec_root.clone())?;
+    let r = verify::verify(&verify::Options {
+        root: args.root.clone(),
+        spec_root,
+        change,
+        base,
+    })?;
+    for w in &r.warnings {
+        eprintln!("warn    {w}");
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&r)?);
+    } else if r.ok {
+        println!("verify: ok");
+    } else {
+        println!("verify: {}", plural(r.problems.len(), "problem"));
+        for p in &r.problems {
+            println!("{}", p.message);
+        }
+    }
+    Ok(if r.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
 }
 
 fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> {

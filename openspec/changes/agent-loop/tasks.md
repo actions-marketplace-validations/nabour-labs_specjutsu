@@ -12,7 +12,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Verify (sj-core + sj-cli)
 
-- [ ] 3.1 Split `gate::run` into `prepare` and shared rules, and `sj verify` (decision 7) (LOOP-006, LOOP-007). Verify: in a git repo branched from `main`, `loop_cmd.rs` sees `untested <ID>` and exit 1, then `verify: ok` and exit 0 once each target is proven red-before-green and `sj spec check` is clean. The existing gate tests still pass unchanged.
+- [x] 3.1 Split `gate::run` into `prepare` and shared rules, and `sj verify` (decision 7) (LOOP-006, LOOP-007). Verify: in a git repo branched from `main`, `loop_cmd.rs` sees `untested <ID>` and exit 1, then `verify: ok` and exit 0 once each target is proven red-before-green and `sj spec check` is clean. The existing gate tests still pass unchanged.
 
 ## 4. Docs and self-hosting
 

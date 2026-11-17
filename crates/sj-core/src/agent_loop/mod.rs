@@ -3,6 +3,7 @@
 pub mod next;
 pub mod status;
 pub mod task;
+pub mod verify;
 
 use std::collections::BTreeMap;
 use std::path::Path;
