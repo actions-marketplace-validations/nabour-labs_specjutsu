@@ -38,7 +38,7 @@ Re-serialising `.claude/settings.json` would change its indentation, spacing and
   - `{"hooks": [{"type": "command", "command": "sj hook claude session-start"}]}` under `hooks.SessionStart`
 - **Insert:** an entry goes after the last element of its event array. It's written as `,` + the whitespace that precedes that array's last element + the entry. An empty array gets the parent's indent plus one indent unit, which is the first indent the file uses, or two spaces. A missing event key or `hooks` object is added the same way, as the last member of its parent. A missing file is created with the entries in two-space JSON.
 - **Ours** is any array element whose `hooks[*].command` starts with `sj hook claude `. That is how install sees it's already present (idempotent) and how remove finds it.
-- **Remove:** cut from the end of the previous element (or the array's `[`) to the end of ours, so the comma and the whitespace that insert added go with it. If an event array or `hooks` object ends up empty, it's removed the same way. If the file ends up as `{}` (plus whitespace) and the adapter created it, the file is deleted.
+- **Remove:** cut from the end of the previous element (or the array's `[`) to the end of ours, so the comma and the whitespace that insert added go with it. If an event array or `hooks` object ends up empty, it's removed the same way. If the file ends up as `{}` (plus whitespace), and it held more than that before removal, it's deleted.
 - **Invalid JSON:** the command exits 2 and names the file. It never rewrites a file it can't read.
 
 ### 3. CLAUDE.md

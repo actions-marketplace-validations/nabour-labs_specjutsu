@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. Install, update and remove (sj-adapters + sj-cli)
 
-- [ ] 1.1 `jsonedit`, the CLAUDE.md block, skill hashes, and `sj init --agents claude`, `sj update [--force]` and `sj init --remove-agents claude` (design decisions 1–5) (ADAPT-001..004, ADAPT-010). Verify: `crates/sj-cli/tests/adapter_cmd.rs` installs into an `ellesmere.ai`-shaped settings file (a `require-worktree.mjs` PreToolUse hook, a SessionStart hook, three deny rules) and sees them unchanged and first; keeps 40 lines of CLAUDE.md byte-identical; runs update twice for `adapters up to date`; reports and keeps a hand-edited `sj-apply`, and replaces it with `--force`; removes and gets both files byte-identical. `crates/sj-adapters/tests/jsonedit.rs` covers insert and remove on empty, missing, minified and tab-indented files.
+- [x] 1.1 `jsonedit`, the CLAUDE.md block, skill hashes, and `sj init --agents claude`, `sj update [--force]` and `sj init --remove-agents claude` (design decisions 1–5) (ADAPT-001..004, ADAPT-010). Verify: `crates/sj-cli/tests/adapter_cmd.rs` installs into an `ellesmere.ai`-shaped settings file (a `require-worktree.mjs` PreToolUse hook, a SessionStart hook, three deny rules) and sees them unchanged and first; keeps 40 lines of CLAUDE.md byte-identical; runs update twice for `adapters up to date`; reports and keeps a hand-edited `sj-apply`, and replaces it with `--force`; removes and gets both files byte-identical. `crates/sj-adapters/tests/jsonedit.rs` covers insert and remove on empty, missing, minified and tab-indented files.
 
 ## 2. Hooks (sj-core + sj-cli)
 

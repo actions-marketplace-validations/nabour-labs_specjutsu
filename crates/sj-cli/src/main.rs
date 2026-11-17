@@ -68,6 +68,20 @@ enum Command {
         /// Replace an existing specjutsu.toml.
         #[arg(long)]
         force: bool,
+        /// Install agent adapters (comma-separated; known: claude).
+        #[arg(long, value_delimiter = ',')]
+        agents: Vec<String>,
+        /// Remove agent adapters (comma-separated; known: claude).
+        #[arg(long, value_delimiter = ',', conflicts_with = "agents")]
+        remove_agents: Vec<String>,
+    },
+    /// Regenerate installed agent adapters; hand-edited files are kept unless --force.
+    Update {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// Replace generated files even when they were edited by hand.
+        #[arg(long)]
+        force: bool,
     },
     /// Detect an existing project's packages and runners and write specjutsu.toml.
     Adopt {
@@ -283,7 +297,31 @@ fn run() -> Result<ExitCode> {
             let spec_root = spec_root_for(&root, spec_root)?;
             test_cmd(scope, root, spec_root, json, no_ledger)
         }
-        Command::Init { root, force } => init_cmd(&root, force),
+        Command::Init {
+            root,
+            force,
+            agents,
+            remove_agents,
+        } => {
+            if !remove_agents.is_empty() {
+                return remove_agents_cmd(&root, &remove_agents);
+            }
+            if agents.is_empty() {
+                return init_cmd(&root, force);
+            }
+            check_agents(&agents)?;
+            if force || !root.join(sj_core::config::FILE).exists() {
+                init_cmd(&root, force)?;
+            }
+            agents_cmd(&root, false, false)
+        }
+        Command::Update { root, force } => {
+            if !sj_adapters::claude::is_installed(&root) {
+                println!("no adapters installed");
+                return Ok(ExitCode::SUCCESS);
+            }
+            agents_cmd(&root, force, true)
+        }
         Command::Doctor { root } => {
             let problems = sj_core::doctor::check(&root);
             if problems.is_empty() {
@@ -378,6 +416,47 @@ fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
         config.mode.as_str(),
         plural(config.packages.len(), "package")
     );
+    Ok(ExitCode::SUCCESS)
+}
+
+const AGENTS: [&str; 1] = ["claude"];
+
+fn check_agents(agents: &[String]) -> Result<()> {
+    for a in agents {
+        if !AGENTS.contains(&a.as_str()) {
+            anyhow::bail!("unknown agent `{a}` (known: {})", AGENTS.join(", "));
+        }
+    }
+    Ok(())
+}
+
+/// Install or refresh the Claude Code adapter and print what changed.
+fn agents_cmd(root: &Path, force: bool, update: bool) -> Result<ExitCode> {
+    use sj_adapters::claude::{self, Change};
+    let changes = claude::install(root, force)?;
+    if changes.is_empty() {
+        println!("adapters up to date");
+    }
+    for c in &changes {
+        println!("{c}");
+    }
+    let kept = changes.iter().any(|c| matches!(c, Change::Kept(_)));
+    Ok(if kept && update {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    })
+}
+
+fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
+    check_agents(agents)?;
+    let changes = sj_adapters::claude::remove(root)?;
+    if changes.is_empty() {
+        println!("no adapter files to remove");
+    }
+    for c in &changes {
+        println!("{c}");
+    }
     Ok(ExitCode::SUCCESS)
 }
 

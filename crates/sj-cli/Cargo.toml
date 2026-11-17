@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 sj-core.workspace = true
+sj-adapters.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 serde_json.workspace = true

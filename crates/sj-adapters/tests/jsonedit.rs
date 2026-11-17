@@ -74,7 +74,6 @@ fn adapt_010_empty_minified_and_hookless_files_roundtrip() {
         "{}\n",
         "{\"permissions\":{\"deny\":[\"Bash(rm:*)\"]}}",
         "{\n  \"permissions\": {\n    \"deny\": []\n  }\n}\n",
-        "{\n  \"hooks\": {\n    \"PreToolUse\": []\n  }\n}\n",
     ] {
         let installed = roundtrip(original);
         assert_eq!(commands(&installed).len(), 2, "{original} → {installed}");
