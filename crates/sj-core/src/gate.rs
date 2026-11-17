@@ -174,6 +174,46 @@ pub struct GateReport {
     pub changes: BTreeMap<String, Change>,
 }
 
+/// Failures of the exemption rules: unknown kinds, missing reasons, and a spike merging to main.
+pub fn exemption_failures(exemptions: &[Exemption], base: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for e in exemptions {
+        if !KINDS.contains(&e.kind.as_str()) {
+            out.push(format!("unknown exemption `{}`", e.kind));
+        }
+        if e.reason.is_empty() {
+            out.push(format!("exemption needs a reason ({})", e.kind));
+        }
+        if e.kind == "spike" && is_main(base) {
+            out.push("spike cannot merge to main".to_string());
+        }
+    }
+    out
+}
+
+/// `unspecified change: <files>` when source files changed with no changed scenario and no
+/// exemption.
+pub fn unspecified(
+    changes: &BTreeMap<String, Change>,
+    changed_files: &[String],
+    exemptions: &[Exemption],
+    classifier: &Classifier,
+    spec_root: &str,
+) -> Option<String> {
+    let targets = changes
+        .values()
+        .any(|c| matches!(c, Change::Added | Change::Modified | Change::Implemented));
+    if targets || !exemptions.is_empty() {
+        return None;
+    }
+    let impl_files: Vec<&str> = changed_files
+        .iter()
+        .filter(|f| classifier.is_impl_under(f, spec_root))
+        .map(String::as_str)
+        .collect();
+    (!impl_files.is_empty()).then(|| format!("unspecified change: {}", impl_files.join(", ")))
+}
+
 /// Apply the gate rules. Pure: no git, no processes.
 pub fn evaluate(input: &Input) -> GateReport {
     let mut r = GateReport {
@@ -190,20 +230,12 @@ pub fn evaluate(input: &Input) -> GateReport {
     let mut skip_red = false;
     for e in &input.exemptions {
         r.exemptions.push(format!("{} — {}", e.kind, e.reason));
-        if !KINDS.contains(&e.kind.as_str()) {
-            r.failures.push(format!("unknown exemption `{}`", e.kind));
-        }
-        if e.reason.is_empty() {
-            r.failures
-                .push(format!("exemption needs a reason ({})", e.kind));
-        }
-        if e.kind == "spike" && is_main(&input.base_branch) {
-            r.failures.push("spike cannot merge to main".to_string());
-        }
         if e.kind == "refactor" || e.kind == "spike" {
             skip_red = true;
         }
     }
+    r.failures
+        .extend(exemption_failures(&input.exemptions, &input.base_branch));
     let refactor = input.exemptions.iter().any(|e| e.kind == "refactor");
     let touches_impl = input
         .changed_files
@@ -336,18 +368,13 @@ pub fn evaluate(input: &Input) -> GateReport {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
 
-    if targets.is_empty() && input.exemptions.is_empty() {
-        let impl_files: Vec<&str> = input
-            .changed_files
-            .iter()
-            .filter(|f| input.classifier.is_impl_under(f, &input.spec_root))
-            .map(String::as_str)
-            .collect();
-        if !impl_files.is_empty() {
-            r.failures
-                .push(format!("unspecified change: {}", impl_files.join(", ")));
-        }
-    }
+    r.failures.extend(unspecified(
+        &input.changes,
+        &input.changed_files,
+        &input.exemptions,
+        &input.classifier,
+        &input.spec_root,
+    ));
 
     r.pass = r.failures.is_empty();
     r.summary = if r.pass {
@@ -530,40 +557,32 @@ impl Classifier {
     }
 }
 
-pub struct Options {
-    pub root: PathBuf,
-    /// Spec root relative to `root`.
-    pub spec_root: PathBuf,
-    pub base: String,
-    pub allow_unverifiable: bool,
+/// What the gate and `sj verify` both work from: the merge-base, the scenario classification,
+/// the trace, changed files and exemptions.
+pub struct Prepared {
+    pub mb: String,
+    /// Spec root relative to the repository root, forward slashes.
+    pub spec_root: String,
+    pub classifier: Classifier,
+    pub changes: BTreeMap<String, Change>,
+    pub unidentified: Vec<String>,
+    pub unidentified_known: usize,
+    pub scan: testscan::Scan,
+    pub report: Report,
+    pub changed_files: Vec<String>,
+    pub exemptions: Vec<Exemption>,
 }
 
-/// Gather inputs from git and the runners (including red-on-base), then evaluate.
-pub fn run(opts: &Options) -> Result<GateReport> {
-    let root = &opts.root;
-    let config = crate::config::load(root)?;
-    // GATE-026: never pass a repository the gate cannot test.
-    if config.packages.iter().all(|p| p.suites.is_empty()) {
-        anyhow::bail!(
-            "no test suite configured in {} (supported runners: {}); \
-             run `sj adopt` to write {}",
-            root.display(),
-            Runner::ALL.map(Runner::as_str).join(", "),
-            crate::config::FILE
-        );
-    }
-    let has_cargo = config
-        .packages
-        .iter()
-        .any(|p| p.suites.iter().any(|s| s.runner == Runner::Cargo));
+/// Gather the gate's inputs against the merge-base of `base` and `HEAD`, without running tests.
+pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -> Result<Prepared> {
     let git = Git::new(root);
-    let base_sha = git.resolve(&opts.base)?;
+    let base_sha = git.resolve(base)?;
     let head_sha = git.resolve("HEAD")?;
     let mb = git.merge_base(&base_sha, &head_sha)?;
-    let spec_root = opts.spec_root.to_string_lossy().replace('\\', "/");
+    let spec_root = spec_root_rel.to_string_lossy().replace('\\', "/");
     // Package sources are a declaration only when the project file exists (GATE-035).
     let classifier = if root.join(crate::config::FILE).is_file() {
-        Classifier::new(&config, &spec_root)?
+        Classifier::new(config, &spec_root)?
     } else {
         Classifier::builtin(&spec_root)
     };
@@ -585,7 +604,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
             }
         }
     }
-    let head_spec_root = root.join(&opts.spec_root);
+    let head_spec_root = root.join(spec_root_rel);
     let mut head_fps = Vec::new();
     // Scenarios without an ID: new text fails, text already on base only counts (GATE-024/025).
     let mut unidentified = Vec::new();
@@ -626,11 +645,11 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     }
 
     let scenarios = spec::load_scenarios(&head_spec_root)?;
-    let scan = testscan::scan_project(root, &config)?;
+    let scan = testscan::scan_project(root, config)?;
     let report = trace::build_report(&scenarios, &scan.tests);
 
     // GATE-023: unchanged scenarios that gain their first test are in scope.
-    let base_mapped = base_mapped_ids(&git, root, &config, &mb, &spec_root)?;
+    let base_mapped = base_mapped_ids(&git, root, config, &mb, &spec_root)?;
     for m in &report.mapped {
         if let Some(c) = changes.get_mut(&m.id) {
             if *c == Change::Unchanged && !base_mapped.contains(&m.id) {
@@ -660,6 +679,59 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     for c in git.log(&format!("{mb}..{head_sha}"))? {
         exemptions.extend(parse_exemptions(&c.body, "Specjutsu-Exempt:"));
     }
+    Ok(Prepared {
+        mb,
+        spec_root,
+        classifier,
+        changes,
+        unidentified,
+        unidentified_known,
+        scan,
+        report,
+        changed_files,
+        exemptions,
+    })
+}
+
+pub struct Options {
+    pub root: PathBuf,
+    /// Spec root relative to `root`.
+    pub spec_root: PathBuf,
+    pub base: String,
+    pub allow_unverifiable: bool,
+}
+
+/// Gather inputs from git and the runners (including red-on-base), then evaluate.
+pub fn run(opts: &Options) -> Result<GateReport> {
+    let root = &opts.root;
+    let config = crate::config::load(root)?;
+    // GATE-026: never pass a repository the gate cannot test.
+    if config.packages.iter().all(|p| p.suites.is_empty()) {
+        anyhow::bail!(
+            "no test suite configured in {} (supported runners: {}); \
+             run `sj adopt` to write {}",
+            root.display(),
+            Runner::ALL.map(Runner::as_str).join(", "),
+            crate::config::FILE
+        );
+    }
+    let has_cargo = config
+        .packages
+        .iter()
+        .any(|p| p.suites.iter().any(|s| s.runner == Runner::Cargo));
+    let git = Git::new(root);
+    let Prepared {
+        mb,
+        spec_root,
+        classifier,
+        changes,
+        unidentified,
+        unidentified_known,
+        scan,
+        report,
+        changed_files,
+        exemptions,
+    } = prepare(root, &opts.spec_root, &config, &opts.base)?;
 
     let targets: Vec<&String> = changes
         .iter()

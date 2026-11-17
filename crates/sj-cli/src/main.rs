@@ -102,6 +102,47 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Where each open change stands: tasks, scenario evidence and the next task.
+    Status {
+        /// Only this change (default: every open change).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
+    /// The next task's context: its scenarios, changed files and test commands.
+    Next {
+        /// Only this change (default: the first open change with an open task).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        /// List open [P] tasks in batches that share no test file.
+        #[arg(long)]
+        parallel: bool,
+        /// Base ref for changed files (default: origin/HEAD, origin/main, main, ...).
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Local check before a PR: the gate's checks without red-on-base.
+    Verify {
+        /// Only this change (default: every open change).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        /// Base ref (default: origin/HEAD, origin/main, origin/master, main, master).
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check off tasks in a change's tasks.md.
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
         /// Report only this scenario ID.
@@ -166,6 +207,18 @@ enum SpecCommand {
         /// Archive despite validation errors and open tasks.
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TaskCommand {
+    /// Check a task's box; strict mode requires red-before-green for its scenarios.
+    Done {
+        change: String,
+        /// The task's number, e.g. 2.1.
+        task: String,
+        #[command(flatten)]
+        args: SpecArgs,
     },
 }
 
@@ -255,6 +308,23 @@ fn run() -> Result<ExitCode> {
             spec_root,
             json,
         } => ids_cmd(write, &root, spec_root, json),
+        Command::Status { change, args, json } => status_cmd(change, &args, json),
+        Command::Task {
+            command: TaskCommand::Done { change, task, args },
+        } => task_done_cmd(&change, &task, &args),
+        Command::Next {
+            change,
+            args,
+            parallel,
+            base,
+            json,
+        } => next_cmd(change, &args, parallel, base, json),
+        Command::Verify {
+            change,
+            args,
+            base,
+            json,
+        } => verify_cmd(change, &args, base, json),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -621,6 +691,120 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
             }
         }
     }
+}
+
+fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {
+    use sj_core::agent_loop::status;
+    let (root, spec_root) = spec_paths(args)?;
+    let rows = status::status(&root, &spec_root, change.as_deref())?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+    } else if rows.is_empty() {
+        println!("no open changes");
+    } else {
+        for r in &rows {
+            for l in status::render(r) {
+                println!("{l}");
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn next_cmd(
+    change: Option<String>,
+    args: &SpecArgs,
+    parallel: bool,
+    base: Option<String>,
+    json: bool,
+) -> Result<ExitCode> {
+    use sj_core::agent_loop::next;
+    let (root, spec_root) = spec_paths(args)?;
+    if parallel {
+        let Some(name) = next::parallel_change(&spec_root, change.as_deref())? else {
+            println!("next: no open tasks");
+            return Ok(ExitCode::SUCCESS);
+        };
+        let batches = next::parallel(&root, &spec_root, &name)?;
+        if json {
+            let v = serde_json::json!({ "change": name, "batches": batches });
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        } else if batches.is_empty() {
+            println!("next: no parallel tasks");
+        } else {
+            for (i, b) in batches.iter().enumerate() {
+                println!("batch {}", i + 1);
+                for t in b {
+                    println!("  {t}");
+                }
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
+        None if json => println!("null"),
+        None => println!("next: no open tasks"),
+        Some(n) if json => println!("{}", serde_json::to_string_pretty(&n)?),
+        Some(n) => print!("{}", next::render(&n)),
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn verify_cmd(
+    change: Option<String>,
+    args: &SpecArgs,
+    base: Option<String>,
+    json: bool,
+) -> Result<ExitCode> {
+    use sj_core::agent_loop::verify;
+    let spec_root = spec_root_for(&args.root, args.spec_root.clone())?;
+    let r = verify::verify(&verify::Options {
+        root: args.root.clone(),
+        spec_root,
+        change,
+        base,
+    })?;
+    for w in &r.warnings {
+        eprintln!("warn    {w}");
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&r)?);
+    } else if r.ok {
+        println!("verify: ok");
+    } else {
+        println!("verify: {}", plural(r.problems.len(), "problem"));
+        for p in &r.problems {
+            println!("{}", p.message);
+        }
+    }
+    Ok(if r.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
+}
+
+fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> {
+    use sj_core::agent_loop::task::{self, Outcome};
+    let config = sj_core::config::load(&args.root)?;
+    let (root, spec_root) = spec_paths(args)?;
+    match task::done(&spec_root, &root, change, task, config.mode)? {
+        Outcome::AlreadyDone { text } => println!("task: already done {text}"),
+        Outcome::Done { text, warnings } => {
+            println!("task: done {text}");
+            for u in &warnings {
+                println!("warn    unproven {} ({})", u.id, u.why);
+            }
+        }
+        Outcome::Refused { unproven } => {
+            println!("task: refused — {} unproven", unproven.len());
+            for u in &unproven {
+                println!("unproven {} ({})", u.id, u.why);
+            }
+            return Ok(ExitCode::from(1));
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> Result<ExitCode> {

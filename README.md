@@ -50,6 +50,10 @@ sj spec list        # open changes: tasks done, scenarios added or modified
 sj spec validate    # spec format, delta structure, every task names its scenarios
 sj spec check add-oauth-login    # uncovered scenarios, unknown IDs, open questions
 sj spec archive add-oauth-login  # merge the deltas into specs/, move to changes/archive/
+sj status           # each open change: tasks, scenario evidence, the next task
+sj next             # the next task: its scenarios, changed files, test commands
+sj task done add-oauth-login 2.1  # check the box (strict mode needs red-before-green)
+sj verify           # before a PR: what the gate checks, without red-on-base
 ```
 
 ## How tracing works
@@ -322,6 +326,47 @@ Each run appends one line per test to `.specjutsu/ledger/runs.jsonl`
 of the working tree, the test, its scenario IDs and the result. `sj ledger`
 reads it back. A scenario is **proven** when a failing run was recorded before
 a passing one, on different code. Pass `--no-ledger` to skip recording.
+
+## The agent loop
+
+Four commands answer the agent's questions (where am I, what next, am I done)
+in a few lines, so it never reads whole spec folders or raw test logs. Each
+takes `--json`, except `sj task done`.
+
+- **`sj status [<change>]`** prints at most five lines per open change. The
+  first line gives tasks done and the change's added or modified scenarios by
+  evidence. One line lists the IDs in each state that isn't proven. The last
+  line names the next task:
+
+  ```
+  add-oauth-login  3/7 tasks  4 scenarios: 2 proven, 1 red, 1 untested
+    red AUTH-005
+    untested AUTH-006
+    next 2.1 Refresh tokens (AUTH-005, AUTH-006)
+  ```
+
+  **proven** means red-before-green in the ledger with a passing latest run.
+  **green-unproven** passed but was never seen failing. **red** means the latest
+  run failed. **untested** means nothing is recorded.
+- **`sj next [<change>]`** prints the first open task, the full WHEN/THEN text
+  of each scenario it names, the files changed since the merge-base,
+  `<spec_root>/principles.md` when there is one, and a `sj test <ID>` command
+  per scenario. Apart from the scenario texts it stays under 1,600 bytes.
+  `--parallel` lists the open tasks marked `[P]` in batches whose tests share no
+  file.
+- **`sj task done <change> <task>`** checks that task's box and changes no
+  other byte. In `strict` mode it refuses, exiting 1, unless every scenario the
+  task names is proven: `unproven AUTH-005 (no red run recorded)`. In `guided`
+  and `advisory` modes it checks the box and prints the same lines as warnings.
+- **`sj verify [<change>]`** is the local check before a PR. It runs the
+  change's scenario tests (recording them), and reports untested and failing
+  scenarios, unproven ones, orphans, `sj spec check` problems, and the gate's
+  unspecified-change and exemption rules against the merge-base. Red-on-base
+  stays in CI. It prints `verify: ok` or one line per problem, and exits 1 when
+  there are any.
+
+`sj next` and `sj verify` compare against `--base`, or else the first of
+`origin/HEAD`, `origin/main`, `origin/master`, `main` and `master` that exists.
 
 ## Roadmap
 
