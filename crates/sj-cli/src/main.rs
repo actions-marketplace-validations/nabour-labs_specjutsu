@@ -321,7 +321,8 @@ fn run() -> Result<ExitCode> {
             }
             check_agents(&agents)?;
             if force || !root.join(sj_core::config::FILE).exists() {
-                init_cmd(&root, force)?;
+                // Its exit code is always success; errors come back as `Err`.
+                let _ = init_cmd(&root, force)?;
             }
             agents_cmd(&root, false, false)
         }

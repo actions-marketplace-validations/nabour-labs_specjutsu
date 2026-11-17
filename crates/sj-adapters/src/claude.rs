@@ -307,7 +307,12 @@ fn has_our_hooks(text: &str) -> bool {
 // CLAUDE.md block
 
 pub fn block() -> String {
-    format!("{BEGIN}\n{}{END}\n", BLOCK_BODY)
+    format!("{BEGIN}\n{}{END}\n", lf(BLOCK_BODY))
+}
+
+/// Templates are compiled in from the checkout; a CRLF checkout must not change the output.
+fn lf(text: &str) -> String {
+    text.replace("\r\n", "\n")
 }
 
 /// The byte range of the block, its trailing newline included.
@@ -453,7 +458,7 @@ pub fn install(root: &Path, force: bool) -> Result<Vec<Change>> {
     for (name, source) in SKILLS {
         let p = skills.join(name).join("SKILL.md");
         let old = read_opt(&p)?;
-        let new = generated(source);
+        let new = generated(&lf(source));
         match old.as_deref() {
             Some(o) if o != new && !is_unmodified(o) && !force => {
                 out.push(Change::Kept(rel(&p, root)))
