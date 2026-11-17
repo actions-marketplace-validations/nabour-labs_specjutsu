@@ -4,11 +4,11 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. Status and task completion (sj-core + sj-cli)
 
-- [ ] 1.1 `agent_loop` module with targets and evidence (design decisions 1, 2), `sj status` (decision 4) and `sj task done` (decision 6) (LOOP-001, LOOP-004, LOOP-005). Verify: `crates/sj-cli/tests/loop_cmd.rs` writes a ledger by hand and sees `3/7 tasks`, `2 proven, 1 red, 1 untested` and `next 2.1 …` in at most 10 lines; strict mode refuses with `unproven <ID> (no red run recorded)`, exit 1 and `tasks.md` byte-identical; guided mode checks only that box, keeping CRLF line endings, and warns.
+- [x] 1.1 `agent_loop` module with targets and evidence (design decisions 1, 2), `sj status` (decision 4) and `sj task done` (decision 6) (LOOP-001, LOOP-004, LOOP-005). Verify: `crates/sj-cli/tests/loop_cmd.rs` writes a ledger by hand and sees `3/7 tasks`, `2 proven, 1 red, 1 untested` and `next 2.1 …` in at most 10 lines; strict mode refuses with `unproven <ID> (no red run recorded)`, exit 1 and `tasks.md` byte-identical; guided mode checks only that box, keeping CRLF line endings, and warns.
 
 ## 2. Next (sj-core + sj-cli)
 
-- [ ] 2.1 `sj next` and `sj next --parallel` with the default branch (decisions 3, 5) (LOOP-002, LOOP-003). Verify: `loop_cmd.rs` sees task 2.1, the steps of both scenarios it names, both `sj test` commands, no other task, and the byte budget; `crates/sj-core/tests/loop_next.rs` batches 3.1 and 3.2 together and 3.3 apart.
+- [x] 2.1 `sj next` and `sj next --parallel` with the default branch (decisions 3, 5) (LOOP-002, LOOP-003). Verify: `loop_cmd.rs` sees task 2.1, the steps of both scenarios it names, both `sj test` commands, no other task, and the byte budget; `crates/sj-core/tests/loop_next.rs` batches 3.1 and 3.2 together and 3.3 apart.
 
 ## 3. Verify (sj-core + sj-cli)
 

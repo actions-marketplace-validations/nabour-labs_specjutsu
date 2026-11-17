@@ -111,6 +111,21 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// The next task's context: its scenarios, changed files and test commands.
+    Next {
+        /// Only this change (default: the first open change with an open task).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        /// List open [P] tasks in batches that share no test file.
+        #[arg(long)]
+        parallel: bool,
+        /// Base ref for changed files (default: origin/HEAD, origin/main, main, ...).
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Check off tasks in a change's tasks.md.
     Task {
         #[command(subcommand)]
@@ -285,6 +300,13 @@ fn run() -> Result<ExitCode> {
         Command::Task {
             command: TaskCommand::Done { change, task, args },
         } => task_done_cmd(&change, &task, &args),
+        Command::Next {
+            change,
+            args,
+            parallel,
+            base,
+            json,
+        } => next_cmd(change, &args, parallel, base, json),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -667,6 +689,45 @@ fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<Exi
                 println!("{l}");
             }
         }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn next_cmd(
+    change: Option<String>,
+    args: &SpecArgs,
+    parallel: bool,
+    base: Option<String>,
+    json: bool,
+) -> Result<ExitCode> {
+    use sj_core::agent_loop::next;
+    let (root, spec_root) = spec_paths(args)?;
+    if parallel {
+        let Some(name) = next::parallel_change(&spec_root, change.as_deref())? else {
+            println!("next: no open tasks");
+            return Ok(ExitCode::SUCCESS);
+        };
+        let batches = next::parallel(&root, &spec_root, &name)?;
+        if json {
+            let v = serde_json::json!({ "change": name, "batches": batches });
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        } else if batches.is_empty() {
+            println!("next: no parallel tasks");
+        } else {
+            for (i, b) in batches.iter().enumerate() {
+                println!("batch {}", i + 1);
+                for t in b {
+                    println!("  {t}");
+                }
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
+        None if json => println!("null"),
+        None => println!("next: no open tasks"),
+        Some(n) if json => println!("{}", serde_json::to_string_pretty(&n)?),
+        Some(n) => print!("{}", next::render(&n)),
     }
     Ok(ExitCode::SUCCESS)
 }
