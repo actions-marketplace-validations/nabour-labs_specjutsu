@@ -29,7 +29,7 @@ See proposal.md (Why). The agent loop now exists: `sj status`, `sj next`, `sj te
 | Frontmatter between `---` lines, opening on line 1 | `no frontmatter` |
 | `name:` equals the folder name | `name is <x>, expected <folder>` |
 | `description:` is present and says when to use it (contains `Use when`, any case) | `description does not say when to use it` |
-| The body after the frontmatter is at most 6,000 bytes | `body is <n> bytes (limit 6000)` |
+| The body after the frontmatter, leading blank lines dropped, is at most 6,000 bytes | `body is <n> bytes (limit 6000)` |
 | No command from a replaced tool | `names a foreign command (<match>)` |
 | The commands its workflow needs (SKILL-003) | ``does not name `<command>` `` |
 | `sj-propose` and `sj-review` name `principles.md`, `design.md` and a deviation | `does not name principles.md` / `does not record deviations in design.md` |

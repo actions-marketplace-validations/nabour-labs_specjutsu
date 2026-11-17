@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. The skill check (sj-adapters)
 
-- [ ] 1.1 `sj_adapters::skills::check` with every rule in design decision 2 (SKILL-001..004). Verify: `crates/sj-adapters/tests/skills.rs` builds fixture skill folders and sees each message: a missing mapping, a duplicate, an unknown skill, a 7,000-byte `sj-propose`, an `sj-apply` that runs a foreign status command, a missing required command, and a review skill without the principles rule.
+- [x] 1.1 `sj_adapters::skills::check` with every rule in design decision 2 (SKILL-001..004). Verify: `crates/sj-adapters/tests/skills.rs` builds fixture skill folders and sees each message: a missing mapping, a duplicate, an unknown skill, a 7,000-byte `sj-propose`, an `sj-apply` that runs a foreign status command, a missing required command, and a review skill without the principles rule.
 
 ## 2. The skills (skills/)
 
