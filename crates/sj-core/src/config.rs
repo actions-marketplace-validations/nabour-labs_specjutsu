@@ -150,6 +150,8 @@ pub struct Config {
     pub mode: Mode,
     /// Root-relative globs of files that never need a scenario, on top of the built-in list.
     pub non_source: Vec<String>,
+    /// `[ids.prefixes]`: capability folder name to the prefix `sj ids` gives its new scenarios.
+    pub id_prefixes: BTreeMap<String, String>,
     pub packages: Vec<Package>,
 }
 
@@ -161,8 +163,16 @@ struct RawConfig {
     mode: Option<String>,
     #[serde(default)]
     non_source: Vec<String>,
+    ids: Option<RawIds>,
     #[serde(default, rename = "package")]
     packages: Vec<RawPackage>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawIds {
+    #[serde(default)]
+    prefixes: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -220,6 +230,7 @@ impl Config {
             spec_root: DEFAULT_SPEC_ROOT.into(),
             mode: Mode::default(),
             non_source: Vec::new(),
+            id_prefixes: BTreeMap::new(),
             packages,
         }
     }
@@ -252,6 +263,16 @@ impl Config {
                     )
                 })?,
         };
+
+        let id_prefixes = raw.ids.map(|i| i.prefixes).unwrap_or_default();
+        for (cap, prefix) in &id_prefixes {
+            if !crate::ids::is_prefix(prefix) {
+                bail!(
+                    "{FILE}: ids.prefixes: `{cap}` maps to `{prefix}`, which is not a prefix \
+                     (an uppercase letter, then uppercase letters or digits)"
+                );
+            }
+        }
 
         let mut packages: Vec<Package> = Vec::with_capacity(raw.packages.len());
         for p in raw.packages {
@@ -328,6 +349,7 @@ impl Config {
             spec_root,
             mode,
             non_source: raw.non_source,
+            id_prefixes,
             packages,
         })
     }
@@ -342,6 +364,12 @@ impl Config {
         );
         if !self.non_source.is_empty() {
             out.push_str(&format!("non_source = {}\n", list(&self.non_source)));
+        }
+        if !self.id_prefixes.is_empty() {
+            out.push_str("\n[ids.prefixes]\n");
+            for (cap, prefix) in &self.id_prefixes {
+                out.push_str(&format!("{} = {}\n", quote(cap), quote(prefix)));
+            }
         }
         for p in &self.packages {
             out.push_str(&format!(

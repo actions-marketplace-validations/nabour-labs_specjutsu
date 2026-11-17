@@ -5,6 +5,7 @@ pub mod config;
 pub mod doctor;
 pub mod gate;
 pub mod git;
+pub mod ids;
 pub mod ledger;
 pub mod run;
 pub mod spec;

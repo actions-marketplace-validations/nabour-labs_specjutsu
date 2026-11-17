@@ -18,16 +18,44 @@ pub struct Scenario {
     pub line: usize,
 }
 
+/// A scenario heading with where it sits in the file's bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Located {
+    pub scenario: Scenario,
+    /// Byte offset of the heading's title (the ID when there is one, else the name).
+    pub title_offset: usize,
+    /// The `### Requirement:` the scenario sits under, reset by any `## ` heading.
+    pub requirement: Option<String>,
+}
+
 /// Parse every scenario heading in one spec file. Lines inside fenced code are skipped.
 pub fn parse_scenarios(file: &Path, content: &str) -> Vec<Scenario> {
+    locate_scenarios(file, content)
+        .into_iter()
+        .map(|l| l.scenario)
+        .collect()
+}
+
+/// Every scenario heading with its byte offset and requirement. Lines inside fenced code are
+/// skipped. Line ends (`\n` or `\r\n`) are handled as [`str::lines`] does.
+pub fn locate_scenarios(file: &Path, content: &str) -> Vec<Located> {
     static HEADING: OnceLock<Regex> = OnceLock::new();
+    static REQUIREMENT: OnceLock<Regex> = OnceLock::new();
     static ID: OnceLock<Regex> = OnceLock::new();
     let heading = HEADING.get_or_init(|| Regex::new(r"^####\s+Scenario:\s*(.*?)\s*$").unwrap());
+    let requirement =
+        REQUIREMENT.get_or_init(|| Regex::new(r"^###\s+Requirement:\s*(.*?)\s*$").unwrap());
     let id_re = ID.get_or_init(|| Regex::new(r"^([A-Z][A-Z0-9]*-[0-9]+)(?:\s+(.*))?$").unwrap());
 
     let mut out = Vec::new();
     let mut fence: Option<&str> = None;
-    for (i, line) in content.lines().enumerate() {
+    let mut current_req: Option<String> = None;
+    let mut offset = 0;
+    for (i, raw) in content.split_inclusive('\n').enumerate() {
+        let line_start = offset;
+        offset += raw.len();
+        let line = raw.strip_suffix('\n').unwrap_or(raw);
+        let line = line.strip_suffix('\r').unwrap_or(line);
         let trimmed = line.trim_start();
         let marker = if trimmed.starts_with("```") {
             Some("```")
@@ -47,10 +75,19 @@ pub fn parse_scenarios(file: &Path, content: &str) -> Vec<Scenario> {
         if fence.is_some() {
             continue;
         }
+        if let Some(c) = requirement.captures(line) {
+            current_req = Some(c[1].to_string());
+            continue;
+        }
+        if line.starts_with("## ") || line == "##" {
+            current_req = None;
+            continue;
+        }
         let Some(caps) = heading.captures(line) else {
             continue;
         };
-        let title = caps[1].to_string();
+        let title_match = caps.get(1).unwrap();
+        let title = title_match.as_str().to_string();
         let (id, name) = match id_re.captures(&title) {
             Some(c) => (
                 Some(c[1].to_string()),
@@ -58,11 +95,15 @@ pub fn parse_scenarios(file: &Path, content: &str) -> Vec<Scenario> {
             ),
             None => (None, title),
         };
-        out.push(Scenario {
-            id,
-            name,
-            file: file.to_path_buf(),
-            line: i + 1,
+        out.push(Located {
+            scenario: Scenario {
+                id,
+                name,
+                file: file.to_path_buf(),
+                line: i + 1,
+            },
+            title_offset: line_start + title_match.start(),
+            requirement: current_req.clone(),
         });
     }
     out
