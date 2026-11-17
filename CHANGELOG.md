@@ -24,6 +24,15 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- Claude Code adapter: `sj init --agents claude` writes a CLAUDE.md block, the
+  `sj-*` skills under `.claude/skills/` and `SessionStart` / `PreToolUse` hooks in
+  `.claude/settings.json`, keeping existing content, order and formatting.
+  `sj update [--force]` regenerates it idempotently and keeps hand-edited skills.
+  `sj init --remove-agents claude` restores the files byte for byte.
+- `sj hook claude session-start` prints the status bootstrap (at most 1,200
+  bytes). `sj hook claude pre-edit` blocks source edits in guided and strict modes
+  until the active task's scenarios have a red ledger record, always allows tests,
+  specs and docs, and never blocks on its own errors.
 - Nine agent skills in `skills/` (`sj-explore`, `sj-propose`, `sj-clarify`,
   `sj-principles`, `sj-apply`, `sj-debug`, `sj-review`, `sj-verify`, `sj-finish`)
   covering every Superpowers skill, OpenSpec workflow command and Spec Kit command,

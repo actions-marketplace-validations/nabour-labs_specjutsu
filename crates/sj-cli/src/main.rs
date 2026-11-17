@@ -68,6 +68,30 @@ enum Command {
         /// Replace an existing specjutsu.toml.
         #[arg(long)]
         force: bool,
+        /// Install agent adapters (comma-separated; known: claude).
+        #[arg(long, value_delimiter = ',')]
+        agents: Vec<String>,
+        /// Remove agent adapters (comma-separated; known: claude).
+        #[arg(long, value_delimiter = ',', conflicts_with = "agents")]
+        remove_agents: Vec<String>,
+    },
+    /// Hook entrypoint for agent tools: `sj hook claude session-start|pre-edit`.
+    Hook {
+        /// The agent tool (claude).
+        agent: String,
+        /// The hook event: session-start or pre-edit.
+        event: String,
+        /// Project root (default: $CLAUDE_PROJECT_DIR, else the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Regenerate installed agent adapters; hand-edited files are kept unless --force.
+    Update {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// Replace generated files even when they were edited by hand.
+        #[arg(long)]
+        force: bool,
     },
     /// Detect an existing project's packages and runners and write specjutsu.toml.
     Adopt {
@@ -283,7 +307,33 @@ fn run() -> Result<ExitCode> {
             let spec_root = spec_root_for(&root, spec_root)?;
             test_cmd(scope, root, spec_root, json, no_ledger)
         }
-        Command::Init { root, force } => init_cmd(&root, force),
+        Command::Init {
+            root,
+            force,
+            agents,
+            remove_agents,
+        } => {
+            if !remove_agents.is_empty() {
+                return remove_agents_cmd(&root, &remove_agents);
+            }
+            if agents.is_empty() {
+                return init_cmd(&root, force);
+            }
+            check_agents(&agents)?;
+            if force || !root.join(sj_core::config::FILE).exists() {
+                // Its exit code is always success; errors come back as `Err`.
+                let _ = init_cmd(&root, force)?;
+            }
+            agents_cmd(&root, false, false)
+        }
+        Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
+        Command::Update { root, force } => {
+            if !sj_adapters::claude::is_installed(&root) {
+                println!("no adapters installed");
+                return Ok(ExitCode::SUCCESS);
+            }
+            agents_cmd(&root, force, true)
+        }
         Command::Doctor { root } => {
             let problems = sj_core::doctor::check(&root);
             if problems.is_empty() {
@@ -378,6 +428,88 @@ fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
         config.mode.as_str(),
         plural(config.packages.len(), "package")
     );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Agent hooks never fail the tool call on an internal error: they warn and allow.
+fn hook_cmd(agent: &str, event: &str, root: Option<PathBuf>) -> ExitCode {
+    use sj_core::hook::{self, Decision};
+    let root = root
+        .or_else(|| std::env::var_os("CLAUDE_PROJECT_DIR").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("."));
+    if agent != "claude" {
+        eprintln!("specjutsu: hook error: unknown agent `{agent}`");
+        return ExitCode::SUCCESS;
+    }
+    match event {
+        "session-start" => match hook::session_start(&root) {
+            Ok(text) => print!("{text}"),
+            Err(e) => println!("specjutsu: {e:#}"),
+        },
+        "pre-edit" => {
+            let mut payload = String::new();
+            let decided = std::io::Read::read_to_string(&mut std::io::stdin(), &mut payload)
+                .map_err(anyhow::Error::from)
+                .and_then(|_| hook::pre_edit(&root, &payload));
+            match decided {
+                Ok(Decision::Allow) => {}
+                Ok(Decision::Warn(reasons)) => {
+                    for r in reasons {
+                        println!("specjutsu: {r}");
+                    }
+                }
+                Ok(Decision::Block(reasons)) => {
+                    for r in reasons {
+                        eprintln!("{r}");
+                    }
+                    return ExitCode::from(2);
+                }
+                Err(e) => eprintln!("specjutsu: hook error: {e:#}"),
+            }
+        }
+        _ => eprintln!("specjutsu: hook error: unknown event `{event}`"),
+    }
+    ExitCode::SUCCESS
+}
+
+const AGENTS: [&str; 1] = ["claude"];
+
+fn check_agents(agents: &[String]) -> Result<()> {
+    for a in agents {
+        if !AGENTS.contains(&a.as_str()) {
+            anyhow::bail!("unknown agent `{a}` (known: {})", AGENTS.join(", "));
+        }
+    }
+    Ok(())
+}
+
+/// Install or refresh the Claude Code adapter and print what changed.
+fn agents_cmd(root: &Path, force: bool, update: bool) -> Result<ExitCode> {
+    use sj_adapters::claude::{self, Change};
+    let changes = claude::install(root, force)?;
+    if changes.is_empty() {
+        println!("adapters up to date");
+    }
+    for c in &changes {
+        println!("{c}");
+    }
+    let kept = changes.iter().any(|c| matches!(c, Change::Kept(_)));
+    Ok(if kept && update {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    })
+}
+
+fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
+    check_agents(agents)?;
+    let changes = sj_adapters::claude::remove(root)?;
+    if changes.is_empty() {
+        println!("no adapter files to remove");
+    }
+    for c in &changes {
+        println!("{c}");
+    }
     Ok(ExitCode::SUCCESS)
 }
 

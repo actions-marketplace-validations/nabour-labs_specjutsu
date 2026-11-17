@@ -641,6 +641,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "regex",
+ "serde_json",
  "tempfile",
 ]
 
@@ -686,6 +687,7 @@ dependencies = [
  "clap",
  "predicates",
  "serde_json",
+ "sj-adapters",
  "sj-core",
  "tempfile",
 ]
