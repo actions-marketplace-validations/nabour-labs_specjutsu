@@ -28,7 +28,11 @@ fn put(root: &Path, rel: &str, content: &str) {
 fn tree() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     put(dir.path(), "specs/auth/spec.md", AUTH);
-    put(dir.path(), "changes/add-refresh/proposal.md", "## Why\n\nTokens expire.\n");
+    put(
+        dir.path(),
+        "changes/add-refresh/proposal.md",
+        "## Why\n\nTokens expire.\n",
+    );
     put(dir.path(), "changes/add-refresh/tasks.md", TASKS);
     put(dir.path(), "changes/add-refresh/specs/auth/spec.md", DELTA);
     dir
@@ -71,7 +75,10 @@ fn spec_004_a_valid_tree_has_no_problems() {
 #[test]
 fn spec_004_a_scenario_without_then_is_reported() {
     let dir = tree();
-    delta(dir.path(), &DELTA.replace("- **THEN** a new token is returned\n", ""));
+    delta(
+        dir.path(),
+        &DELTA.replace("- **THEN** a new token is returned\n", ""),
+    );
     assert_eq!(
         errors(dir.path(), Some("add-refresh")),
         [("AUTH-003 has no THEN step".into(), D.into(), 6)]
@@ -81,7 +88,10 @@ fn spec_004_a_scenario_without_then_is_reported() {
 #[test]
 fn spec_004_a_scenario_without_when_is_reported() {
     let dir = tree();
-    delta(dir.path(), &DELTA.replace("- **WHEN** a refresh token is sent\n", ""));
+    delta(
+        dir.path(),
+        &DELTA.replace("- **WHEN** a refresh token is sent\n", ""),
+    );
     assert_eq!(
         errors(dir.path(), Some("add-refresh")),
         [("AUTH-003 has no WHEN step".into(), D.into(), 6)]
@@ -91,7 +101,10 @@ fn spec_004_a_scenario_without_when_is_reported() {
 #[test]
 fn spec_004_a_scenario_without_an_id_is_reported() {
     let dir = tree();
-    delta(dir.path(), &DELTA.replace("AUTH-003 Refresh", "Refresh works"));
+    delta(
+        dir.path(),
+        &DELTA.replace("AUTH-003 Refresh", "Refresh works"),
+    );
     assert_eq!(
         errors(dir.path(), Some("add-refresh")),
         [("Refresh works has no ID".into(), D.into(), 6)]
@@ -101,7 +114,10 @@ fn spec_004_a_scenario_without_an_id_is_reported() {
 #[test]
 fn spec_004_a_duplicate_id_is_reported() {
     let dir = tree();
-    delta(dir.path(), &DELTA.replace("AUTH-003 Refresh", "AUTH-002 Refresh"));
+    delta(
+        dir.path(),
+        &DELTA.replace("AUTH-003 Refresh", "AUTH-002 Refresh"),
+    );
     assert_eq!(
         errors(dir.path(), Some("add-refresh")),
         [(
@@ -115,7 +131,11 @@ fn spec_004_a_duplicate_id_is_reported() {
 #[test]
 fn spec_004_two_open_changes_adding_one_id_is_a_duplicate() {
     let dir = tree();
-    put(dir.path(), "changes/other/tasks.md", "- [ ] 1.1 Other (AUTH-003)\n");
+    put(
+        dir.path(),
+        "changes/other/tasks.md",
+        "- [ ] 1.1 Other (AUTH-003)\n",
+    );
     put(
         dir.path(),
         "changes/other/specs/auth/spec.md",
@@ -123,7 +143,9 @@ fn spec_004_two_open_changes_adding_one_id_is_a_duplicate() {
     );
     let e = errors(dir.path(), None);
     assert!(
-        e.iter().any(|(m, f, _)| m.starts_with("duplicate ID AUTH-003") && f == "changes/other/specs/auth/spec.md"),
+        e.iter()
+            .any(|(m, f, _)| m.starts_with("duplicate ID AUTH-003")
+                && f == "changes/other/specs/auth/spec.md"),
         "{e:?}"
     );
 }
@@ -136,16 +158,32 @@ fn spec_004_a_requirement_needs_a_scenario_and_shall() {
         &format!("{DELTA}\n## ADDED Requirements\n\n### Requirement: Rotation\nTokens rotate.\n\n### Requirement: Revoke\nThe system MUST revoke.\n"),
     );
     let e = errors(dir.path(), Some("add-refresh"));
-    assert!(e.contains(&("requirement Rotation has no SHALL or MUST".into(), D.into(), 21)), "{e:?}");
-    assert!(e.contains(&("requirement Rotation has no scenario".into(), D.into(), 21)), "{e:?}");
-    assert!(e.contains(&("requirement Revoke has no scenario".into(), D.into(), 24)), "{e:?}");
+    assert!(
+        e.contains(&(
+            "requirement Rotation has no SHALL or MUST".into(),
+            D.into(),
+            21
+        )),
+        "{e:?}"
+    );
+    assert!(
+        e.contains(&("requirement Rotation has no scenario".into(), D.into(), 21)),
+        "{e:?}"
+    );
+    assert!(
+        e.contains(&("requirement Revoke has no scenario".into(), D.into(), 24)),
+        "{e:?}"
+    );
     assert_eq!(e.len(), 3, "{e:?}");
 }
 
 #[test]
 fn spec_004_delta_requirements_must_sit_in_a_delta_section() {
     let dir = tree();
-    delta(dir.path(), &DELTA.replace("## ADDED Requirements", "## Requirements"));
+    delta(
+        dir.path(),
+        &DELTA.replace("## ADDED Requirements", "## Requirements"),
+    );
     let e = errors(dir.path(), Some("add-refresh"));
     assert!(
         e.contains(&(
@@ -163,7 +201,11 @@ fn spec_004_a_delta_without_operations_is_reported() {
     delta(dir.path(), "## Notes\n\nNothing yet.\n");
     assert_eq!(
         errors(dir.path(), Some("add-refresh")),
-        [("no ADDED, MODIFIED, REMOVED or RENAMED requirements".into(), D.into(), 0)]
+        [(
+            "no ADDED, MODIFIED, REMOVED or RENAMED requirements".into(),
+            D.into(),
+            0
+        )]
     );
 }
 
@@ -187,10 +229,17 @@ fn spec_004_removed_needs_reason_and_migration() {
 #[test]
 fn spec_005_modified_must_name_an_existing_requirement() {
     let dir = tree();
-    delta(dir.path(), &DELTA.replace("### Requirement: Login\n", "### Requirement: Login flow\n"));
+    delta(
+        dir.path(),
+        &DELTA.replace("### Requirement: Login\n", "### Requirement: Login flow\n"),
+    );
     assert_eq!(
         errors(dir.path(), Some("add-refresh")),
-        [("MODIFIED requirement not found: Login flow".into(), D.into(), 12)]
+        [(
+            "MODIFIED requirement not found: Login flow".into(),
+            D.into(),
+            12
+        )]
     );
 }
 
@@ -203,8 +252,14 @@ fn spec_005_removed_and_renamed_must_name_existing_requirements() {
          ## RENAMED Requirements\n\n- FROM: `### Requirement: Nope`\n- TO: `### Requirement: Still nope`\n",
     );
     let e = errors(dir.path(), Some("add-refresh"));
-    assert!(e.contains(&("REMOVED requirement not found: Gone".into(), D.into(), 3)), "{e:?}");
-    assert!(e.contains(&("RENAMED requirement not found: Nope".into(), D.into(), 10)), "{e:?}");
+    assert!(
+        e.contains(&("REMOVED requirement not found: Gone".into(), D.into(), 3)),
+        "{e:?}"
+    );
+    assert!(
+        e.contains(&("RENAMED requirement not found: Nope".into(), D.into(), 10)),
+        "{e:?}"
+    );
 }
 
 #[test]
@@ -272,7 +327,11 @@ fn spec_004_specs_are_checked_too_when_no_change_is_named() {
     );
     assert_eq!(
         errors(dir.path(), None),
-        [("AUTH-002 has no WHEN step".into(), "specs/auth/spec.md".into(), 18)]
+        [(
+            "AUTH-002 has no WHEN step".into(),
+            "specs/auth/spec.md".into(),
+            18
+        )]
     );
     // Naming a change checks only that change.
     assert_eq!(errors(dir.path(), Some("add-refresh")), []);
@@ -295,8 +354,16 @@ fn spec_004_warnings_for_placeholder_purpose_and_missing_tasks() {
     assert_eq!(
         msgs(&r.warnings, dir.path()),
         [
-            ("Purpose is a placeholder".into(), "specs/auth/spec.md".into(), 4),
-            ("change has no tasks.md".into(), "changes/add-refresh".into(), 0),
+            (
+                "Purpose is a placeholder".into(),
+                "specs/auth/spec.md".into(),
+                4
+            ),
+            (
+                "change has no tasks.md".into(),
+                "changes/add-refresh".into(),
+                0
+            ),
         ]
     );
 }
@@ -332,15 +399,33 @@ fn spec_007_an_uncovered_scenario_and_an_open_question_are_reported() {
     let unknown: Vec<(String, String, usize)> = r
         .unknown
         .iter()
-        .map(|u| (u.id.clone(), u.file.to_string_lossy().replace('\\', "/"), u.line))
+        .map(|u| {
+            (
+                u.id.clone(),
+                u.file.to_string_lossy().replace('\\', "/"),
+                u.line,
+            )
+        })
         .collect();
-    assert_eq!(unknown, [("AUTH-099".to_string(), "tasks.md".to_string(), 8)]);
+    assert_eq!(
+        unknown,
+        [("AUTH-099".to_string(), "tasks.md".to_string(), 8)]
+    );
     let clarify: Vec<(String, String, usize)> = r
         .clarify
         .iter()
-        .map(|c| (c.question.clone(), c.file.to_string_lossy().replace('\\', "/"), c.line))
+        .map(|c| {
+            (
+                c.question.clone(),
+                c.file.to_string_lossy().replace('\\', "/"),
+                c.line,
+            )
+        })
         .collect();
-    assert_eq!(clarify, [("token lifetime?".to_string(), "proposal.md".to_string(), 7)]);
+    assert_eq!(
+        clarify,
+        [("token lifetime?".to_string(), "proposal.md".to_string(), 7)]
+    );
     assert!(!r.is_clean());
 }
 
@@ -360,4 +445,17 @@ fn spec_007_questions_in_fenced_code_are_ignored() {
         "## Context\n\n```md\n[NEEDS CLARIFICATION: example only]\n```\n",
     );
     assert!(check(dir.path(), "add-refresh").unwrap().is_clean());
+}
+
+#[test]
+fn spec_007_questions_in_inline_code_are_ignored() {
+    let dir = tree();
+    put(
+        dir.path(),
+        "changes/add-refresh/design.md",
+        "## Context\n\nWrite `[NEEDS CLARIFICATION: <question>]` for open points.\n\n[NEEDS CLARIFICATION: real one?]\n",
+    );
+    let r = check(dir.path(), "add-refresh").unwrap();
+    let qs: Vec<&str> = r.clarify.iter().map(|c| c.question.as_str()).collect();
+    assert_eq!(qs, ["real one?"]);
 }

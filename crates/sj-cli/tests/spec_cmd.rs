@@ -50,7 +50,10 @@ fn spec_001_a_new_change_is_scaffolded() {
     let change = dir.path().join("openspec/changes/add-oauth-login");
     for f in ["proposal.md", "design.md", "tasks.md"] {
         let text = std::fs::read_to_string(change.join(f)).unwrap();
-        assert!(text.starts_with("## ") || text.starts_with("# "), "{f}: {text}");
+        assert!(
+            text.starts_with("## ") || text.starts_with("# "),
+            "{f}: {text}"
+        );
     }
     assert!(change.join("specs").is_dir());
     assert_eq!(std::fs::read_dir(change.join("specs")).unwrap().count(), 0);
@@ -59,7 +62,9 @@ fn spec_001_a_new_change_is_scaffolded() {
 #[test]
 fn spec_001_a_fresh_change_lists_with_no_tasks_or_scenarios() {
     let dir = project();
-    sj(dir.path(), &["new", "add-oauth-login"]).assert().success();
+    sj(dir.path(), &["new", "add-oauth-login"])
+        .assert()
+        .success();
     // The templates hold no task lines and no scenarios.
     sj(dir.path(), &["list"])
         .assert()
@@ -76,9 +81,12 @@ fn spec_002_bad_or_duplicate_names_are_refused() {
         .stderr(predicate::str::contains("kebab-case"));
     assert!(!dir.path().join("openspec/changes").exists());
 
-    sj(dir.path(), &["new", "add-oauth-login"]).assert().success();
+    sj(dir.path(), &["new", "add-oauth-login"])
+        .assert()
+        .success();
     std::fs::write(
-        dir.path().join("openspec/changes/add-oauth-login/proposal.md"),
+        dir.path()
+            .join("openspec/changes/add-oauth-login/proposal.md"),
         "## Why\n\nMine.\n",
     )
     .unwrap();
@@ -87,7 +95,11 @@ fn spec_002_bad_or_duplicate_names_are_refused() {
         .code(2)
         .stderr(predicate::str::contains("already exists"));
     assert_eq!(
-        std::fs::read_to_string(dir.path().join("openspec/changes/add-oauth-login/proposal.md")).unwrap(),
+        std::fs::read_to_string(
+            dir.path()
+                .join("openspec/changes/add-oauth-login/proposal.md")
+        )
+        .unwrap(),
         "## Why\n\nMine.\n"
     );
 }
@@ -100,15 +112,31 @@ fn spec_003_list_shows_progress() {
         let mark = if i <= 3 { "x" } else { " " };
         tasks.push_str(&format!("- [{mark}] 1.{i} Step (AUTH-005)\n"));
     }
-    put(dir.path(), "openspec/changes/add-oauth-login/tasks.md", &tasks);
-    let mut delta = String::from("## ADDED Requirements\n\n### Requirement: OAuth\nThe system SHALL do OAuth.\n");
+    put(
+        dir.path(),
+        "openspec/changes/add-oauth-login/tasks.md",
+        &tasks,
+    );
+    let mut delta = String::from(
+        "## ADDED Requirements\n\n### Requirement: OAuth\nThe system SHALL do OAuth.\n",
+    );
     for i in 5..=7 {
-        delta.push_str(&format!("\n#### Scenario: AUTH-00{i} Case {i}\n- **WHEN** a\n- **THEN** b\n"));
+        delta.push_str(&format!(
+            "\n#### Scenario: AUTH-00{i} Case {i}\n- **WHEN** a\n- **THEN** b\n"
+        ));
     }
     delta.push_str("\n## MODIFIED Requirements\n\n### Requirement: Login\nThe system SHALL Login.\n\n#### Scenario: AUTH-001 Login works\n- **WHEN** asked\n- **THEN** it works via OAuth\n");
     delta.push_str("\n## REMOVED Requirements\n\n### Requirement: Revoke\n**Reason**: r\n**Migration**: m\n\n#### Scenario: AUTH-004 Revoke works\n- **WHEN** asked\n- **THEN** it works\n");
-    put(dir.path(), "openspec/changes/add-oauth-login/specs/auth/spec.md", &delta);
-    put(dir.path(), "openspec/changes/b/tasks.md", "- [x] 1.1 One (AUTH-001)\n");
+    put(
+        dir.path(),
+        "openspec/changes/add-oauth-login/specs/auth/spec.md",
+        &delta,
+    );
+    put(
+        dir.path(),
+        "openspec/changes/b/tasks.md",
+        "- [x] 1.1 One (AUTH-001)\n",
+    );
     sj(dir.path(), &["list"]).assert().success().stdout(
         "add-oauth-login  3/7 tasks  4 scenarios\n\
          b                1/1 tasks  0 scenarios\n",
@@ -124,7 +152,10 @@ fn spec_003_list_shows_progress() {
 #[test]
 fn spec_003_no_open_changes() {
     let dir = project();
-    sj(dir.path(), &["list"]).assert().success().stdout("no open changes\n");
+    sj(dir.path(), &["list"])
+        .assert()
+        .success()
+        .stdout("no open changes\n");
 }
 
 // ---------- validate ----------
@@ -162,7 +193,10 @@ fn spec_004_validate_reports_a_missing_then_and_exits_1() {
 fn spec_004_a_clean_tree_validates() {
     let dir = project();
     with_change(dir.path(), "- **THEN** it is replaced\n");
-    sj(dir.path(), &["validate"]).assert().success().stdout("validate: ok\n");
+    sj(dir.path(), &["validate"])
+        .assert()
+        .success()
+        .stdout("validate: ok\n");
 }
 
 #[test]
@@ -173,7 +207,9 @@ fn spec_004_strict_fails_on_warnings() {
     sj(dir.path(), &["validate"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("warn    change has no tasks.md (openspec/changes/add-refresh)"));
+        .stdout(predicate::str::contains(
+            "warn    change has no tasks.md (openspec/changes/add-refresh)",
+        ));
     sj(dir.path(), &["validate", "--strict"]).assert().code(1);
 }
 
@@ -189,7 +225,9 @@ fn spec_005_modified_must_name_an_existing_requirement() {
     sj(dir.path(), &["validate", "add-refresh"])
         .assert()
         .code(1)
-        .stdout(predicate::str::contains("fail    MODIFIED requirement not found: Login flow ("));
+        .stdout(predicate::str::contains(
+            "fail    MODIFIED requirement not found: Login flow (",
+        ));
 }
 
 #[test]
@@ -223,11 +261,14 @@ fn spec_007_check_reports_uncovered_and_clarify() {
         "openspec/changes/add-refresh/proposal.md",
         "## Why\n\nRotation.\n\n[NEEDS CLARIFICATION: token lifetime?]\n",
     );
-    sj(dir.path(), &["check", "add-refresh"]).assert().code(1).stdout(
-        "check: 2 problems\n\
+    sj(dir.path(), &["check", "add-refresh"])
+        .assert()
+        .code(1)
+        .stdout(
+            "check: 2 problems\n\
          uncovered AUTH-006\n\
          clarify token lifetime? (proposal.md:5)\n",
-    );
+        );
 }
 
 #[test]
@@ -260,7 +301,10 @@ fn spec_008_archive_moves_the_change_under_todays_date() {
         .is_file());
     assert!(!root.join("changes/add-refresh").exists());
     let spec = std::fs::read_to_string(root.join("specs/auth/spec.md")).unwrap();
-    assert!(spec.trim_end().ends_with("- **THEN** it is replaced"), "{spec}");
+    assert!(
+        spec.trim_end().ends_with("- **THEN** it is replaced"),
+        "{spec}"
+    );
 }
 
 #[test]
@@ -298,7 +342,11 @@ fn spec_010_archive_creates_a_new_capability() {
         "openspec/changes/add-billing/specs/billing/spec.md",
         "## Purpose\n\nCharge customers monthly and send them an invoice.\n\n## ADDED Requirements\n\n### Requirement: Invoice\nThe system SHALL invoice.\n\n#### Scenario: BILL-001 Invoice\n- **WHEN** the month starts\n- **THEN** an invoice exists\n",
     );
-    put(dir.path(), "openspec/changes/add-billing/tasks.md", "- [x] 1.1 Invoice (BILL-001)\n");
+    put(
+        dir.path(),
+        "openspec/changes/add-billing/tasks.md",
+        "- [x] 1.1 Invoice (BILL-001)\n",
+    );
     sj(dir.path(), &["archive", "add-billing"])
         .assert()
         .success()

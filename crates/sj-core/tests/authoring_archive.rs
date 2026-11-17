@@ -37,7 +37,11 @@ fn files(dir: &Path) -> BTreeMap<String, String> {
             if p.is_dir() {
                 walk(base, &p, out);
             } else {
-                let rel = p.strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/");
+                let rel = p
+                    .strip_prefix(base)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 out.insert(rel, std::fs::read_to_string(&p).unwrap());
             }
         }
@@ -70,7 +74,10 @@ fn assert_matches_golden(case: &str, dir: &Path) {
         want.keys().collect::<Vec<_>>()
     );
     for (rel, text) in &want {
-        assert_eq!(&got[rel], text, "{case}: specs/{rel} differs from openspec's output");
+        assert_eq!(
+            &got[rel], text,
+            "{case}: specs/{rel} differs from openspec's output"
+        );
     }
 }
 
@@ -82,7 +89,10 @@ fn spec_008_archive_merges_all_four_delta_kinds() {
     };
     assert_matches_golden("four-kinds", dir.path());
     let root = dir.path().join("openspec");
-    assert_eq!(dest, root.join(format!("changes/archive/{DATE}-add-refresh")));
+    assert_eq!(
+        dest,
+        root.join(format!("changes/archive/{DATE}-add-refresh"))
+    );
     assert!(dest.join("proposal.md").is_file());
     assert!(!root.join("changes/add-refresh").exists());
     assert_eq!(specs.len(), 1);
@@ -125,7 +135,8 @@ fn spec_011_metadata_moves_with_the_change() {
 #[test]
 fn spec_008_a_spec_already_in_openspec_layout_keeps_other_bytes() {
     // The golden output is canonical: merging an empty-effect delta into it changes nothing.
-    let golden = std::fs::read_to_string(fixture("four-kinds").join("expected/specs/auth/spec.md")).unwrap();
+    let golden =
+        std::fs::read_to_string(fixture("four-kinds").join("expected/specs/auth/spec.md")).unwrap();
     let delta = "## ADDED Requirements\n\n### Requirement: Session lifetime\nThe system SHALL expire sessions after 30 days.\n\n\
                  #### Scenario: AUTH-004 An old session expires\n- **WHEN** a session is 31 days old\n- **THEN** it is rejected\n";
     let merged = merge(Some(&golden), delta, "auth", "noop").unwrap();
@@ -135,7 +146,8 @@ fn spec_008_a_spec_already_in_openspec_layout_keeps_other_bytes() {
 
 #[test]
 fn spec_008_crlf_input_becomes_lf() {
-    let golden = std::fs::read_to_string(fixture("four-kinds").join("expected/specs/auth/spec.md")).unwrap();
+    let golden =
+        std::fs::read_to_string(fixture("four-kinds").join("expected/specs/auth/spec.md")).unwrap();
     let delta = "## REMOVED Requirements\r\n\r\n### Requirement: Refresh\r\n**Reason**: x\r\n**Migration**: y\r\n";
     let merged = merge(Some(&golden.replace('\n', "\r\n")), delta, "auth", "c").unwrap();
     assert!(!merged.text.contains('\r'));
@@ -197,7 +209,13 @@ fn spec_008_a_name_in_two_sections_is_an_error() {
 fn spec_010_a_new_capability_may_not_modify() {
     let e = format!(
         "{:#}",
-        merge(None, "## MODIFIED Requirements\n\n### Requirement: X\nThe system SHALL x.\n", "billing", "c").unwrap_err()
+        merge(
+            None,
+            "## MODIFIED Requirements\n\n### Requirement: X\nThe system SHALL x.\n",
+            "billing",
+            "c"
+        )
+        .unwrap_err()
     );
     assert!(e.contains("billing"), "{e}");
 }
@@ -238,9 +256,11 @@ fn spec_009_archive_refuses_open_tasks() {
         panic!("archived despite an open task");
     };
     assert!(
-        reasons.iter().any(|r| r.message == "open task 1.2 Sign out (AUTH-001)"
-            && r.file.ends_with("changes/add-refresh/tasks.md")
-            && r.line == 4),
+        reasons
+            .iter()
+            .any(|r| r.message == "open task 1.2 Sign out (AUTH-001)"
+                && r.file.ends_with("changes/add-refresh/tasks.md")
+                && r.line == 4),
         "{reasons:?}"
     );
     assert_eq!(files(dir.path()), before, "nothing may change");
@@ -264,13 +284,19 @@ fn spec_009_archive_refuses_an_invalid_change() {
     let root = dir.path().join("openspec");
     let delta = root.join("changes/add-refresh/specs/auth/spec.md");
     let text = std::fs::read_to_string(&delta).unwrap();
-    std::fs::write(&delta, text.replace("- **THEN** a new access token is returned\n", "")).unwrap();
+    std::fs::write(
+        &delta,
+        text.replace("- **THEN** a new access token is returned\n", ""),
+    )
+    .unwrap();
     let before = files(dir.path());
     let Outcome::Refused(reasons) = archive(&root, "add-refresh", &opts()).unwrap() else {
         panic!("archived an invalid change");
     };
     assert!(
-        reasons.iter().any(|r| r.message == "AUTH-005 has no THEN step"),
+        reasons
+            .iter()
+            .any(|r| r.message == "AUTH-005 has no THEN step"),
         "{reasons:?}"
     );
     assert_eq!(files(dir.path()), before);
@@ -300,7 +326,11 @@ fn spec_008_a_merge_error_writes_nothing() {
         date: DATE.into(),
     };
     assert!(archive(&root, "add-refresh", &forced).is_err());
-    assert_eq!(files(dir.path()), before, "auth must not be written when chat fails");
+    assert_eq!(
+        files(dir.path()),
+        before,
+        "auth must not be written when chat fails"
+    );
 }
 
 #[test]

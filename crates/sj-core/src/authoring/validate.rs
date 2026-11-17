@@ -1,0 +1,298 @@
+//! `sj spec validate`: spec format, delta structure and task-to-scenario links.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
+use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use serde::Serialize;
+
+use super::blocks::{self, Block};
+use super::{find_change, open_changes, read, spec_files, tasks, Change};
+
+/// One problem, at a file and 1-based line (0 when it concerns the whole file or folder).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Problem {
+    pub message: String,
+    pub file: PathBuf,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Report {
+    pub errors: Vec<Problem>,
+    pub warnings: Vec<Problem>,
+}
+
+impl Report {
+    fn err(&mut self, message: impl Into<String>, file: &Path, line: usize) {
+        self.errors.push(Problem {
+            message: message.into(),
+            file: file.to_path_buf(),
+            line,
+        });
+    }
+
+    fn warn(&mut self, message: impl Into<String>, file: &Path, line: usize) {
+        self.warnings.push(Problem {
+            message: message.into(),
+            file: file.to_path_buf(),
+            line,
+        });
+    }
+}
+
+/// Where an ID was first defined: (file, line).
+type Seen = BTreeMap<String, (PathBuf, usize)>;
+
+/// Validate every `specs/` file and open change, or only `change`.
+pub fn validate(spec_root: &Path, change: Option<&str>) -> Result<Report> {
+    let scoped = change.map(|c| find_change(spec_root, c)).transpose()?;
+    let mut r = Report::default();
+    let specs_dir = spec_root.join("specs");
+
+    // IDs in specs/, in file order; duplicates there are errors when specs/ is in scope.
+    let mut seen: Seen = BTreeMap::new();
+    for file in spec_files(&specs_dir)? {
+        let text = read(&file)?;
+        let lines: Vec<&str> = text.split('\n').collect();
+        let mask = blocks::fence_mask(&lines);
+        let all = 0..lines.len();
+        for s in blocks::scenarios_in(&lines, &mask, all.clone()) {
+            let Some(id) = &s.id else { continue };
+            if let Some(first) = seen.get(id) {
+                if scoped.is_none() {
+                    r.err(dup(id, first, spec_root), &file, s.line);
+                }
+            } else {
+                seen.insert(id.clone(), (file.clone(), s.line));
+            }
+        }
+        if scoped.is_none() {
+            let blocks = blocks::blocks_in(&lines, &mask, all);
+            for b in &blocks {
+                check_block(&mut r, &file, &lines, &mask, b);
+            }
+            check_purpose(&mut r, &file, &text);
+        }
+    }
+
+    // ADDED IDs of every open change, in change order, so two changes can't claim one ID.
+    let changes = open_changes(spec_root)?;
+    for c in &changes {
+        let in_scope = scoped.as_ref().map_or(true, |s| s.name == c.name);
+        validate_change(&mut r, spec_root, c, &mut seen, in_scope)?;
+    }
+    Ok(r)
+}
+
+fn dup(id: &str, first: &(PathBuf, usize), spec_root: &Path) -> String {
+    let rel = first.0.strip_prefix(spec_root).unwrap_or(&first.0);
+    format!(
+        "duplicate ID {id} (first at {}:{})",
+        rel.to_string_lossy().replace('\\', "/"),
+        first.1
+    )
+}
+
+/// A requirement needs a scenario and a SHALL or MUST; each scenario needs an ID, WHEN and THEN.
+fn check_block(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool], b: &Block) {
+    let scenarios = blocks::scenarios_in(lines, mask, b.lines.clone());
+    let first = scenarios.first().map_or(b.lines.end, |s| s.line - 1);
+    let text = lines[b.header..first].join("\n");
+    if !text.contains("SHALL") && !text.contains("MUST") {
+        r.err(
+            format!("requirement {} has no SHALL or MUST", b.name),
+            file,
+            b.header + 1,
+        );
+    }
+    if scenarios.is_empty() {
+        r.err(
+            format!("requirement {} has no scenario", b.name),
+            file,
+            b.header + 1,
+        );
+    }
+    for s in &scenarios {
+        let label = s.id.clone().unwrap_or_else(|| s.name.clone());
+        if s.id.is_none() {
+            r.err(format!("{} has no ID", s.name), file, s.line);
+        }
+        if !s.has_when {
+            r.err(format!("{label} has no WHEN step"), file, s.line);
+        }
+        if !s.has_then {
+            r.err(format!("{label} has no THEN step"), file, s.line);
+        }
+    }
+}
+
+fn check_purpose(r: &mut Report, file: &Path, text: &str) {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mask = blocks::fence_mask(&lines);
+    let Some(s) = blocks::sections(&lines, &mask)
+        .into_iter()
+        .find(|s| s.title.eq_ignore_ascii_case("Purpose"))
+    else {
+        r.warn("no Purpose section", file, 0);
+        return;
+    };
+    let body = s.body.clone().find(|&i| !lines[i].trim().is_empty());
+    match body {
+        None => r.warn("Purpose is empty", file, s.header + 1),
+        Some(i) if lines[i].trim_start().starts_with("TBD") => {
+            r.warn("Purpose is a placeholder", file, i + 1)
+        }
+        Some(_) => {}
+    }
+}
+
+/// Requirement names in a target spec file, after the delta's renames.
+fn target_names(target: &Path, renames: &[blocks::Rename]) -> Result<BTreeSet<String>> {
+    let mut names = BTreeSet::new();
+    if target.is_file() {
+        let text = read(target)?;
+        let lines: Vec<&str> = text.split('\n').collect();
+        let mask = blocks::fence_mask(&lines);
+        for b in blocks::blocks_in(&lines, &mask, 0..lines.len()) {
+            names.insert(b.name);
+        }
+    }
+    Ok(names
+        .into_iter()
+        .map(|n| {
+            renames
+                .iter()
+                .find(|r| r.from == n)
+                .map_or(n, |r| r.to.clone())
+        })
+        .collect())
+}
+
+fn validate_change(
+    r: &mut Report,
+    spec_root: &Path,
+    c: &Change,
+    seen: &mut Seen,
+    in_scope: bool,
+) -> Result<()> {
+    let mut sink = Report::default();
+    let out = if in_scope { &mut *r } else { &mut sink };
+    let specs_dir = c.dir.join("specs");
+    // IDs defined by this change's MODIFIED blocks: one copy per change.
+    let mut modified_ids: Seen = BTreeMap::new();
+    for file in spec_files(&specs_dir)? {
+        let text = read(&file)?;
+        let lines: Vec<&str> = text.split('\n').collect();
+        let mask = blocks::fence_mask(&lines);
+        let d = blocks::parse_delta(&text);
+        let rel = file.strip_prefix(&specs_dir).unwrap_or(&file);
+        let target = spec_root.join("specs").join(rel);
+        let before = target_names(&target, &[])?;
+        let after = target_names(&target, &d.renamed)?;
+
+        if !d.has_operations() {
+            out.err(
+                "no ADDED, MODIFIED, REMOVED or RENAMED requirements",
+                &file,
+                0,
+            );
+        }
+        for (name, line) in &d.orphans {
+            out.err(
+                format!(
+                    "requirement {name} is outside ADDED/MODIFIED/REMOVED/RENAMED Requirements"
+                ),
+                &file,
+                *line,
+            );
+        }
+        for b in &d.added {
+            check_block(out, &file, &lines, &mask, b);
+            for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
+                let Some(id) = s.id else { continue };
+                match seen.get(&id) {
+                    Some(first) => out.err(dup(&id, first, spec_root), &file, s.line),
+                    None => {
+                        seen.insert(id, (file.clone(), s.line));
+                    }
+                }
+            }
+        }
+        for b in &d.modified {
+            check_block(out, &file, &lines, &mask, b);
+            if !after.contains(&b.name) {
+                out.err(
+                    format!("MODIFIED requirement not found: {}", b.name),
+                    &file,
+                    b.header + 1,
+                );
+            }
+            for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
+                let Some(id) = s.id else { continue };
+                match modified_ids.get(&id) {
+                    Some(first) => out.err(dup(&id, first, spec_root), &file, s.line),
+                    None => {
+                        modified_ids.insert(id, (file.clone(), s.line));
+                    }
+                }
+            }
+        }
+        for rm in &d.removed {
+            if !before.contains(&rm.name) {
+                out.err(
+                    format!("REMOVED requirement not found: {}", rm.name),
+                    &file,
+                    rm.line,
+                );
+            }
+            let range: Range<usize> = match &rm.block {
+                Some(b) => b.lines.clone(),
+                None => rm.section.clone(),
+            };
+            let body = lines[range].join("\n");
+            if !body.contains("**Reason**") || !body.contains("**Migration**") {
+                out.err(
+                    format!(
+                        "REMOVED requirement {} needs **Reason** and **Migration**",
+                        rm.name
+                    ),
+                    &file,
+                    rm.line,
+                );
+            }
+        }
+        for rn in &d.renamed {
+            if !before.contains(&rn.from) {
+                out.err(
+                    format!("RENAMED requirement not found: {}", rn.from),
+                    &file,
+                    rn.line,
+                );
+            }
+        }
+        for (side, name, line) in &d.unpaired {
+            out.err(
+                format!("RENAMED {side} without its pair: {name}"),
+                &file,
+                *line,
+            );
+        }
+    }
+
+    let tasks_file = c.dir.join("tasks.md");
+    if !tasks_file.is_file() {
+        out.warn("change has no tasks.md", &c.dir, 0);
+    }
+    for t in tasks(&tasks_file)? {
+        if blocks::task_ids(&t.text).is_empty() && !t.text.contains("(no-scenario:") {
+            out.err(
+                format!("task names no scenario: {}", t.text),
+                &tasks_file,
+                t.line,
+            );
+        }
+    }
+    Ok(())
+}
