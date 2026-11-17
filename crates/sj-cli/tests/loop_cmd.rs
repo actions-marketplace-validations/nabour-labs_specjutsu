@@ -394,3 +394,94 @@ fn loop_003_parallel_tasks_are_listed_only_when_independent() {
              batch 2\n  3.3 [P] Issuer (AUTH-006)\n",
         );
 }
+
+/// A repo branched from `main` whose change adds AUTH-005 and AUTH-006, with `tests/auth.rs`.
+fn verify_repo(tests: &str) -> support::Repo {
+    let repo = support::Repo::with_lib("");
+    repo.branch("feature");
+    repo.add_change(
+        "add-oauth-login",
+        &[("AUTH-005", "Refresh"), ("AUTH-006", "Reject")],
+    );
+    repo.write(
+        "openspec/changes/add-oauth-login/tasks.md",
+        "- [ ] 1.1 Tokens (AUTH-005, AUTH-006)\n",
+    );
+    repo.write("src/lib.rs", "pub fn refresh() {}\n");
+    repo.write("tests/auth.rs", tests);
+    repo.commit("tokens");
+    repo
+}
+
+#[test]
+fn loop_006_verify_catches_what_the_gate_would_catch() {
+    let repo = verify_repo("#[test]\nfn auth_005_refresh() {}\n");
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::starts_with("verify: "))
+        .stdout(predicate::str::contains("untested AUTH-006\n"))
+        .stdout(predicate::str::contains("failing").not());
+}
+
+#[test]
+fn loop_006_verify_reports_failing_tests_and_open_questions() {
+    let repo = verify_repo(
+        "#[test]\nfn auth_005_refresh() { panic!(\"no\"); }\n\n#[test]\nfn auth_006_reject() {}\n",
+    );
+    repo.write(
+        "openspec/changes/add-oauth-login/design.md",
+        "## Context\n\n[NEEDS CLARIFICATION: which issuer?]\n",
+    );
+    sj(repo.path(), &["verify", "add-oauth-login"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("failing"))
+        .stdout(predicate::str::contains("AUTH-005"))
+        .stdout(predicate::str::contains(
+            "clarify which issuer? (openspec/changes/add-oauth-login/design.md:3)",
+        ))
+        .stdout(predicate::str::contains(
+            "unproven AUTH-006 (no red run recorded)",
+        ));
+}
+
+#[test]
+fn loop_006_verify_applies_the_unspecified_change_rule() {
+    let repo = support::Repo::with_lib("");
+    repo.branch("feature");
+    repo.write("src/lib.rs", "pub fn sneaky() {}\n");
+    repo.commit("no spec");
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("unspecified change: src/lib.rs"));
+}
+
+#[test]
+fn loop_007_verify_passes_a_finished_change() {
+    let repo = verify_repo(
+        "#[test]\nfn auth_005_refresh() { panic!(\"red\"); }\n\n#[test]\nfn auth_006_reject() { panic!(\"red\"); }\n",
+    );
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["test", "--root"])
+        .arg(repo.path())
+        .assert()
+        .code(1);
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_005_refresh() {}\n\n#[test]\nfn auth_006_reject() {}\n",
+    );
+    repo.commit("green");
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["test", "--root"])
+        .arg(repo.path())
+        .assert()
+        .success();
+    sj(repo.path(), &["verify"])
+        .assert()
+        .success()
+        .stdout("verify: ok\n");
+}
