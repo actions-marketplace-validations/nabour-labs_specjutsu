@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. The skills (skills/)
 
-- [ ] 2.1 The nine `skills/sj-*/SKILL.md` files and `skills/COVERAGE.md` (design decisions 1, 3) (SKILL-001..004). Verify: the test that checks this repo's `skills/` passes, and every body is at most 6,000 bytes.
+- [x] 2.1 The nine `skills/sj-*/SKILL.md` files and `skills/COVERAGE.md` (design decisions 1, 3) (SKILL-001..004). Verify: the test that checks this repo's `skills/` passes, and every body is at most 6,000 bytes.
 
 ## 3. Docs and self-hosting
 
