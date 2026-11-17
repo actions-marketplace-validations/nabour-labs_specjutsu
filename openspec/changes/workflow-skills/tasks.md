@@ -12,4 +12,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Docs and self-hosting
 
-- [ ] 3.1 README section on the skills, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes and `sj spec check workflow-skills` is clean.
+- [x] 3.1 README section on the skills, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes and `sj spec check workflow-skills` is clean.
