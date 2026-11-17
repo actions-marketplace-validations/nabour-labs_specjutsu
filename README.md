@@ -54,6 +54,8 @@ sj status           # each open change: tasks, scenario evidence, the next task
 sj next             # the next task: its scenarios, changed files, test commands
 sj task done add-oauth-login 2.1  # check the box (strict mode needs red-before-green)
 sj verify           # before a PR: what the gate checks, without red-on-base
+sj init --agents claude  # install the Claude Code adapter: CLAUDE.md block, skills, hooks
+sj update           # regenerate installed adapters; hand-edited files are kept
 ```
 
 ## How tracing works
@@ -390,7 +392,41 @@ spec folders and logs:
 its skill. `cargo test` checks the skills: frontmatter whose description says when
 to use the skill, a body of at most 6,000 bytes, no commands from the tools they
 replace, the `sj` commands each workflow needs, and complete coverage. Agent
-adapters install them. The Claude Code adapter is next on the roadmap.
+adapters install them.
+
+## The Claude Code adapter
+
+```bash
+sj init --agents claude          # install (writes specjutsu.toml too if it's missing)
+sj update                        # regenerate; prints `adapters up to date` when nothing changed
+sj init --remove-agents claude   # remove everything it added
+```
+
+It writes three things and touches nothing else:
+
+- **A block in CLAUDE.md**, between `<!-- specjutsu:begin -->` and
+  `<!-- specjutsu:end -->`, appended after your own content. It is under 1,200
+  bytes.
+- **The nine skills**, under `.claude/skills/sj-*/SKILL.md`. Each ends with a
+  generated-hash line. `sj update` reports a skill you edited by hand
+  (`modified … (kept; sj update --force replaces it)`), keeps it, and exits 1.
+- **Two hooks** in `.claude/settings.json`, added after your existing ones. The
+  file is edited as text, so your indentation, key order, permissions and other
+  hooks stay as they are. Removing the adapter gives back the file byte for byte.
+
+The generated files hold no timestamps, versions or paths, so prompt caches stay
+valid. The hooks call `sj` from `PATH`:
+
+- **`sj hook claude session-start`** prints the `sj status` lines and the active
+  task, in at most 1,200 bytes.
+- **`sj hook claude pre-edit`** runs before `Edit`, `Write`, `MultiEdit` and
+  `NotebookEdit`. It always allows tests, specs, docs and other non-source
+  files. For a source file, in `guided` and `strict` modes, it blocks the edit
+  until each scenario of the active task has a red run in the ledger:
+  `write a failing test for AUTH-005 first (sj test AUTH-005)`. In `advisory`
+  mode it only warns. If the hook itself fails, it warns and allows the edit,
+  so it never blocks work. CI's gate is the backstop for edits it can't see,
+  such as shell redirects.
 
 ## Roadmap
 

@@ -12,4 +12,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Docs
 
-- [ ] 3.1 README section on the Claude Code adapter and hooks, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes, and a scratch repository shows the hooks working in a real Claude Code session.
+- [x] 3.1 README section on the Claude Code adapter and hooks, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes, and a scratch repository shows the hooks working in a real Claude Code session.
