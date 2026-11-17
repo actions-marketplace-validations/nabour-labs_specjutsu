@@ -24,6 +24,15 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `sj ids [--write] [--json]` lists scenarios without IDs with the ID each would
+  get (exit 1 when there are any) and, with `--write`, inserts them in place,
+  changing no other byte. Prefixes come from the capability folder or from
+  `[ids.prefixes]` in `specjutsu.toml`. Numbers continue after the highest ever
+  used, `changes/archive/` included. A delta copy of a `specs/` scenario gets the
+  same ID. Two capabilities with the same prefix exit 2 and write nothing.
+- `sj gate` treats a scenario that only gained an ID as unchanged, so an ID-only
+  commit passes. `--json` gains `changes`: every scenario that isn't unchanged,
+  with its kind.
 - `sj gate` proves red-on-base for vitest, Jest, Playwright, pytest and `junit`
   suites. It overlays changed files matching each suite's `tests` and `support`
   globs on base, runs the suite's `setup` there first, and records a test file that

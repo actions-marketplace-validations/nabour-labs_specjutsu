@@ -43,6 +43,8 @@ sj ledger           # per scenario: latest result, red-before-green proven or no
 sj init             # new project: write specjutsu.toml, create openspec/specs and changes
 sj adopt --dry-run  # existing project: detect packages and runners, print the config
 sj doctor           # check the config, runner executables and spec folders
+sj ids              # list scenarios without IDs and the IDs they would get
+sj ids --write      # assign them in place
 ```
 
 ## How tracing works
@@ -201,6 +203,45 @@ spec folders, one per line. It never installs anything: pytest is checked on
 `PATH` or with `uv run --no-sync`, and Node runners in `node_modules/.bin`.
 
 `sj trace`, `sj test` and `sj gate` read the packages and suites.
+
+## Adding IDs to existing scenarios
+
+Trace and gate only see scenarios with an ID. `sj ids` lists every scenario
+without one and the ID it would get, and exits 1 when there are any.
+`sj ids --write` inserts them:
+
+```
+$ sj ids --write
+2 scenarios without IDs
+USERAUTH-001 Valid registration (openspec/specs/user-auth/spec.md:6)
+USERAUTH-002 Password too short (openspec/specs/user-auth/spec.md:10)
+wrote 2 IDs to 1 file
+```
+
+- **Only the headings change.** The ID goes before the scenario name, and every
+  other byte, line endings included, stays as it was. Running it again changes
+  nothing.
+- **Prefixes come from the capability folder:** its letters, uppercased
+  (`user-auth` → `USERAUTH`). Set your own in the project file:
+
+  ```toml
+  [ids.prefixes]
+  user-auth = "AUTH"
+  ```
+
+  If two capabilities that need IDs end up with the same prefix, nothing is
+  written and the command exits 2 naming both. Map one of them to fix it.
+- **IDs are never reused.** Numbers continue after the highest one used for that
+  prefix anywhere under the spec root, `changes/archive/` included, so keep the
+  archive. Archived changes are read, never written.
+- **A delta copy shares its spec's ID.** A scenario in an open change with the
+  same requirement and scenario name as one in `specs/` gets the same ID.
+
+The gate treats a scenario that only gained an ID as unchanged, so the ID commit
+can land on its own: its scenarios show as `gap` warnings, not failures. Adding a
+test in the same change makes the scenario `implemented`, which still needs
+red-on-base. `sj gate --json` lists every scenario that isn't unchanged under
+`changes`.
 
 ## Test runs and the evidence ledger
 
