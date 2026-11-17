@@ -94,6 +94,7 @@ pub fn detect(root: &Path) -> Result<Detected> {
             spec_root: DEFAULT_SPEC_ROOT.into(),
             mode: Default::default(),
             non_source: Vec::new(),
+            id_prefixes: Default::default(),
             packages,
         },
         notes,

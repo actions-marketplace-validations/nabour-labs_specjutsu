@@ -286,3 +286,29 @@ fn gate_038_non_source_is_a_top_level_list() {
     let dir = tempfile::tempdir().unwrap();
     assert!(Config::default_for(dir.path()).non_source.is_empty());
 }
+
+#[test]
+fn ids_004_id_prefixes_are_read_and_written_back() {
+    let c = load_text("schema = 1\n\n[ids.prefixes]\nuser-auth = \"AUTH\"\nchat = \"CHAT2\"\n")
+        .unwrap();
+    assert_eq!(
+        c.id_prefixes.get("user-auth").map(String::as_str),
+        Some("AUTH")
+    );
+    assert_eq!(c.id_prefixes.len(), 2);
+    let text = c.to_toml();
+    assert!(text.contains("[ids.prefixes]\n"), "{text}");
+    assert_eq!(Config::parse(&text).unwrap(), c);
+}
+
+#[test]
+fn ids_004_an_invalid_prefix_is_rejected() {
+    for bad in ["auth", "1AUTH", "AU-TH", ""] {
+        let e = err_text(&format!(
+            "schema = 1\n\n[ids.prefixes]\nuser-auth = \"{bad}\"\n"
+        ));
+        assert!(e.contains("user-auth"), "{bad}: {e}");
+    }
+    let e = err_text("schema = 1\n\n[ids]\nprefix = {}\n");
+    assert!(e.contains("prefix"), "{e}");
+}

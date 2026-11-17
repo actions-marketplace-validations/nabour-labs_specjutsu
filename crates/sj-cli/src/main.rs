@@ -85,6 +85,18 @@ enum Command {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+    /// List scenarios without IDs and the IDs they would get; --write assigns them in place.
+    Ids {
+        /// Insert the IDs into the spec files.
+        #[arg(long)]
+        write: bool,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
         /// Report only this scenario ID.
@@ -175,6 +187,12 @@ fn run() -> Result<ExitCode> {
             dry_run,
             force,
         } => adopt_cmd(&root, dry_run, force),
+        Command::Ids {
+            write,
+            root,
+            spec_root,
+            json,
+        } => ids_cmd(write, &root, spec_root, json),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -386,6 +404,61 @@ fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode>
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> Result<ExitCode> {
+    let config = sj_core::config::load(root)?;
+    let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
+    let plan = sj_core::ids::plan(&root.join(&spec_root), &config.id_prefixes)?;
+    let files = if write {
+        sj_core::ids::write(&plan)?
+    } else {
+        0
+    };
+    if json {
+        let assignments: Vec<serde_json::Value> = plan
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "id": a.id,
+                    "name": a.name,
+                    "file": rel(&a.file, root),
+                    "line": a.line,
+                })
+            })
+            .collect();
+        let v = serde_json::json!({
+            "missing": plan.len(),
+            "written": write && !plan.is_empty(),
+            "assignments": assignments,
+        });
+        println!("{}", serde_json::to_string_pretty(&v)?);
+    } else {
+        if plan.len() == 1 {
+            println!("1 scenario without an ID");
+        } else {
+            println!("{} scenarios without IDs", plan.len());
+        }
+        for a in &plan {
+            println!("{} {} ({}:{})", a.id, a.name, rel(&a.file, root), a.line);
+        }
+        if write && !plan.is_empty() {
+            println!(
+                "wrote {} to {}",
+                if plan.len() == 1 {
+                    "1 ID".to_string()
+                } else {
+                    format!("{} IDs", plan.len())
+                },
+                plural(files, "file")
+            );
+        }
+    }
+    Ok(if write || plan.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
 }
 
 fn plural(n: usize, word: &str) -> String {

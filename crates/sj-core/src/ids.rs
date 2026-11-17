@@ -1,0 +1,268 @@
+//! Listing and assigning scenario IDs (`sj ids`).
+//!
+//! Prefixes come from the capability folder or `[ids.prefixes]`; numbers continue after the
+//! highest one ever used under the spec root, archive included; a delta copy of a `specs/`
+//! scenario shares its ID. Writing inserts the ID before each name and changes no other byte.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use anyhow::{bail, Context, Result};
+
+use crate::spec;
+
+/// One ID `sj ids --write` would insert.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Assignment {
+    pub id: String,
+    pub name: String,
+    pub file: PathBuf,
+    pub line: usize,
+    title_offset: usize,
+}
+
+/// Whether `s` is a valid ID prefix: an uppercase letter, then uppercase letters or digits.
+pub fn is_prefix(s: &str) -> bool {
+    let mut chars = s.chars();
+    chars.next().is_some_and(|c| c.is_ascii_uppercase())
+        && chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+}
+
+/// The prefix derived from a capability folder name: its ASCII letters, uppercased.
+pub fn derive_prefix(capability: &str) -> String {
+    capability
+        .chars()
+        .filter(char::is_ascii_alphabetic)
+        .map(|c| c.to_ascii_uppercase())
+        .collect()
+}
+
+/// Where a spec file sits relative to the spec root.
+struct Place {
+    capability: Option<String>,
+    /// Under `specs/`, not a change delta.
+    in_specs: bool,
+}
+
+fn place(spec_root: &Path, file: &Path) -> Place {
+    let rel = file.strip_prefix(spec_root).unwrap_or(file);
+    let parts: Vec<String> = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let at = |i: usize| -> Option<String> {
+        // The capability is a folder: something must follow it.
+        (parts.len() > i + 1).then(|| parts[i].clone())
+    };
+    match parts.first().map(String::as_str) {
+        Some("specs") => Place {
+            capability: at(1),
+            in_specs: true,
+        },
+        Some("changes") => {
+            let specs_at = if parts.get(1).map(String::as_str) == Some("archive") {
+                3
+            } else {
+                2
+            };
+            let capability = if parts.get(specs_at).map(String::as_str) == Some("specs") {
+                at(specs_at + 1)
+            } else {
+                None
+            };
+            Place {
+                capability,
+                in_specs: false,
+            }
+        }
+        _ => Place {
+            capability: None,
+            in_specs: false,
+        },
+    }
+}
+
+/// Every `spec.md` under `specs/` and `changes/` (archive included), for used numbers.
+fn all_spec_files(spec_root: &Path) -> Result<Vec<PathBuf>> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .with_context(|| format!("cannot read {}", dir.display()))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                walk(&path, out)?;
+            } else if path.file_name().is_some_and(|n| n == "spec.md") {
+                out.push(path);
+            }
+        }
+        Ok(())
+    }
+    let mut out = Vec::new();
+    walk(&spec_root.join("specs"), &mut out)?;
+    walk(&spec_root.join("changes"), &mut out)?;
+    Ok(out)
+}
+
+fn read(file: &Path) -> Result<String> {
+    std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))
+}
+
+/// The IDs `sj ids --write` would assign, in file and heading order. Errors when a capability
+/// has no usable prefix or two capabilities that need IDs share one.
+pub fn plan(spec_root: &Path, prefixes: &BTreeMap<String, String>) -> Result<Vec<Assignment>> {
+    // Highest number ever used per prefix, archive included (IDS-006).
+    let mut next: BTreeMap<String, u64> = BTreeMap::new();
+    for file in all_spec_files(spec_root)? {
+        for s in spec::parse_scenarios(&file, &read(&file)?) {
+            if let Some((prefix, n)) = s.id.as_deref().and_then(|id| id.rsplit_once('-')) {
+                if let Ok(n) = n.parse::<u64>() {
+                    let e = next.entry(prefix.to_string()).or_insert(0);
+                    *e = (*e).max(n);
+                }
+            }
+        }
+    }
+
+    // The files we may write, parsed once.
+    let mut files = Vec::new();
+    for file in spec::discover_spec_files(spec_root)? {
+        let content = read(&file)?;
+        let located = spec::locate_scenarios(&file, &content);
+        let place = place(spec_root, &file);
+        files.push((file, place, located));
+    }
+
+    // Prefixes for capabilities that need IDs, and collisions among them (IDS-004, IDS-005).
+    let mut prefix_of: BTreeMap<String, String> = BTreeMap::new();
+    for (file, place, located) in &files {
+        if located.iter().all(|l| l.scenario.id.is_some()) {
+            continue;
+        }
+        let Some(cap) = &place.capability else {
+            bail!(
+                "{} has scenarios without IDs but is not in a capability folder \
+                 (specs/<capability>/spec.md)",
+                file.display()
+            );
+        };
+        if prefix_of.contains_key(cap) {
+            continue;
+        }
+        let prefix = match prefixes.get(cap) {
+            Some(p) => p.clone(),
+            None => derive_prefix(cap),
+        };
+        if prefix.is_empty() {
+            bail!(
+                "capability `{cap}` has no letters to make a prefix; \
+                 map it in [ids.prefixes] in specjutsu.toml"
+            );
+        }
+        prefix_of.insert(cap.clone(), prefix);
+    }
+    let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
+    for (cap, prefix) in &prefix_of {
+        if let Some(other) = owner.insert(prefix, cap) {
+            let mut pair = [other, cap.as_str()];
+            pair.sort();
+            bail!(
+                "capabilities `{}` and `{}` both use prefix {prefix}; \
+                 map one in [ids.prefixes] in specjutsu.toml",
+                pair[0],
+                pair[1]
+            );
+        }
+    }
+
+    // The first `specs/` scenario per (capability, requirement, name), for delta copies (IDS-007).
+    type Key = (String, String, String);
+    let key = |cap: &str, l: &spec::Located| -> Key {
+        (
+            cap.to_string(),
+            l.requirement.clone().unwrap_or_default(),
+            l.scenario.name.clone(),
+        )
+    };
+    let mut origin: BTreeMap<Key, (usize, usize, Option<String>)> = BTreeMap::new();
+    for (fi, (_, place, located)) in files.iter().enumerate() {
+        let (true, Some(cap)) = (place.in_specs, &place.capability) else {
+            continue;
+        };
+        for (li, l) in located.iter().enumerate() {
+            origin
+                .entry(key(cap, l))
+                .or_insert((fi, li, l.scenario.id.clone()));
+        }
+    }
+
+    let mut out = Vec::new();
+    for (fi, (file, place, located)) in files.iter().enumerate() {
+        let Some(cap) = &place.capability else {
+            continue;
+        };
+        for (li, l) in located.iter().enumerate() {
+            if l.scenario.id.is_some() {
+                continue;
+            }
+            let k = key(cap, l);
+            let copied = if place.in_specs {
+                None
+            } else {
+                origin.get(&k).and_then(|(_, _, id)| id.clone())
+            };
+            let id = match copied {
+                Some(id) => id,
+                None => {
+                    let prefix = &prefix_of[cap];
+                    let n = next.entry(prefix.clone()).or_insert(0);
+                    *n += 1;
+                    format!("{prefix}-{:03}", *n)
+                }
+            };
+            if place.in_specs {
+                if let Some(o) = origin.get_mut(&k) {
+                    if (o.0, o.1) == (fi, li) {
+                        o.2 = Some(id.clone());
+                    }
+                }
+            }
+            out.push(Assignment {
+                id,
+                name: l.scenario.name.clone(),
+                file: file.clone(),
+                line: l.scenario.line,
+                title_offset: l.title_offset,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Insert each planned ID before its scenario name. Returns the number of files written.
+pub fn write(plan: &[Assignment]) -> Result<usize> {
+    let mut by_file: BTreeMap<&Path, Vec<&Assignment>> = BTreeMap::new();
+    for a in plan {
+        by_file.entry(a.file.as_path()).or_default().push(a);
+    }
+    let written = by_file.len();
+    for (file, mut list) in by_file {
+        let mut content = read(file)?;
+        list.sort_by_key(|a| std::cmp::Reverse(a.title_offset));
+        for a in list {
+            let insert = if a.name.is_empty() {
+                a.id.clone()
+            } else {
+                format!("{} ", a.id)
+            };
+            content.insert_str(a.title_offset, &insert);
+        }
+        std::fs::write(file, content)
+            .with_context(|| format!("cannot write {}", file.display()))?;
+    }
+    Ok(written)
+}
