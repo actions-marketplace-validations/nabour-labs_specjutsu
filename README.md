@@ -368,6 +368,30 @@ takes `--json`, except `sj task done`.
 `sj next` and `sj verify` compare against `--base`, or else the first of
 `origin/HEAD`, `origin/main`, `origin/master`, `main` and `master` that exists.
 
+## Skills
+
+`skills/` holds nine agent skills that cover spec-driven work from idea to merge.
+Each one drives the work through `sj` commands instead of having the agent read
+spec folders and logs:
+
+| Skill | Use it to | Replaces |
+| --- | --- | --- |
+| `sj-explore` | think an idea through before specifying it | Superpowers brainstorming, OpenSpec explore |
+| `sj-propose` | write the proposal, delta specs, design and tasks | Superpowers writing-plans; OpenSpec propose, update; Spec Kit specify, plan, tasks, analyze |
+| `sj-clarify` | resolve `[NEEDS CLARIFICATION]` markers with the user | Spec Kit clarify |
+| `sj-principles` | create or amend `<spec_root>/principles.md` | Spec Kit constitution |
+| `sj-apply` | implement tasks test-first, in parallel where `[P]` allows | Superpowers TDD, executing-plans, subagent and parallel-agent skills; OpenSpec apply; Spec Kit implement |
+| `sj-debug` | reproduce a bug as a failing scenario test, then fix it | Superpowers systematic-debugging |
+| `sj-review` | review a diff against its scenarios and the principles | Superpowers code review; Spec Kit checklist |
+| `sj-verify` | check `sj verify` before calling anything done | Superpowers verification-before-completion |
+| `sj-finish` | verify, archive, and open the PR | Superpowers finishing-a-branch, git worktrees; OpenSpec archive, sync |
+
+[skills/COVERAGE.md](skills/COVERAGE.md) maps every replaced skill and command to
+its skill. `cargo test` checks the skills: frontmatter whose description says when
+to use the skill, a body of at most 6,000 bytes, no commands from the tools they
+replace, the `sj` commands each workflow needs, and complete coverage. Agent
+adapters install them. The Claude Code adapter is next on the roadmap.
+
 ## Roadmap
 
 | Release | Delivers |

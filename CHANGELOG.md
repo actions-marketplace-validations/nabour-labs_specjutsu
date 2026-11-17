@@ -24,6 +24,13 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- Nine agent skills in `skills/` (`sj-explore`, `sj-propose`, `sj-clarify`,
+  `sj-principles`, `sj-apply`, `sj-debug`, `sj-review`, `sj-verify`, `sj-finish`)
+  covering every Superpowers skill, OpenSpec workflow command and Spec Kit command,
+  mapped in `skills/COVERAGE.md`. `sj_adapters::skills::check` keeps them
+  well-formed: `name` and a `Use when` description, bodies of at most 6,000 bytes,
+  no foreign commands, each workflow's required `sj` commands, the principles rule
+  for planning and review, and complete coverage.
 - `sj status [<change>]`: per open change, at most five lines with tasks done,
   added and modified scenarios counted as proven, green-unproven, red and
   untested from the ledger, and the next task.
