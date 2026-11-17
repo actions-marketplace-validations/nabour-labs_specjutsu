@@ -84,7 +84,7 @@ Notes on the table:
 It reports three things (SPEC-007):
 - **`uncovered <ID>`:** a scenario ID in the change's ADDED or MODIFIED sections that no task names (ranges expanded).
 - **`unknown <ID> (tasks.md:<line>)`:** a task naming an ID that neither the change nor `specs/` defines.
-- **`clarify <question> (<file>:<line>)`:** each `[NEEDS CLARIFICATION: <question>]` in any `.md` file of the change, outside fences.
+- **`clarify <question> (<file>:<line>)`:** each `[NEEDS CLARIFICATION: <question>]` in any `.md` file of the change, outside fences and inline code spans (a marker in backticks is quoted, not asked).
 
 Summary `check: ok` or `check: <n> problems`. It exits 1 when there are any. `--json` lists the three kinds.
 

@@ -24,6 +24,14 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `sj spec new | list | validate | check | archive`: scaffold a change (kebab-case
+  name, next free ID per prefix), list open changes with task progress, validate
+  spec format, delta structure and task-to-scenario links (`--strict` fails on
+  warnings), report uncovered scenarios, unknown task IDs and
+  `[NEEDS CLARIFICATION: …]` markers, and archive a change. Archive refuses
+  validation errors and open tasks unless `--force`. It merges deltas the way
+  `openspec archive` 1.14.0 does and writes the same bytes, and writes nothing
+  when any delta fails to merge.
 - `sj ids [--write] [--json]` lists scenarios without IDs with the ID each would
   get (exit 1 when there are any) and, with `--write`, inserts them in place,
   changing no other byte. Prefixes come from the capability folder or from
