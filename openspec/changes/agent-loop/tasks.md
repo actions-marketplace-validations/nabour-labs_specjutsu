@@ -16,4 +16,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. Docs and self-hosting
 
-- [ ] 4.1 README section on the agent loop, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes, and `sj status`, `sj next` and `sj verify` run on this repo's own open change.
+- [x] 4.1 README section on the agent loop, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes, and `sj status`, `sj next` and `sj verify` run on this repo's own open change.

@@ -24,6 +24,21 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `sj status [<change>]`: per open change, at most five lines with tasks done,
+  added and modified scenarios counted as proven, green-unproven, red and
+  untested from the ledger, and the next task.
+- `sj next [<change>] [--parallel] [--base <ref>]`: the first open task, the
+  full text of its scenarios, files changed since the merge-base, the
+  principles file and one `sj test <ID>` per scenario, within 1,600 bytes besides
+  the scenario texts. `--parallel` batches open `[P]` tasks whose tests share no
+  file.
+- `sj task done <change> <task>` checks one box in `tasks.md` and changes no other
+  byte. Strict mode refuses (exit 1) unless the ledger proves red-before-green for
+  each of the task's scenarios. Guided and advisory modes warn.
+- `sj verify [<change>] [--base <ref>]`: runs and records the change's scenario
+  tests, then reports untested, failing and unproven scenarios, orphans,
+  `sj spec check` problems, and the gate's unspecified-change and exemption rules
+  against the merge-base. It skips red-on-base.
 - `sj spec new | list | validate | check | archive`: scaffold a change (kebab-case
   name, next free ID per prefix), list open changes with task progress, validate
   spec format, delta structure and task-to-scenario links (`--strict` fails on
