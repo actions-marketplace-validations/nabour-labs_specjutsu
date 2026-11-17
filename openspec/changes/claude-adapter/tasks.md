@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. Hooks (sj-core + sj-cli)
 
-- [ ] 2.1 `sj hook claude session-start` and `sj hook claude pre-edit` (decisions 6, 7) (ADAPT-005..009). Verify: `crates/sj-cli/tests/hook_cmd.rs` prints at most 1,200 bytes naming two open changes and the next task; blocks `apps/api/src/auth.ts` with exit 2 and `write a failing test for <ID> first (sj test <ID>)`; allows `apps/api/src/auth.test.ts`; allows the source edit after a `failed` record; warns in advisory mode; and exits 0 with a warning when the ledger can't be read.
+- [x] 2.1 `sj hook claude session-start` and `sj hook claude pre-edit` (decisions 6, 7) (ADAPT-005..009). Verify: `crates/sj-cli/tests/hook_cmd.rs` prints at most 1,200 bytes naming two open changes and the next task; blocks `apps/api/src/auth.ts` with exit 2 and `write a failing test for <ID> first (sj test <ID>)`; allows `apps/api/src/auth.test.ts`; allows the source edit after a `failed` record; warns in advisory mode; and exits 0 with a warning when the ledger can't be read.
 
 ## 3. Docs
 

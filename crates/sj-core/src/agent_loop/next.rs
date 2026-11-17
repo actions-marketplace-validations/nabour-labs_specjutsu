@@ -89,7 +89,7 @@ fn changed_files(root: &Path, base: Option<&str>) -> Option<Vec<String>> {
 }
 
 /// The change to work on: the one named, or the first open change with an unchecked task.
-fn pick(spec_root: &Path, change: Option<&str>) -> Result<Option<(Change, authoring::Task)>> {
+pub fn pick(spec_root: &Path, change: Option<&str>) -> Result<Option<(Change, authoring::Task)>> {
     let candidates = match change {
         Some(name) => vec![authoring::find_change(spec_root, name)?],
         None => authoring::open_changes(spec_root)?,

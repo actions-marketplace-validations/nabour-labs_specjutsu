@@ -7,6 +7,7 @@ pub mod config;
 pub mod doctor;
 pub mod gate;
 pub mod git;
+pub mod hook;
 pub mod ids;
 pub mod ledger;
 pub mod run;

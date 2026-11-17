@@ -74,7 +74,7 @@ Re-serialising `.claude/settings.json` would change its indentation, spacing and
 - **Exit:** always 0. An error prints `specjutsu: <error>` and exits 0.
 
 ### 7. `sj hook claude pre-edit`
-- **Input:** stdin is the hook JSON. The target is `tool_input.file_path` or `tool_input.notebook_path`. The root is `$CLAUDE_PROJECT_DIR`, else `--root`, else `.`.
+- **Input:** stdin is the hook JSON. The target is `tool_input.file_path` or `tool_input.notebook_path`. The root is `--root`, else `$CLAUDE_PROJECT_DIR`, else `.`.
 - **Allowed always** (ADAPT-007): a path outside the root, under the spec root, or not source by the gate's classifier. The classifier is `Classifier::new` when `specjutsu.toml` exists, else `Classifier::builtin`. So a suite's `tests` globs, `tests/` directories, docs and manifests are never blocked.
 - **The active task** is the first unchecked task of the first open change that has one. No such task, or a task naming no IDs, allows the edit.
 - **Red evidence:** each ID needs at least one `failed` or `build-failed` record in the ledger (ADAPT-008).

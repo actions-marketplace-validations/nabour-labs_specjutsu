@@ -75,6 +75,16 @@ enum Command {
         #[arg(long, value_delimiter = ',', conflicts_with = "agents")]
         remove_agents: Vec<String>,
     },
+    /// Hook entrypoint for agent tools: `sj hook claude session-start|pre-edit`.
+    Hook {
+        /// The agent tool (claude).
+        agent: String,
+        /// The hook event: session-start or pre-edit.
+        event: String,
+        /// Project root (default: $CLAUDE_PROJECT_DIR, else the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
     /// Regenerate installed agent adapters; hand-edited files are kept unless --force.
     Update {
         #[arg(long, default_value = ".")]
@@ -315,6 +325,7 @@ fn run() -> Result<ExitCode> {
             }
             agents_cmd(&root, false, false)
         }
+        Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
         Command::Update { root, force } => {
             if !sj_adapters::claude::is_installed(&root) {
                 println!("no adapters installed");
@@ -417,6 +428,47 @@ fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
         plural(config.packages.len(), "package")
     );
     Ok(ExitCode::SUCCESS)
+}
+
+/// Agent hooks never fail the tool call on an internal error: they warn and allow.
+fn hook_cmd(agent: &str, event: &str, root: Option<PathBuf>) -> ExitCode {
+    use sj_core::hook::{self, Decision};
+    let root = root
+        .or_else(|| std::env::var_os("CLAUDE_PROJECT_DIR").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("."));
+    if agent != "claude" {
+        eprintln!("specjutsu: hook error: unknown agent `{agent}`");
+        return ExitCode::SUCCESS;
+    }
+    match event {
+        "session-start" => match hook::session_start(&root) {
+            Ok(text) => print!("{text}"),
+            Err(e) => println!("specjutsu: {e:#}"),
+        },
+        "pre-edit" => {
+            let mut payload = String::new();
+            let decided = std::io::Read::read_to_string(&mut std::io::stdin(), &mut payload)
+                .map_err(anyhow::Error::from)
+                .and_then(|_| hook::pre_edit(&root, &payload));
+            match decided {
+                Ok(Decision::Allow) => {}
+                Ok(Decision::Warn(reasons)) => {
+                    for r in reasons {
+                        println!("specjutsu: {r}");
+                    }
+                }
+                Ok(Decision::Block(reasons)) => {
+                    for r in reasons {
+                        eprintln!("{r}");
+                    }
+                    return ExitCode::from(2);
+                }
+                Err(e) => eprintln!("specjutsu: hook error: {e:#}"),
+            }
+        }
+        _ => eprintln!("specjutsu: hook error: unknown event `{event}`"),
+    }
+    ExitCode::SUCCESS
 }
 
 const AGENTS: [&str; 1] = ["claude"];
