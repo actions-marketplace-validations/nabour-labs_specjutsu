@@ -102,6 +102,20 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Where each open change stands: tasks, scenario evidence and the next task.
+    Status {
+        /// Only this change (default: every open change).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check off tasks in a change's tasks.md.
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
     /// Per-scenario evidence from recorded runs: latest result and red-before-green.
     Ledger {
         /// Report only this scenario ID.
@@ -166,6 +180,18 @@ enum SpecCommand {
         /// Archive despite validation errors and open tasks.
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TaskCommand {
+    /// Check a task's box; strict mode requires red-before-green for its scenarios.
+    Done {
+        change: String,
+        /// The task's number, e.g. 2.1.
+        task: String,
+        #[command(flatten)]
+        args: SpecArgs,
     },
 }
 
@@ -255,6 +281,10 @@ fn run() -> Result<ExitCode> {
             spec_root,
             json,
         } => ids_cmd(write, &root, spec_root, json),
+        Command::Status { change, args, json } => status_cmd(change, &args, json),
+        Command::Task {
+            command: TaskCommand::Done { change, task, args },
+        } => task_done_cmd(&change, &task, &args),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -621,6 +651,47 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
             }
         }
     }
+}
+
+fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {
+    use sj_core::agent_loop::status;
+    let (root, spec_root) = spec_paths(args)?;
+    let rows = status::status(&root, &spec_root, change.as_deref())?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+    } else if rows.is_empty() {
+        println!("no open changes");
+    } else {
+        for r in &rows {
+            for l in status::render(r) {
+                println!("{l}");
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> {
+    use sj_core::agent_loop::task::{self, Outcome};
+    let config = sj_core::config::load(&args.root)?;
+    let (root, spec_root) = spec_paths(args)?;
+    match task::done(&spec_root, &root, change, task, config.mode)? {
+        Outcome::AlreadyDone { text } => println!("task: already done {text}"),
+        Outcome::Done { text, warnings } => {
+            println!("task: done {text}");
+            for u in &warnings {
+                println!("warn    unproven {} ({})", u.id, u.why);
+            }
+        }
+        Outcome::Refused { unproven } => {
+            println!("task: refused — {} unproven", unproven.len());
+            for u in &unproven {
+                println!("unproven {} ({})", u.id, u.why);
+            }
+            return Ok(ExitCode::from(1));
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> Result<ExitCode> {
