@@ -249,3 +249,18 @@ fn skill_004_planning_and_review_reference_the_principles_file() {
         assert!(got.iter().any(|m| m == want), "{want}: {got:?}");
     }
 }
+
+#[test]
+fn skill_001_this_repos_skills_check_clean() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    assert_eq!(messages(&dir), Vec::<String>::new());
+}
+
+#[test]
+fn skill_002_this_repos_skill_bodies_are_within_the_limit() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    for s in SKILLS {
+        let text = std::fs::read_to_string(dir.join(s).join("SKILL.md")).unwrap();
+        assert!(text.len() <= 6000 + 400, "{s}: {} bytes", text.len());
+    }
+}
