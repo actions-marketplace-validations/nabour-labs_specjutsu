@@ -25,3 +25,4 @@ quick-xml = "0.37"
 tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

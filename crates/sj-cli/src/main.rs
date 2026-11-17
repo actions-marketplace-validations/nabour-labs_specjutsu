@@ -85,6 +85,11 @@ enum Command {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+    /// Create, list, validate, check and archive spec changes.
+    Spec {
+        #[command(subcommand)]
+        command: SpecCommand,
+    },
     /// List scenarios without IDs and the IDs they would get; --write assigns them in place.
     Ids {
         /// Insert the IDs into the spec files.
@@ -105,6 +110,62 @@ enum Command {
         root: PathBuf,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(clap::Args)]
+struct SpecArgs {
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+    /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+    #[arg(long)]
+    spec_root: Option<PathBuf>,
+}
+
+#[derive(Subcommand)]
+enum SpecCommand {
+    /// Scaffold changes/<change>/ with proposal, design, tasks and specs/.
+    New {
+        /// Kebab-case change name.
+        change: String,
+        #[command(flatten)]
+        args: SpecArgs,
+    },
+    /// Open changes with task progress and scenario counts.
+    List {
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check spec format, delta structure and that every task names its scenarios.
+    Validate {
+        /// Only this change (default: specs/ and every open change).
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        /// Fail on warnings too.
+        #[arg(long)]
+        strict: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Scenarios no task covers, tasks naming unknown IDs, and open questions.
+    Check {
+        change: String,
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Apply the change's deltas to specs/ and move it to changes/archive/.
+    Archive {
+        change: String,
+        #[command(flatten)]
+        args: SpecArgs,
+        /// Archive despite validation errors and open tasks.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -187,6 +248,7 @@ fn run() -> Result<ExitCode> {
             dry_run,
             force,
         } => adopt_cmd(&root, dry_run, force),
+        Command::Spec { command } => spec_cmd(command),
         Command::Ids {
             write,
             root,
@@ -404,6 +466,161 @@ fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode>
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn spec_paths(args: &SpecArgs) -> Result<(PathBuf, PathBuf)> {
+    let spec_root = spec_root_for(&args.root, args.spec_root.clone())?;
+    Ok((args.root.clone(), args.root.join(spec_root)))
+}
+
+fn location(p: &sj_core::authoring::validate::Problem, root: &Path) -> String {
+    if p.line == 0 {
+        format!("{} ({})", p.message, rel(&p.file, root))
+    } else {
+        format!("{} ({}:{})", p.message, rel(&p.file, root), p.line)
+    }
+}
+
+fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
+    use sj_core::authoring::{self, archive, check, validate};
+    match command {
+        SpecCommand::New { change, args } => {
+            let (root, spec_root) = spec_paths(&args)?;
+            let dir = authoring::new_change(&spec_root, &change)?;
+            println!("created {}", rel(&dir, &root));
+            for (prefix, n) in sj_core::ids::highest_numbers(&spec_root)? {
+                println!("next {prefix}-{:03}", n + 1);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        SpecCommand::List { args, json } => {
+            let (_, spec_root) = spec_paths(&args)?;
+            let rows = authoring::list(&spec_root)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else if rows.is_empty() {
+                println!("no open changes");
+            } else {
+                let width = rows.iter().map(|r| r.name.len()).max().unwrap_or(0);
+                for r in &rows {
+                    println!(
+                        "{:<width$}  {}/{} tasks  {}",
+                        r.name,
+                        r.tasks_done,
+                        r.tasks_total,
+                        plural(r.scenarios, "scenario")
+                    );
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        SpecCommand::Validate {
+            change,
+            args,
+            strict,
+            json,
+        } => {
+            let (root, spec_root) = spec_paths(&args)?;
+            let r = validate::validate(&spec_root, change.as_deref())?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                if r.errors.is_empty() && r.warnings.is_empty() {
+                    println!("validate: ok");
+                } else {
+                    println!(
+                        "validate: {}, {}",
+                        plural(r.errors.len(), "error"),
+                        plural(r.warnings.len(), "warning")
+                    );
+                }
+                for p in &r.errors {
+                    println!("fail    {}", location(p, &root));
+                }
+                for p in &r.warnings {
+                    println!("warn    {}", location(p, &root));
+                }
+            }
+            let failed = !r.errors.is_empty() || (strict && !r.warnings.is_empty());
+            Ok(if failed {
+                ExitCode::from(1)
+            } else {
+                ExitCode::SUCCESS
+            })
+        }
+        SpecCommand::Check { change, args, json } => {
+            let (_, spec_root) = spec_paths(&args)?;
+            let r = check::check(&spec_root, &change)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                if r.is_clean() {
+                    println!("check: ok");
+                } else {
+                    println!("check: {}", plural(r.problems(), "problem"));
+                }
+                for id in &r.uncovered {
+                    println!("uncovered {id}");
+                }
+                for u in &r.unknown {
+                    println!(
+                        "unknown {} ({}:{})",
+                        u.id,
+                        rel(&u.file, Path::new("")),
+                        u.line
+                    );
+                }
+                for c in &r.clarify {
+                    println!(
+                        "clarify {} ({}:{})",
+                        c.question,
+                        rel(&c.file, Path::new("")),
+                        c.line
+                    );
+                }
+            }
+            Ok(if r.is_clean() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
+        }
+        SpecCommand::Archive {
+            change,
+            args,
+            force,
+        } => {
+            let (root, spec_root) = spec_paths(&args)?;
+            let opts = archive::Options {
+                force,
+                date: chrono::Local::now().format("%Y-%m-%d").to_string(),
+            };
+            match archive::archive(&spec_root, &change, &opts)? {
+                archive::Outcome::Refused(reasons) => {
+                    println!("archive: refused");
+                    for p in &reasons {
+                        println!("fail    {}", location(p, &root));
+                    }
+                    Ok(ExitCode::from(1))
+                }
+                archive::Outcome::Archived { specs, dest } => {
+                    for s in &specs {
+                        let file = rel(&s.file, &root);
+                        if s.created {
+                            println!("created {file} (+{})", s.added);
+                        } else {
+                            println!(
+                                "updated {file} (+{} ~{} -{} →{})",
+                                s.added, s.modified, s.removed, s.renamed
+                            );
+                        }
+                    }
+                    println!("archived {change} → {}", rel(&dest, &root));
+                    Ok(ExitCode::SUCCESS)
+                }
+            }
+        }
+    }
 }
 
 fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> Result<ExitCode> {

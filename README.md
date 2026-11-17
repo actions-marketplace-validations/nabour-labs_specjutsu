@@ -45,6 +45,11 @@ sj adopt --dry-run  # existing project: detect packages and runners, print the c
 sj doctor           # check the config, runner executables and spec folders
 sj ids              # list scenarios without IDs and the IDs they would get
 sj ids --write      # assign them in place
+sj spec new add-oauth-login  # scaffold a change; prints the next free ID per prefix
+sj spec list        # open changes: tasks done, scenarios added or modified
+sj spec validate    # spec format, delta structure, every task names its scenarios
+sj spec check add-oauth-login    # uncovered scenarios, unknown IDs, open questions
+sj spec archive add-oauth-login  # merge the deltas into specs/, move to changes/archive/
 ```
 
 ## How tracing works
@@ -242,6 +247,42 @@ can land on its own: its scenarios show as `gap` warnings, not failures. Adding 
 test in the same change makes the scenario `implemented`, which still needs
 red-on-base. `sj gate --json` lists every scenario that isn't unchanged under
 `changes`.
+
+## Writing and archiving changes
+
+`sj spec` does what `openspec new`, `validate` and `archive` do, plus Spec Kit's
+*analyze* and *clarify* passes. The format is OpenSpec's, so existing `openspec/`
+folders work unchanged.
+
+- **`sj spec new <change>`** creates `changes/<change>/` with `proposal.md`,
+  `design.md`, `tasks.md` and an empty `specs/`. The name must be kebab-case. It
+  prints the next free ID for every prefix in use.
+- **`sj spec list`** prints one line per open change:
+  `add-oauth-login  3/7 tasks  4 scenarios`.
+- **`sj spec validate [<change>]`** reports each problem with its file and line:
+  - A scenario without an ID, a duplicate ID, or a missing WHEN or THEN step.
+  - A requirement with no scenario, or with no SHALL or MUST.
+  - A delta requirement outside `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`.
+  - A REMOVED requirement without `**Reason**` and `**Migration**`.
+  - A MODIFIED, REMOVED or RENAMED name that the current spec doesn't have.
+  - A task that names no scenario ID. Mark tasks that cover none with
+    `(no-scenario: <reason>)`, for example docs.
+
+  It exits 1 on errors. `--strict` also fails on warnings, such as a placeholder
+  Purpose.
+- **`sj spec check <change>`** lists scenarios no task names (`uncovered
+  AUTH-006`), tasks naming IDs nobody defines, and every
+  `[NEEDS CLARIFICATION: …]` marker outside code.
+- **`sj spec archive <change>`** refuses while validation fails or a task is
+  open, unless you pass `--force`. Then it applies RENAMED, REMOVED, MODIFIED and
+  ADDED requirements to `specs/` and moves the change to
+  `changes/archive/YYYY-MM-DD-<change>/`. A new capability gets the delta's
+  `## Purpose`.
+
+  The merge follows `openspec archive` 1.14.0 rule for rule, and writes the same
+  bytes. Like OpenSpec, it writes LF line endings and one blank line between
+  requirements. A MODIFIED block that would drop a scenario is an error. Nothing
+  is written unless every delta merges.
 
 ## Test runs and the evidence ledger
 

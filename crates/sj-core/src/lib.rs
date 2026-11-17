@@ -1,6 +1,7 @@
 //! specjutsu core: spec parsing, trace engine gate, test runs and the evidence ledger.
 
 pub mod adopt;
+pub mod authoring;
 pub mod config;
 pub mod doctor;
 pub mod gate;

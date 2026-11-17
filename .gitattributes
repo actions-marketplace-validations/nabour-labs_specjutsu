@@ -1,0 +1,2 @@
+# Golden files compare bytes with what `openspec archive` wrote; keep them LF on every OS.
+crates/sj-core/tests/fixtures/authoring/** text eol=lf

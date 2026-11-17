@@ -112,21 +112,27 @@ fn read(file: &Path) -> Result<String> {
     std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))
 }
 
-/// The IDs `sj ids --write` would assign, in file and heading order. Errors when a capability
-/// has no usable prefix or two capabilities that need IDs share one.
-pub fn plan(spec_root: &Path, prefixes: &BTreeMap<String, String>) -> Result<Vec<Assignment>> {
-    // Highest number ever used per prefix, archive included (IDS-006).
-    let mut next: BTreeMap<String, u64> = BTreeMap::new();
+/// The highest number used per ID prefix in any `spec.md` under the spec root, archive included.
+pub fn highest_numbers(spec_root: &Path) -> Result<BTreeMap<String, u64>> {
+    let mut out: BTreeMap<String, u64> = BTreeMap::new();
     for file in all_spec_files(spec_root)? {
         for s in spec::parse_scenarios(&file, &read(&file)?) {
             if let Some((prefix, n)) = s.id.as_deref().and_then(|id| id.rsplit_once('-')) {
                 if let Ok(n) = n.parse::<u64>() {
-                    let e = next.entry(prefix.to_string()).or_insert(0);
+                    let e = out.entry(prefix.to_string()).or_insert(0);
                     *e = (*e).max(n);
                 }
             }
         }
     }
+    Ok(out)
+}
+
+/// The IDs `sj ids --write` would assign, in file and heading order. Errors when a capability
+/// has no usable prefix or two capabilities that need IDs share one.
+pub fn plan(spec_root: &Path, prefixes: &BTreeMap<String, String>) -> Result<Vec<Assignment>> {
+    // Highest number ever used per prefix, archive included (IDS-006).
+    let mut next = highest_numbers(spec_root)?;
 
     // The files we may write, parsed once.
     let mut files = Vec::new();
