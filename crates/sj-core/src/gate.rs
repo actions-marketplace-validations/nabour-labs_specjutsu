@@ -170,11 +170,21 @@ pub struct GateReport {
     pub warnings: Vec<String>,
     pub exemptions: Vec<String>,
     pub proven: Vec<Proven>,
+    /// Every scenario whose classification is not `unchanged`, with its kind.
+    pub changes: BTreeMap<String, Change>,
 }
 
 /// Apply the gate rules. Pure: no git, no processes.
 pub fn evaluate(input: &Input) -> GateReport {
-    let mut r = GateReport::default();
+    let mut r = GateReport {
+        changes: input
+            .changes
+            .iter()
+            .filter(|(_, c)| **c != Change::Unchanged)
+            .map(|(id, c)| (id.clone(), *c))
+            .collect(),
+        ..GateReport::default()
+    };
 
     // Exemptions.
     let mut skip_red = false;
@@ -561,15 +571,18 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     // Classification: base from git objects, head from the working tree.
     let mut base_fps = Vec::new();
     let mut base_texts: BTreeSet<String> = BTreeSet::new();
+    // Texts of base scenarios without an ID: gaining one is not a change (GATE-036).
+    let mut base_unidentified: BTreeSet<String> = BTreeSet::new();
     for path in git.ls_tree(&mb)? {
         if spec::is_spec_path(&path, &spec_root) {
             let content = git.show(&mb, &path)?;
             base_fps.extend(spec::fingerprints(&content));
-            base_texts.extend(
-                spec::scenario_texts(Path::new(&path), &content)
-                    .into_iter()
-                    .map(|(_, t)| t),
-            );
+            for (s, t) in spec::scenario_texts(Path::new(&path), &content) {
+                if s.id.is_none() {
+                    base_unidentified.insert(t.clone());
+                }
+                base_texts.insert(t);
+            }
         }
     }
     let head_spec_root = root.join(&opts.spec_root);
@@ -597,6 +610,20 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         }
     }
     let mut changes = classify(&base_fps, &head_fps);
+    // GATE-036: an added ID whose text (last occurrence, as `classify`) existed without an ID.
+    let head_text: BTreeMap<&str, &str> = head_fps
+        .iter()
+        .map(|f| (f.id.as_str(), f.text.as_str()))
+        .collect();
+    for (id, c) in changes.iter_mut() {
+        if *c == Change::Added
+            && head_text
+                .get(id.as_str())
+                .is_some_and(|t| base_unidentified.contains(*t))
+        {
+            *c = Change::Unchanged;
+        }
+    }
 
     let scenarios = spec::load_scenarios(&head_spec_root)?;
     let scan = testscan::scan_project(root, &config)?;
