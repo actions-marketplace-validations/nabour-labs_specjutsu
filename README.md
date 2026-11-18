@@ -56,6 +56,7 @@ sj task done add-oauth-login 2.1  # check the box (strict mode needs red-before-
 sj verify           # before a PR: what the gate checks, without red-on-base
 sj init --agents claude  # install the Claude Code adapter: CLAUDE.md block, skills, hooks
 sj update           # regenerate installed adapters; hand-edited files are kept
+sj import speckit   # preview converting Spec Kit's specs/NNN-*/ features; --write converts
 ```
 
 ## How tracing works
@@ -427,6 +428,42 @@ valid. The hooks call `sj` from `PATH`:
   mode it only warns. If the hook itself fails, it warns and allows the edit,
   so it never blocks work. CI's gate is the backstop for edits it can't see,
   such as shell redirects.
+
+## Importing Spec Kit
+
+```bash
+sj import speckit           # print the plan: targets, counts and gaps; writes nothing
+sj import speckit --write   # convert (exits 2 if a target exists; --force overwrites)
+```
+
+Each `specs/NNN-<name>/` feature becomes OpenSpec layout under the spec root:
+
+- **A finished feature** (no unchecked task) becomes `specs/<name>/spec.md` plus
+  an archived change, `changes/archive/<Created date>-<name>/`.
+- **A feature with open tasks** becomes an open change, `changes/<name>/`, whose
+  spec is an `## ADDED Requirements` delta.
+
+Inside the spec:
+
+- **Each user story becomes a requirement.** Each numbered **Given / When / Then**
+  item becomes a scenario with a new ID, `US<story>.<item>` plus its When clause
+  as the name, and its clauses kept verbatim as GIVEN, WHEN and THEN steps. An
+  item without a When uses its Given as the WHEN step.
+- **Each `FR-NNN` line becomes a requirement too.** Spec Kit doesn't link
+  requirements to scenarios, so an FR is a gap until a scenario names it. The
+  import lists `gap FR-NNN (no scenario)`, and the spec gets a
+  `[NEEDS CLARIFICATION]` marker that `sj spec check` reports.
+
+Nothing is lost along the way:
+
+- `plan.md` becomes `design.md`.
+- Research, data model, quickstart, contracts, checklists and tasks are copied
+  byte for byte. Spec Kit tasks keep their `T001` form.
+- Clarifications, edge cases, key entities, success criteria, assumptions and the
+  spec's header go into `proposal.md`.
+- `.specify/memory/constitution.md` becomes `principles.md`.
+
+The import never modifies or deletes anything under `specs/` or `.specify/`.
 
 ## Roadmap
 

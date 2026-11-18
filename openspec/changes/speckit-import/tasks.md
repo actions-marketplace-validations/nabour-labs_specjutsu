@@ -12,4 +12,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Docs
 
-- [ ] 3.1 README section on importing Spec Kit, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes, and a dry run on `chrome-agent` lists one finished feature with its counts and gaps.
+- [x] 3.1 README section on importing Spec Kit, and the CHANGELOG entry (no-scenario: docs). Verify: built `sj gate --base origin/main` passes, and a dry run on `chrome-agent` lists one finished feature with its counts and gaps.
