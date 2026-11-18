@@ -3,3 +3,4 @@
 pub mod claude;
 pub mod jsonedit;
 pub mod skills;
+pub mod superpowers;

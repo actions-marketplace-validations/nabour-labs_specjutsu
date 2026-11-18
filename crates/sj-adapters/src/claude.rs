@@ -186,7 +186,7 @@ fn insert_element(text: &str, arr: &Node, entry: &str, s: &Style) -> String {
     }
 }
 
-fn remove_member(text: &str, obj: &Node, key: &str) -> String {
+pub(crate) fn remove_member(text: &str, obj: &Node, key: &str) -> String {
     let m = obj.members();
     let Some(i) = m.iter().position(|x| x.key == key) else {
         return text.to_string();
@@ -207,7 +207,7 @@ fn remove_member(text: &str, obj: &Node, key: &str) -> String {
     out
 }
 
-fn remove_element(text: &str, arr: &Node, i: usize) -> String {
+pub(crate) fn remove_element(text: &str, arr: &Node, i: usize) -> String {
     let e = arr.elements();
     if i > 0 {
         cut(text, e[i - 1].end, e[i].end)
@@ -216,7 +216,7 @@ fn remove_element(text: &str, arr: &Node, i: usize) -> String {
     }
 }
 
-fn root_object(text: &str) -> Result<Node> {
+pub(crate) fn root_object(text: &str) -> Result<Node> {
     let root = jsonedit::parse(text)?;
     if !root.is_object() {
         bail!("the top level is not an object");
@@ -431,40 +431,69 @@ pub fn is_installed(root: &Path) -> bool {
         || std::fs::read_to_string(settings).is_ok_and(|t| has_our_hooks(&t))
 }
 
-/// Install or refresh every file. A hand-edited skill is kept unless `force`. Nothing is
-/// written when the settings file can't be read as JSON.
-pub fn install(root: &Path, force: bool) -> Result<Vec<Change>> {
+/// One planned write: the new text, or `None` for a hand-edited skill that is kept.
+struct Planned {
+    path: PathBuf,
+    text: Option<String>,
+    change: Change,
+}
+
+/// Every file `install` would write, computed without writing.
+fn planned(root: &Path, force: bool) -> Result<Vec<Planned>> {
     let (md, settings, skills) = paths(root);
     let old_settings = read_opt(&settings)?;
     let new_settings = settings_install(old_settings.as_deref())
         .with_context(|| format!("{} is not valid JSON", settings.display()))?;
-    let mut out = Vec::new();
-
     let old_md = read_opt(&md)?;
-    put(
-        &md,
-        root,
-        old_md.as_deref(),
-        &block_install(old_md.as_deref()),
-        &mut out,
-    )?;
-    put(
-        &settings,
-        root,
-        old_settings.as_deref(),
-        &new_settings,
-        &mut out,
-    )?;
+    let new_md = block_install(old_md.as_deref());
+    let mut files = vec![(md, old_md, new_md), (settings, old_settings, new_settings)];
     for (name, source) in SKILLS {
         let p = skills.join(name).join("SKILL.md");
         let old = read_opt(&p)?;
-        let new = generated(&lf(source));
-        match old.as_deref() {
-            Some(o) if o != new && !is_unmodified(o) && !force => {
-                out.push(Change::Kept(rel(&p, root)))
+        files.push((p, old, generated(&lf(source))));
+    }
+    let mut out = Vec::new();
+    for (i, (path, old, new)) in files.into_iter().enumerate() {
+        let r = rel(&path, root);
+        let change = match old.as_deref() {
+            Some(o) if o == new => continue,
+            Some(o) if i >= 2 && !is_unmodified(o) && !force => {
+                out.push(Planned {
+                    path,
+                    text: None,
+                    change: Change::Kept(r),
+                });
+                continue;
             }
-            o => put(&p, root, o, &new, &mut out)?,
+            Some(_) => Change::Updated(r),
+            None => Change::Created(r),
+        };
+        out.push(Planned {
+            path,
+            text: Some(new),
+            change,
+        });
+    }
+    Ok(out)
+}
+
+/// What `install` would change, without writing anything.
+pub fn plan_install(root: &Path, force: bool) -> Result<Vec<Change>> {
+    Ok(planned(root, force)?
+        .into_iter()
+        .map(|p| p.change)
+        .collect())
+}
+
+/// Install or refresh every file. A hand-edited skill is kept unless `force`. Nothing is
+/// written when the settings file can't be read as JSON.
+pub fn install(root: &Path, force: bool) -> Result<Vec<Change>> {
+    let mut out = Vec::new();
+    for p in planned(root, force)? {
+        if let Some(text) = &p.text {
+            write(&p.path, text)?;
         }
+        out.push(p.change);
     }
     Ok(out)
 }
