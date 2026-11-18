@@ -11,45 +11,45 @@ pub const BEGIN: &str = "<!-- specjutsu:begin -->";
 pub const END: &str = "<!-- specjutsu:end -->";
 
 /// The CLAUDE.md block body.
-pub const BLOCK_BODY: &str = include_str!("../../../adapters/claude/CLAUDE.block.md");
+pub const BLOCK_BODY: &str = include_str!("../assets/claude/CLAUDE.block.md");
 
 /// The skills, as (name, source text).
 pub const SKILLS: [(&str, &str); 9] = [
     (
         "sj-explore",
-        include_str!("../../../skills/sj-explore/SKILL.md"),
+        include_str!("../assets/skills/sj-explore/SKILL.md"),
     ),
     (
         "sj-propose",
-        include_str!("../../../skills/sj-propose/SKILL.md"),
+        include_str!("../assets/skills/sj-propose/SKILL.md"),
     ),
     (
         "sj-clarify",
-        include_str!("../../../skills/sj-clarify/SKILL.md"),
+        include_str!("../assets/skills/sj-clarify/SKILL.md"),
     ),
     (
         "sj-principles",
-        include_str!("../../../skills/sj-principles/SKILL.md"),
+        include_str!("../assets/skills/sj-principles/SKILL.md"),
     ),
     (
         "sj-apply",
-        include_str!("../../../skills/sj-apply/SKILL.md"),
+        include_str!("../assets/skills/sj-apply/SKILL.md"),
     ),
     (
         "sj-debug",
-        include_str!("../../../skills/sj-debug/SKILL.md"),
+        include_str!("../assets/skills/sj-debug/SKILL.md"),
     ),
     (
         "sj-review",
-        include_str!("../../../skills/sj-review/SKILL.md"),
+        include_str!("../assets/skills/sj-review/SKILL.md"),
     ),
     (
         "sj-verify",
-        include_str!("../../../skills/sj-verify/SKILL.md"),
+        include_str!("../assets/skills/sj-verify/SKILL.md"),
     ),
     (
         "sj-finish",
-        include_str!("../../../skills/sj-finish/SKILL.md"),
+        include_str!("../assets/skills/sj-finish/SKILL.md"),
     ),
 ];
 
