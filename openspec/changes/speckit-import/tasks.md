@@ -8,7 +8,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 2. Command (sj-core + sj-cli)
 
-- [ ] 2.1 `import::speckit::write` and `sj import speckit [--write] [--force] [--json]` (decisions 5, 6) (IMP-001, IMP-002, IMP-003, IMP-006). Verify: `crates/sj-cli/tests/import_cmd.rs`, in a git repository holding the fixture, sees a dry run with targets and counts and a clean `git status`; then `--write` creates the specs, archived change and open change with copies byte-identical to their sources, principles equal to the constitution, no change under `specs/` or `.specify/`, and exit 2 on a second run without `--force`.
+- [x] 2.1 `import::speckit::write` and `sj import speckit [--write] [--force] [--json]` (decisions 5, 6) (IMP-001, IMP-002, IMP-003, IMP-006). Verify: `crates/sj-cli/tests/import_cmd.rs`, in a git repository holding the fixture, sees a dry run with targets and counts and a clean `git status`; then `--write` creates the specs, archived change and open change with copies byte-identical to their sources, principles equal to the constitution, no change under `specs/` or `.specify/`, and exit 2 on a second run without `--force`.
 
 ## 3. Docs
 

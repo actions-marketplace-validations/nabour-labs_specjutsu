@@ -228,6 +228,7 @@ fn imp_006_clarifications_edge_cases_and_other_sections_go_to_the_proposal() {
         "## Key Entities\n\n- **API Key Credential**",
         "## Success Criteria *(mandatory)*\n\n- **SC-001**",
         "## Assumptions\n\n- Users bring their own API key.\n",
+        "## Functional Requirements\n\n**Settings**\n\n- **FR-001**",
     ] {
         assert!(proposal.contains(want), "{want}\n---\n{proposal}");
     }

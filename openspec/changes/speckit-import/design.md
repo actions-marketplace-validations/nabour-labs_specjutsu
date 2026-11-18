@@ -58,6 +58,7 @@ Principles live in `.specify/memory/constitution.md`. The reference is `chrome-a
 - `## Why`: the Overview, else the Input line.
 - `## Source`: the header lines before the first `##` (title, branch, created, status, input), verbatim.
 - Every other `##` section (Clarifications, Success Criteria, Assumptions, …) and the `### Edge Cases` and `### Key Entities` sections, verbatim, at `##` level (IMP-006).
+- `### Functional Requirements`, verbatim as well, so group labels between FR lines aren't lost.
 
 ### 5. Principles
 `.specify/memory/constitution.md` is copied byte for byte to `<spec_root>/principles.md` (IMP-006).
@@ -67,7 +68,7 @@ Principles live in `.specify/memory/constitution.md`. The reference is `chrome-a
 - **No source is opened for writing.** Copies read the source and write the target.
 - **Output:**
   - A dry run prints `import: <n> features (dry run; --write converts them)`.
-  - Per feature: `<name>  <finished|open>  <r> requirements, <s> scenarios, <g> gaps`, then `  <source> → <target>` lines, then the `gap` lines.
+  - Per feature: `<name>  <finished|open>  <r> requirements, <s> scenarios, <g> gaps`, then `  <source> → <target>` for copies and `  → <target>` for generated files, then the `gap` lines.
   - It ends with the principles line.
   - With `--write` the first line is `import: wrote <n> features`. `--json` prints the plan.
 

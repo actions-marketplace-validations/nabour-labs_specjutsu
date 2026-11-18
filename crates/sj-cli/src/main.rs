@@ -126,6 +126,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Convert another tool's spec folders into the specjutsu layout (dry run unless --write).
+    Import {
+        #[command(subcommand)]
+        command: ImportCommand,
+    },
     /// Where each open change stands: tasks, scenario evidence and the next task.
     Status {
         /// Only this change (default: every open change).
@@ -231,6 +236,23 @@ enum SpecCommand {
         /// Archive despite validation errors and open tasks.
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ImportCommand {
+    /// Spec Kit features (`specs/NNN-<name>/`) and the constitution.
+    Speckit {
+        #[command(flatten)]
+        args: SpecArgs,
+        /// Write the files (default: print the plan).
+        #[arg(long)]
+        write: bool,
+        /// Overwrite targets that already exist.
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -358,6 +380,15 @@ fn run() -> Result<ExitCode> {
             spec_root,
             json,
         } => ids_cmd(write, &root, spec_root, json),
+        Command::Import {
+            command:
+                ImportCommand::Speckit {
+                    args,
+                    write,
+                    force,
+                    json,
+                },
+        } => import_speckit_cmd(&args, write, force, json),
         Command::Status { change, args, json } => status_cmd(change, &args, json),
         Command::Task {
             command: TaskCommand::Done { change, task, args },
@@ -823,6 +854,59 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
             }
         }
     }
+}
+
+fn import_speckit_cmd(args: &SpecArgs, write: bool, force: bool, json: bool) -> Result<ExitCode> {
+    use sj_core::import::speckit::{self, Content};
+    let config = sj_core::config::load(&args.root)?;
+    let (root, spec_root) = spec_paths(args)?;
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let plan = speckit::plan(&root, &spec_root, &config.id_prefixes, &today)?;
+    if write {
+        speckit::write(&plan, force)?;
+    }
+    if json {
+        let v = serde_json::json!({
+            "features": plan.features,
+            "principles": plan.principles,
+            "written": write,
+        });
+        println!("{}", serde_json::to_string_pretty(&v)?);
+        return Ok(ExitCode::SUCCESS);
+    }
+    let n = plural(plan.features.len(), "feature");
+    if write {
+        println!("import: wrote {n}");
+    } else {
+        println!("import: {n} (dry run; --write converts them)");
+    }
+    for f in &plan.features {
+        println!(
+            "{}  {}  {}, {}, {}",
+            f.name,
+            if f.finished { "finished" } else { "open" },
+            plural(f.requirements, "requirement"),
+            plural(f.scenarios, "scenario"),
+            plural(f.gaps.len(), "gap")
+        );
+        for o in &f.outputs {
+            match &o.content {
+                Content::Copy(src) => {
+                    println!("  {} → {}", rel(src, &root), rel(&o.path, &root))
+                }
+                Content::Text(_) => println!("  → {}", rel(&o.path, &root)),
+            }
+        }
+        for g in &f.gaps {
+            println!("gap {g} (no scenario)");
+        }
+    }
+    if let Some(p) = &plan.principles {
+        if let Content::Copy(src) = &p.content {
+            println!("principles {} → {}", rel(src, &root), rel(&p.path, &root));
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {

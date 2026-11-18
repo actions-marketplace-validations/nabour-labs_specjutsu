@@ -307,6 +307,8 @@ fn parse_spec(text: &str, folder: &str) -> Parsed {
                 for sub in subs {
                     if key(&sub.title) == "functional requirements" {
                         frs.extend(parse_frs(&sub.body));
+                        // Verbatim too, so group labels between FR lines aren't lost.
+                        kept.push(format!("## {}\n\n{}", sub.title, trim_lines(&sub.body)));
                     } else {
                         kept.push(format!("## {}\n\n{}", sub.title, trim_lines(&sub.body)));
                     }
