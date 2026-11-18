@@ -46,10 +46,7 @@ fn ci_001_passing_gate_renders_a_short_comment() {
         body.contains("✅ gate: pass — 2 scenarios proven"),
         "{body}"
     );
-    let rows: Vec<&str> = body
-        .lines()
-        .filter(|l| l.starts_with("| AUTH-"))
-        .collect();
+    let rows: Vec<&str> = body.lines().filter(|l| l.starts_with("| AUTH-")).collect();
     assert_eq!(rows.len(), 2, "{body}");
     assert!(row(&body, "AUTH-004").contains("red:assert"), "{body}");
     assert!(row(&body, "AUTH-004").contains("auth_004_adds"), "{body}");
@@ -83,7 +80,12 @@ fn ci_003_a_very_large_result_is_truncated() {
     let repo = Repo::with_lib(ADD_OK);
     repo.branch("feature");
     let ids: Vec<(String, String)> = (1..=2000)
-        .map(|n| (format!("BIG-{n:04}"), format!("Scenario number {n} with a long-ish name")))
+        .map(|n| {
+            (
+                format!("BIG-{n:04}"),
+                format!("Scenario number {n} with a long-ish name"),
+            )
+        })
         .collect();
     let refs: Vec<(&str, &str)> = ids.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
     repo.add_change("big", &refs);

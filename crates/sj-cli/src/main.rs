@@ -44,8 +44,11 @@ enum Command {
         /// Warn instead of failing when a test cannot be overlaid on base.
         #[arg(long)]
         allow_unverifiable: bool,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "format")]
         json: bool,
+        /// Output format: text (default), json, or markdown (a PR comment body).
+        #[arg(long, value_enum)]
+        format: Option<GateFormat>,
     },
     /// Run the tests (all, one package, or one scenario's); print failures only; record the run.
     Test {
@@ -298,8 +301,15 @@ fn run() -> Result<ExitCode> {
             spec_root,
             allow_unverifiable,
             json,
+            format,
         } => {
             let spec_root = spec_root_for(&root, spec_root)?;
+            let format = format.unwrap_or(if json {
+                GateFormat::Json
+            } else {
+                GateFormat::Text
+            });
+            let shown_base = base.clone().unwrap_or_default();
             let report = match (base, since) {
                 (_, Some(since)) => sj_core::gate::history(&root, &since)?,
                 (Some(base), None) => sj_core::gate::run(&sj_core::gate::Options {
@@ -310,8 +320,10 @@ fn run() -> Result<ExitCode> {
                 })?,
                 (None, None) => anyhow::bail!("pass --base <ref> or --since <commit>"),
             };
-            if json {
+            if format == GateFormat::Json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
+            } else if format == GateFormat::Markdown {
+                print!("{}", sj_core::ci::render_markdown(&report, &shown_base));
             } else {
                 println!("{}", report.summary);
                 for f in &report.failures {
@@ -1193,4 +1205,11 @@ fn print_compact(r: &sj_core::trace::Report, root: &Path) {
     for u in &r.unidentified {
         println!("no-id   {}  ({}:{})", u.name, rel(&u.file, root), u.line);
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum GateFormat {
+    Text,
+    Json,
+    Markdown,
 }
