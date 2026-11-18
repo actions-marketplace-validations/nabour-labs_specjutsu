@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Releases publish `specjutsu`, `sj-core`, `sj-runners` and `sj-adapters` to
+  crates.io, so `cargo install specjutsu` works. CI checks that every crate builds
+  from its own package.
+
+### Changed
+- `sj-adapters` embeds a copy of `skills/` and `adapters/claude/` under
+  `crates/sj-adapters/assets/` so it builds outside the repository.
+  `scripts/sync-adapter-assets.sh` refreshes it, and a test fails when it is stale.
+
 ## [0.3.0] - 2026-11-18
 
 ### Changed
