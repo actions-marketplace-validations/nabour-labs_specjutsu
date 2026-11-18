@@ -29,6 +29,16 @@ enum Command {
         #[arg(long)]
         strict: bool,
     },
+    /// Write a shields.io endpoint badge with the share of tested scenarios.
+    Badge {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
+        /// Where to write the JSON (default .specjutsu/badge.json under the root).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     /// CI check: every changed scenario tested, red on base, green on head.
     Gate {
         /// Base ref to compare against, e.g. origin/main.
@@ -433,6 +443,26 @@ fn run() -> Result<ExitCode> {
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
+        }
+        Command::Badge {
+            root,
+            spec_root,
+            out,
+        } => {
+            let config = sj_core::config::load(&root)?;
+            let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
+            let spec_dir = root.join(&spec_root);
+            let scenarios = sj_core::spec::load_scenarios(&spec_dir)?;
+            let scan = sj_core::testscan::scan_project(&root, &config)?;
+            let report = sj_core::trace::build_report(&scenarios, &scan.tests);
+            let badge = sj_core::ci::badge(&spec_dir, &scenarios, &report);
+            let out = out.unwrap_or_else(|| root.join(".specjutsu/badge.json"));
+            if let Some(dir) = out.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(&out, format!("{}\n", serde_json::to_string(&badge)?))?;
+            println!("badge: {} → {}", badge.message, out.display());
+            Ok(ExitCode::SUCCESS)
         }
         Command::Trace {
             root,

@@ -126,3 +126,54 @@ pub fn render_markdown(report: &GateReport, base: &str) -> String {
     }
     out
 }
+
+/// A shields.io endpoint badge (CI-004..006).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Badge {
+    pub schema_version: u8,
+    pub label: String,
+    pub message: String,
+    pub color: String,
+}
+
+/// Count the scenarios under `<spec_root>/specs/` and those with at least one mapped test that
+/// is not skipped. Scenarios in change folders are not counted.
+pub fn badge(
+    spec_root: &std::path::Path,
+    scenarios: &[crate::spec::Scenario],
+    report: &crate::trace::Report,
+) -> Badge {
+    let specs = spec_root.join("specs");
+    let ids: Vec<&str> = scenarios
+        .iter()
+        .filter(|s| s.file.starts_with(&specs))
+        .filter_map(|s| s.id.as_deref())
+        .collect();
+    let total = ids.len();
+    let tested = ids
+        .iter()
+        .filter(|id| {
+            report
+                .mapped
+                .iter()
+                .any(|m| m.id == **id && m.tests.iter().any(|t| !t.skipped))
+        })
+        .count();
+    let (message, color) = if total == 0 {
+        ("no specs".to_string(), "lightgrey")
+    } else {
+        let color = match tested * 100 / total {
+            90.. => "brightgreen",
+            70.. => "yellow",
+            _ => "red",
+        };
+        (format!("{tested}/{total} tested"), color)
+    };
+    Badge {
+        schema_version: 1,
+        label: "specs".to_string(),
+        message,
+        color: color.to_string(),
+    }
+}
