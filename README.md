@@ -28,7 +28,7 @@ Prebuilt binaries for macOS, Linux and Windows are on the
 [releases page](https://github.com/nabour-labs/specjutsu/releases). Or from source:
 
 ```bash
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu
 ```
 
 ## Quickstart
@@ -510,8 +510,8 @@ uncommitted. Review them with `git diff`, and undo them with
 | --- | --- |
 | v0.1 | `sj trace` on OpenSpec + `cargo test`; non-blocking CI report |
 | v0.2 | `sj gate` with red-on-base |
-| v0.3 | `status`, `next`, `test`; Claude Code adapter; self-hosting |
-| v0.5 | All runners and agents, importers, token benchmark, public launch |
+| v0.3 | vitest, Jest, Playwright, pytest and JUnit suites; `specjutsu.toml`; `sj ids`, `sj spec`, `status`, `next`, `verify`; Claude Code adapter and skills; Spec Kit import; `sj migrate` |
+| v0.5 | More agent adapters, token benchmark, public launch |
 
 ## Contributing
 

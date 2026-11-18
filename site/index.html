@@ -43,7 +43,7 @@
     <img src="assets/banner.jpg" alt="The specjutsu ninja holding a glowing spec scroll marked SJ" width="2000" height="848" fetchpriority="high">
   </div>
   <div class="wrap hero-copy">
-    <span class="pill"><span class="dot"></span>v0.2.0 · open source · MIT · single binary</span>
+    <span class="pill"><span class="dot"></span>v0.3.0 · open source · MIT · single binary</span>
     <h1>Master the art<br>of the <span class="grad-text">spec.</span></h1>
     <p class="lede">AI coding agents that <strong>prove their work</strong>. Every spec scenario gets a test, every test fails first, and CI refuses anything unproven.</p>
     <div class="cta">
@@ -51,8 +51,8 @@
       <a class="btn" href="manual.html">Read the manual</a>
     </div>
     <div class="install">
-      <code id="install-cmd"><span class="p">$ </span>cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu</code>
-      <button class="copy" type="button" data-copy="cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu">Copy</button>
+      <code id="install-cmd"><span class="p">$ </span>cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu</code>
+      <button class="copy" type="button" data-copy="cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu">Copy</button>
     </div>
     <p class="tagline"><em>One tool from spec to proof.</em> Bring your OpenSpec folders; specjutsu takes it from there.</p>
   </div>
@@ -219,7 +219,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
           <tr>
             <th scope="row">TDD enforced</th>
             <td class="no">No</td><td class="no">No (DIY)</td><td>Yes, by prompt</td><td>Yes, loosely tied to spec</td>
-            <td class="sj">Yes, by CI gate<span class="tag live">LIVE</span> + agent hooks<span class="tag soon">v0.3</span></td>
+            <td class="sj">Yes, by CI gate<span class="tag live">LIVE</span> + agent hooks<span class="tag live">LIVE</span></td>
           </tr>
           <tr>
             <th scope="row">Runtime needed</th>
@@ -229,17 +229,17 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
           <tr>
             <th scope="row">Reads other tools' specs</th>
             <td class="no">No</td><td class="no">No</td><td class="no">n/a</td><td class="no">n/a</td>
-            <td class="sj">OpenSpec natively<span class="tag live">LIVE</span> · Spec Kit import<span class="tag soon">v0.5</span></td>
+            <td class="sj">OpenSpec natively<span class="tag live">LIVE</span> · Spec Kit import<span class="tag live">LIVE</span></td>
           </tr>
           <tr>
             <th scope="row">Existing projects</th>
             <td>Via extension</td><td>Best</td><td>Weak</td><td>Good</td>
-            <td class="sj"><code>sj adopt</code>, incremental<span class="tag soon">v0.5</span></td>
+            <td class="sj"><code>sj adopt</code>, incremental<span class="tag live">LIVE</span></td>
           </tr>
           <tr>
             <th scope="row">Monorepo-aware</th>
             <td>Limited</td><td>Limited</td><td class="no">No</td><td>Limited</td>
-            <td class="sj">Per-package specs and runners<span class="tag soon">v0.5</span></td>
+            <td class="sj">Per-package specs and runners<span class="tag live">LIVE</span></td>
           </tr>
           <tr>
             <th scope="row">Token cost</th>
@@ -250,7 +250,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
       </table>
     </div>
     <div class="legend">
-      <span><span class="tag live" style="margin:0 6px 0 0">LIVE</span>works in v0.2.0 today</span>
+      <span><span class="tag live" style="margin:0 6px 0 0">LIVE</span>works in v0.3.0 today</span>
       <span><span class="tag soon" style="margin:0 6px 0 0">v0.x</span>on the public roadmap</span>
     </div>
 
@@ -302,7 +302,7 @@ tar -xzf sj-aarch64-apple-darwin.tar.gz
 install sj-aarch64-apple-darwin/sj ~/.local/bin/
 
 <span class="c-m"># or from source (needs Rust)</span>
-cargo install --tag v0.2.0 \
+cargo install --tag v0.3.0 \
   --git https://github.com/nabour-labs/specjutsu \
   specjutsu
 

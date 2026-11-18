@@ -163,12 +163,10 @@ match (PRs #7 and #8). The spec *format* stays OpenSpec's, so
 
 ## Replacement roadmap (proposed OpenSpec changes)
 
-Each change has a proposal and delta specs. Changes 0–2 are done and archived under
-`openspec/changes/archive/`. The rest wait on the `spec/replacement-proposals` branch,
-because the gate fails any merged scenario that has no test. Each one comes to `main`
-in the same PR as its implementation, with its design and tasks written when it is
-picked up. `polyglot-runners` was split in two when picked up: `sj test` across runners
-(3), and the gate's per-suite red-on-base (3b).
+Each change has a proposal and delta specs. All of them are done and archived under
+`openspec/changes/archive/` and shipped in v0.3.0. Each came to `main` in the same PR
+as its implementation, with its design and tasks written when it was picked up.
+`polyglot-runners` was split in two when picked up: `sj test` across runners (3), and the gate's per-suite red-on-base (3b).
 
 | # | Change | Capability (prefix) | Delivers | Needed by |
 | --- | --- | --- | --- | --- |
