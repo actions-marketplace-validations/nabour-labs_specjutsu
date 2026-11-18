@@ -3,3 +3,5 @@ crates/sj-core/tests/fixtures/authoring/** text eol=lf
 # Templates the adapters compile in with include_str!; generated files must be the same on every OS.
 skills/** text eol=lf
 adapters/** text eol=lf
+# The Spec Kit import fixture is compared as text; keep it LF on every OS.
+crates/sj-core/tests/fixtures/speckit/** text eol=lf
