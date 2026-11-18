@@ -463,7 +463,46 @@ Nothing is lost along the way:
   spec's header go into `proposal.md`.
 - `.specify/memory/constitution.md` becomes `principles.md`.
 
-The import never modifies or deletes anything under `specs/` or `.specify/`.
+The import never modifies or deletes anything under `specs/` or `.specify/`. To
+remove them once the import is in, use `sj migrate --from speckit`.
+
+## Migrating from OpenSpec, Spec Kit or Superpowers
+
+```bash
+sj migrate --from openspec --from superpowers           # print every planned change; writes nothing
+sj migrate --from openspec --from superpowers --write   # apply it (needs a clean git tree)
+```
+
+`sj migrate` replaces the old tool in one step, so two workflows don't compete
+for the agent. `--from` is repeatable: `openspec`, `speckit` or `superpowers`.
+
+- **openspec** keeps `openspec/` (specs, open changes and archive) as the spec
+  root and gives every scenario an ID. The `context`, `rules` and `operations`
+  guidance in `openspec/config.yaml` move to `openspec/principles.md`, and the
+  file is removed.
+
+  It removes OpenSpec's skills and `/opsx` commands from every agent folder,
+  such as `.claude/` and `.agents/`. A file is removed only when its metadata
+  says OpenSpec generated it, so your own skills stay.
+- **speckit** runs `sj import speckit --write` first. Only once that succeeds
+  does it remove `.specify/`, the imported `specs/NNN-*/` folders and the agent
+  files Spec Kit's manifests list. An import target that already exists stops
+  the run before anything changes.
+- **superpowers** removes the plugin, its marketplace and any permission rule
+  naming `superpowers:` or `docs/superpowers/` from `.claude/settings.json`.
+  Every other key, hook and rule stays byte for byte. Files under
+  `docs/superpowers/` are kept and listed for you to review.
+
+Every run then:
+
+- writes `specjutsu.toml` with `sj adopt` if it's missing
+- installs the Claude Code adapter
+- prints `sj doctor` and `sj spec validate`
+
+It exits 0 when both are clean, and 1 with the problems listed otherwise. It
+exits 2, changing nothing, when the tree is dirty. The changes are left
+uncommitted. Review them with `git diff`, and undo them with
+`git restore . && git clean -fd`.
 
 ## Roadmap
 

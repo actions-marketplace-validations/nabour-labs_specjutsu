@@ -24,6 +24,18 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `sj migrate --from openspec|speckit|superpowers [--write]` replaces those tools
+  in a project. It is a dry run by default, and the write needs a clean git tree.
+  - **OpenSpec:** specs and history stay, scenarios get IDs, and `config.yaml`
+    moves to `principles.md`. Generated skills and `/opsx` commands are removed
+    by their metadata.
+  - **Spec Kit:** the features are imported, then `.specify/`, `specs/` and the
+    manifest-listed agent files are removed.
+  - **Superpowers:** its plugin, marketplace and permission rules leave
+    `.claude/settings.json`, keeping project hooks.
+
+  Every run ends by adopting the project, installing the Claude Code adapter, and
+  running `sj doctor` and `sj spec validate`.
 - `sj import speckit [--write] [--force] [--json]` converts Spec Kit features into
   the OpenSpec layout. A finished feature becomes a current spec plus an archived
   change, and an open one becomes an open change. User stories and FR lines become
