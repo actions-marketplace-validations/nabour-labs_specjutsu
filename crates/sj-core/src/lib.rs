@@ -11,6 +11,7 @@ pub mod hook;
 pub mod ids;
 pub mod import;
 pub mod ledger;
+pub mod migrate;
 pub mod run;
 pub mod spec;
 pub mod testscan;
