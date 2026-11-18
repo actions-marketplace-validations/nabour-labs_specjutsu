@@ -24,6 +24,14 @@ All notable changes are recorded here. The format follows
   files change, not only for `refactor`.
 
 ### Added
+- `sj import speckit [--write] [--force] [--json]` converts Spec Kit features into
+  the OpenSpec layout. A finished feature becomes a current spec plus an archived
+  change, and an open one becomes an open change. User stories and FR lines become
+  requirements, and acceptance items become scenarios with new IDs and verbatim
+  GIVEN/WHEN/THEN steps. FRs without a scenario are listed as gaps and marked for
+  clarification. The other files are copied byte for byte, the remaining spec
+  sections go to `proposal.md`, and the constitution becomes `principles.md`. It
+  is a dry run by default and never touches Spec Kit's own files.
 - Claude Code adapter: `sj init --agents claude` writes a CLAUDE.md block, the
   `sj-*` skills under `.claude/skills/` and `SessionStart` / `PreToolUse` hooks in
   `.claude/settings.json`, keeping existing content, order and formatting.
