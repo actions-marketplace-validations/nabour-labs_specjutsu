@@ -284,3 +284,102 @@ fn ci_012_fail_on_never_reports_without_blocking() {
     let env_error = a.run("", 2, &[("SJ_FAIL_ON", "never")]);
     assert_eq!(env_error.status.code(), Some(2));
 }
+
+/// An `sj badge --out <path>` that writes `$STUB_BADGE` to the path.
+const SJ_BADGE_STUB: &str = r#"#!/usr/bin/env bash
+while [ $# -gt 0 ]; do [ "$1" = --out ] && out="$2"; shift; done
+printf '%s\n' "$STUB_BADGE" > "$out"
+echo "badge: written"
+"#;
+
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@example.com")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@example.com")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap()
+}
+
+#[test]
+fn ci_013_the_badge_branch_is_updated_only_when_the_badge_changes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let t = tmp.path();
+    let origin = t.join("origin.git");
+    let work = t.join("work");
+    git(
+        t,
+        &[
+            "init",
+            "-q",
+            "--bare",
+            "-b",
+            "main",
+            origin.to_str().unwrap(),
+        ],
+    );
+    git(
+        t,
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            work.to_str().unwrap(),
+        ],
+    );
+    std::fs::write(work.join("README.md"), "# shop\n").unwrap();
+    git(&work, &["add", "."]);
+    git(&work, &["commit", "-qm", "init"]);
+    git(&work, &["push", "-q", "origin", "HEAD:main"]);
+    write_exe(&t.join("bin/sj"), SJ_BADGE_STUB);
+
+    let badge =
+        r#"{"schemaVersion":1,"label":"specs","message":"45/50 tested","color":"brightgreen"}"#;
+    for _ in 0..2 {
+        let out = run(Command::new("bash")
+            .arg(script("badge.sh"))
+            .current_dir(&work)
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    t.join("bin").display(),
+                    std::env::var("PATH").unwrap()
+                ),
+            )
+            .env("STUB_BADGE", badge));
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    assert_eq!(
+        git(&origin, &["rev-list", "--count", "sj-badge"]).trim(),
+        "1"
+    );
+    assert_eq!(
+        git(&origin, &["show", "sj-badge:badge.json"]).trim_end(),
+        badge
+    );
+    assert_eq!(
+        git(&origin, &["ls-tree", "--name-only", "sj-badge"]).trim(),
+        "badge.json"
+    );
+    assert_eq!(
+        git(&work, &["status", "--porcelain"]),
+        "",
+        "work tree was touched"
+    );
+}
