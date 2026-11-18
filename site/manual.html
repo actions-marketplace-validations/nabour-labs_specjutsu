@@ -116,22 +116,23 @@
     <ol>
       <li><a href="#status">What works today</a></li>
       <li><a href="#install">Install</a></li>
+      <li><a href="#setup">Set up a project</a></li>
       <li><a href="#concepts">Core concepts</a></li>
       <li><a href="#first-change">Your first change</a></li>
       <li><a href="#agents">Set up your agent</a></li>
       <li><a href="#ci">Gate every PR</a></li>
       <li><a href="#exemptions">Exemptions</a></li>
       <li><a href="#commands">Command reference</a></li>
-      <li><a href="#from-openspec">Coming from OpenSpec</a></li>
+      <li><a href="#migrating">Migrating from other tools</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ol>
   </aside>
 
   <main class="prose">
     <header>
-      <p class="eyebrow">User manual · v0.2.0</p>
+      <p class="eyebrow">User manual · v0.3.0</p>
       <h1>Using <span class="grad-text">specjutsu</span></h1>
-      <p class="lead">Everything you need to go from an <code>openspec/</code> folder to pull requests that can't merge unless every scenario is tested and every test was red first.</p>
+      <p class="lead">Everything you need to go from an <code>openspec/</code> folder, a Spec Kit project or a Superpowers setup to pull requests that can't merge unless every scenario is tested and every test was red first.</p>
     </header>
 
     <section id="status">
@@ -140,17 +141,20 @@
       <div class="tbl"><table>
         <thead><tr><th>Feature</th><th>State</th><th>Notes</th></tr></thead>
         <tbody>
-          <tr><td><code>sj trace</code></td><td><span class="badge live">v0.2.0</span></td><td>Map scenario IDs to tests; list gaps and orphans.</td></tr>
-          <tr><td><code>sj gate</code></td><td><span class="badge live">v0.2.0</span></td><td>CI check, including red-on-base. Blocking on specjutsu's own repo.</td></tr>
-          <tr><td><code>sj test</code>, <code>sj ledger</code></td><td><span class="badge next">v0.3</span></td><td>Merged on main; ships with the next release.</td></tr>
-          <tr><td>Rust (<code>cargo test</code>)</td><td><span class="badge live">v0.2.0</span></td><td>The only test runner today.</td></tr>
-          <tr><td><code>sj status</code>, <code>next</code>, <code>verify</code>, <code>task done</code></td><td><span class="badge plan">planned</span></td><td>The agent's working loop.</td></tr>
-          <tr><td><code>sj spec new / validate / check / archive</code></td><td><span class="badge plan">planned</span></td><td>Replaces the OpenSpec CLI and Spec Kit clarify/analyze.</td></tr>
-          <tr><td><code>sj-*</code> agent skills, Claude Code adapter</td><td><span class="badge plan">planned</span></td><td>Claude Code first, then Cursor, Antigravity, Codex and Copilot.</td></tr>
-          <tr><td>pytest, Jest/Vitest, Go, JUnit and more</td><td><span class="badge plan">planned</span></td><td>Through JUnit XML and per-language matchers.</td></tr>
+          <tr><td><code>sj trace</code>, <code>sj gate</code></td><td><span class="badge live">v0.3.0</span></td><td>Scenario-to-test map, and the CI check with per-suite red-on-base.</td></tr>
+          <tr><td>Rust, vitest, Jest, Playwright, pytest, JUnit XML</td><td><span class="badge live">v0.3.0</span></td><td>Test discovery, <code>sj test</code> and the gate, per package and suite.</td></tr>
+          <tr><td><code>specjutsu.toml</code>, <code>init</code>, <code>adopt</code>, <code>doctor</code></td><td><span class="badge live">v0.3.0</span></td><td>Monorepos with mixed TypeScript and Python.</td></tr>
+          <tr><td><code>sj test</code>, <code>sj ledger</code></td><td><span class="badge live">v0.3.0</span></td><td>Failures-only runs and the local evidence ledger.</td></tr>
+          <tr><td><code>sj ids</code></td><td><span class="badge live">v0.3.0</span></td><td>Adds IDs to existing scenarios in place.</td></tr>
+          <tr><td><code>sj spec new / list / validate / check / archive</code></td><td><span class="badge live">v0.3.0</span></td><td>Replaces the OpenSpec CLI and Spec Kit clarify/analyze.</td></tr>
+          <tr><td><code>sj status</code>, <code>next</code>, <code>task done</code>, <code>verify</code></td><td><span class="badge live">v0.3.0</span></td><td>The agent's working loop.</td></tr>
+          <tr><td>Claude Code adapter, nine <code>sj-*</code> skills</td><td><span class="badge live">v0.3.0</span></td><td>CLAUDE.md block, skills, session-start and pre-edit TDD hooks.</td></tr>
+          <tr><td><code>sj import speckit</code>, <code>sj migrate</code></td><td><span class="badge live">v0.3.0</span></td><td>Replace OpenSpec, Spec Kit or Superpowers in one step.</td></tr>
+          <tr><td>Cursor, Antigravity, Codex, Copilot adapters</td><td><span class="badge plan">v0.5</span></td><td>The skills work in any agent today; adapters install them.</td></tr>
+          <tr><td>Token benchmark</td><td><span class="badge plan">v0.5</span></td><td>Public comparison against the tools specjutsu replaces.</td></tr>
         </tbody>
       </table></div>
-      <div class="callout"><p><b>In practice today:</b> write and archive changes with OpenSpec, and use <code>sj</code> to prove them. When the authoring commands land, OpenSpec drops out and nothing in your <code>openspec/</code> folder changes.</p></div>
+      <div class="callout"><p><b>In practice today:</b> specjutsu runs the whole loop on its own, from <code>sj spec new</code> to <code>sj spec archive</code>. You don't need OpenSpec, Spec Kit or Superpowers alongside it, and <code>sj migrate</code> removes them for you.</p></div>
     </section>
 
     <section id="install">
@@ -167,50 +171,105 @@
         </tbody>
       </table></div>
 <pre class="code"><span class="c-m"># download, verify and install (macOS Apple silicon shown)</span>
-gh release download v0.2.0 -R nabour-labs/specjutsu \
+gh release download v0.3.0 -R nabour-labs/specjutsu \
   -p 'sj-aarch64-apple-darwin.tar.gz' -p SHA256SUMS
 grep ' sj-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
 tar -xzf sj-aarch64-apple-darwin.tar.gz
 install sj-aarch64-apple-darwin/sj ~/.local/bin/
 
 <span class="c-m"># or build from source (needs Rust)</span>
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu
 
 sj --version</pre>
+    </section>
+
+    <section id="setup">
+      <h2>Set up a project</h2>
+      <p>Pick the line that matches where you're starting from. Each one writes <code>specjutsu.toml</code>, which says where the specs are and which packages and test suites the project has.</p>
+<pre class="code"><span class="c-m"># a new project</span>
+sj init --agents claude
+
+<span class="c-m"># an existing project without a spec tool</span>
+sj adopt --dry-run        <span class="c-m"># print the detected packages and runners</span>
+sj adopt
+sj init --agents claude
+
+<span class="c-m"># a project on OpenSpec, Spec Kit or Superpowers</span>
+sj migrate --from openspec --from superpowers           <span class="c-m"># dry run</span>
+sj migrate --from openspec --from superpowers --write   <span class="c-m"># needs a clean git tree</span>
+
+<span class="c-m"># then check it</span>
+sj doctor</pre>
+      <p><code>sj adopt</code> reads Cargo, pnpm, npm and yarn workspaces and <code>pyproject.toml</code>, and detects <code>cargo</code>, <code>vitest</code>, <code>jest</code>, <code>pytest</code> and <code>playwright</code> without running anything. <code>sj doctor</code> lists config errors, packages without a runner, runners that aren't installed and missing spec folders.</p>
+<pre class="code"><span class="c-m"># specjutsu.toml, as sj adopt writes it for a pnpm app with a uv worker</span>
+schema = 1
+spec_root = "openspec"
+mode = "guided"
+
+[[package]]
+path = "apps/app"
+sources = ["apps/app/**"]
+
+[[package.suite]]
+runner = "vitest"
+tests = ["apps/app/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}"]
+setup = "pnpm install --frozen-lockfile"
+
+[[package]]
+path = "python/worker"
+sources = ["python/worker/**"]
+
+[[package.suite]]
+runner = "pytest"
+tests = ["python/worker/**/test_*.py", "python/worker/**/*_test.py"]</pre>
+      <p><code>mode</code> sets how strict the agent loop is: <code>strict</code> refuses to tick a task until its scenarios are proven, <code>guided</code> warns, <code>advisory</code> only reports. The CI gate is the same in every mode.</p>
     </section>
 
     <section id="concepts">
       <h2>Core concepts</h2>
 
-      <h3>Specs live where OpenSpec puts them</h3>
-      <p>specjutsu reads the OpenSpec layout in place. Current truth lives in <code>openspec/specs/</code>; in-flight changes live in <code>openspec/changes/&lt;change&gt;/specs/</code>; the archive is skipped. Use <code>--spec-root</code> if your folder has another name.</p>
+      <h3>Specs use the OpenSpec layout</h3>
+      <p>Current truth lives in <code>openspec/specs/</code>; in-flight changes live in <code>openspec/changes/&lt;change&gt;/</code>; the archive is read for IDs and never written. Set <code>spec_root</code> in <code>specjutsu.toml</code> (or pass <code>--spec-root</code>) if your folder has another name.</p>
 <pre class="code">openspec/
+  principles.md                      <span class="c-m"># project rules the agent reads</span>
   specs/auth/spec.md                 <span class="c-m"># current truth</span>
   changes/add-token-expiry/
     proposal.md                      <span class="c-m"># why, scope, exemptions</span>
-    specs/auth/spec.md               <span class="c-m"># ADDED / MODIFIED / REMOVED</span>
-    tasks.md
-  changes/archive/                   <span class="c-m"># ignored</span></pre>
+    design.md
+    specs/auth/spec.md               <span class="c-m"># ADDED / MODIFIED / REMOVED / RENAMED</span>
+    tasks.md                         <span class="c-m"># each task names its scenario IDs</span>
+  changes/archive/</pre>
 
       <h3>Every scenario gets a stable ID</h3>
-      <p>Put an ID of the form <code>PREFIX-NNN</code> at the start of each scenario name. Use one prefix per capability and never reuse an ID. Matching ignores case and treats <code>-</code> and <code>_</code> the same, so <code>AUTH-003</code> matches <code>auth_003</code>.</p>
+      <p>Each scenario name starts with an ID of the form <code>PREFIX-NNN</code>, one prefix per capability, never reused. Matching ignores case and treats <code>-</code> and <code>_</code> the same, so <code>AUTH-003</code> matches <code>auth_003</code>.</p>
 <pre class="code"><span class="c-k">### Requirement:</span> Expired tokens are rejected
 The system SHALL reject tokens older than 24 hours.
 
 <span class="c-k">#### Scenario:</span> <span class="c-s">AUTH-003</span> Reject expired token
 - <span class="c-k">**WHEN**</span> the client calls GET /me with a token issued 25 hours ago
 - <span class="c-k">**THEN**</span> the response is 401 with code TOKEN_EXPIRED</pre>
-      <p>A scenario heading with no ID isn't dropped: <code>sj trace</code> reports it as <em>without ID</em> so you can fix it.</p>
+      <p>Existing specs don't need editing by hand. <code>sj ids --write</code> adds IDs to every scenario without one, changing only the headings. Prefixes come from the capability folder (<code>user-auth</code> → <code>USERAUTH</code>) unless you map them under <code>[ids.prefixes]</code>, and a delta copy in an open change gets the same ID as its spec.</p>
 
       <h3>Tests point at scenarios</h3>
-      <p>Link a test by putting the ID in its name, or in a <code>// spec:</code> comment on the line above. No library needed.</p>
-<pre class="code"><span class="c-m">// tests/auth.rs</span>
-<span class="c-m">#[test]</span>
-<span class="c-k">fn</span> <span class="c-s">auth_003</span>_rejects_expired_token() { … }
+      <p>Link a test by putting the ID in its name or title, or in a <code>spec:</code> comment on the line above. No library needed.</p>
+<pre class="code"><span class="c-m">// vitest, Jest, Playwright: the title, a describe title, or a comment</span>
+<span class="c-k">it</span>("<span class="c-s">AUTH-003</span> rejects expired token", () =&gt; { … })
 
-<span class="c-m">// spec: </span><span class="c-s">AUTH-003</span>
+<span class="c-k">describe</span>("<span class="c-s">AUTH-004</span> refresh", () =&gt; {
+  <span class="c-k">it</span>("issues a new token", () =&gt; { … })   <span class="c-m">// covered by AUTH-004</span>
+})
+
+<span class="c-m"># pytest: the function name, a marker, or a comment</span>
+<span class="c-k">def</span> test_<span class="c-s">auth_003</span>_rejects_expired(): …
+
+@pytest.mark.spec("<span class="c-s">AUTH-005</span>")
+<span class="c-k">def</span> test_rotates_key(): …
+
+<span class="c-m">// Rust: the function name or a comment</span>
+<span class="c-m">// spec: </span><span class="c-s">AUTH-006</span>
 <span class="c-m">#[test]</span>
 <span class="c-k">fn</span> rejects_token_issued_yesterday() { … }</pre>
+      <p>Titles built at runtime (variables, <code>${}</code> templates) aren't read; use a <code>spec:</code> comment for those.</p>
 
       <h3>Trace states</h3>
       <div class="tbl"><table>
@@ -219,86 +278,96 @@ The system SHALL reject tokens older than 24 hours.
           <tr><td><span class="c-g">mapped</span></td><td>The scenario has at least one test.</td></tr>
           <tr><td><span class="c-r">gap</span></td><td>The scenario has no test.</td></tr>
           <tr><td><span class="c-a">orphan</span></td><td>A test names an ID that no spec contains any more.</td></tr>
-          <tr><td>without ID</td><td>A scenario heading has no ID.</td></tr>
+          <tr><td>without ID</td><td>A scenario heading has no ID. <code>sj ids --write</code> fixes it.</td></tr>
         </tbody>
       </table></div>
 
       <h3>Red-on-base</h3>
       <p>The gate's core check. It checks out the base commit, overlays only the change's test files, and runs the new tests there. They must fail. Then they must pass on the PR head. A test that already passes on the old code didn't drive the change.</p>
       <ul>
-        <li>An assertion failure on base counts as red (<code>red:assert</code>).</li>
-        <li>A compile failure on base also counts, recorded separately (<code>red:compile</code>). New tests often call code that doesn't exist yet.</li>
-        <li>Only separate test files can be overlaid. Keep scenario tests in <code>tests/</code>. Tests inline in source files (<code>#[cfg(test)] mod tests</code>) are reported as <em>unverifiable</em>.</li>
+        <li>It runs per suite. Every changed file matching a suite's <code>tests</code> or <code>support</code> globs is overlaid, so a co-located <code>auth.test.ts</code> runs against the base <code>auth.ts</code>.</li>
+        <li>An assertion failure on base counts as red (<code>red:assert</code>). A test that fails to compile or load, because it calls code that doesn't exist yet, counts too (<code>red:compile</code>).</li>
+        <li>A base checkout has no installed dependencies, so a suite can declare <code>setup</code> (e.g. <code>pnpm install --frozen-lockfile</code>), run once before its base run.</li>
+        <li>A suite that can't run on old code, such as end-to-end tests against a deployed API, sets <code>red_on_base = "skip"</code> with a <code>reason</code>. Its new tests are <em>unverifiable</em>, and its head run still happens.</li>
+        <li>Rust tests inline in source files (<code>#[cfg(test)] mod tests</code>) can't be overlaid and are reported as <em>unverifiable</em>. Keep scenario tests in <code>tests/</code>.</li>
       </ul>
 
-      <h3>The evidence ledger <span class="badge next">v0.3</span></h3>
-      <p><code>sj test</code> appends one line per test to <code>.specjutsu/ledger/runs.jsonl</code>: run ID, time, git tree hash, test, scenario IDs and result. It's gitignored and local. A scenario is <strong>proven</strong> when a failing run was recorded before a passing one, on different code. CI never trusts the ledger; it recomputes red and green itself.</p>
+      <h3>The evidence ledger</h3>
+      <p><code>sj test</code> appends one line per test to <code>.specjutsu/ledger/runs.jsonl</code>: run ID, time, git tree hash, test, scenario IDs and result. It's gitignored and local. A scenario is <strong>proven</strong> when a failing run was recorded before a passing one, on different code. The agent loop and the pre-edit hook read it; CI never trusts it and recomputes red and green itself.</p>
     </section>
 
     <section id="first-change">
       <h2>Your first proven change</h2>
-      <p>The full loop, using OpenSpec for authoring and <code>sj</code> for proof. The same steps work whether you type them or your agent does.</p>
+      <p>The full loop with <code>sj</code> alone. The same steps work whether you type them or your agent does; with the Claude Code adapter, the <code>sj-propose</code>, <code>sj-apply</code> and <code>sj-finish</code> skills run them for you.</p>
       <ol class="flow">
         <li>
-          <h3>Propose the change</h3>
-          <p>Create the change folder as usual: <code>/opsx:propose add-token-expiry</code> in your agent, or <code>openspec new change add-token-expiry</code>.</p>
+          <h3>Create the change</h3>
+<pre class="code"><span class="c-m">$</span> sj spec new add-token-expiry
+created openspec/changes/add-token-expiry
+next AUTH-003</pre>
+          <p>Write <code>proposal.md</code>, the delta spec under <code>specs/</code>, <code>design.md</code> and <code>tasks.md</code>. Each task names the scenarios it covers: <code>- [ ] 1.1 Reject expired tokens (AUTH-003)</code>.</p>
         </li>
         <li>
-          <h3>Give every scenario an ID</h3>
-          <p>Add IDs to the delta spec's scenario headings: <code>#### Scenario: AUTH-003 Reject expired token</code>. Then check what's missing:</p>
-<pre class="code"><span class="c-m">$</span> sj trace
-trace: 12 mapped, <span class="c-r">1 gaps</span>, 0 orphans, 0 without ID
-<span class="c-r">gap</span>     AUTH-003 Reject expired token  <span class="c-m">(openspec/changes/add-token-expiry/specs/auth/spec.md:9)</span></pre>
+          <h3>Check the plan</h3>
+<pre class="code">sj spec validate add-token-expiry   <span class="c-m"># format, IDs, deltas, task links</span>
+sj spec check add-token-expiry      <span class="c-m"># uncovered scenarios, open questions</span></pre>
         </li>
         <li>
           <h3>Write the failing test first, and commit it</h3>
-          <p>Add <code>auth_003_rejects_expired_token</code> to <code>tests/auth.rs</code>. Run it and watch it fail. Commit it on its own:</p>
-<pre class="code">cargo test auth_003          <span class="c-m"># or, from v0.3: sj test AUTH-003</span>
+          <p><code>sj next</code> prints the task, its scenario text and the test command. Add the test, watch it fail, and commit it on its own:</p>
+<pre class="code"><span class="c-m">$</span> sj test AUTH-003
+<span class="c-r">test: fail — 1 failed, 0 passed</span>
+<span class="c-r">fail</span>    src/auth.test.ts › AUTH-003 rejects expired token  AUTH-003
 git commit -m "test(AUTH-003): red"</pre>
         </li>
         <li>
           <h3>Make it pass</h3>
-          <p>Write the implementation until the test is green, then commit:</p>
-<pre class="code">git commit -m "feat(AUTH-003): green"
-sj trace                     <span class="c-m"># no gaps for this change</span></pre>
+          <p>Implement until the test is green, tick the task and commit:</p>
+<pre class="code">sj test AUTH-003
+sj task done add-token-expiry 1.1   <span class="c-m"># strict mode needs red-before-green</span>
+git commit -m "feat(AUTH-003): green"</pre>
           <p>The <code>test(ID): red</code> / <code>feat(ID): green</code> commit pair lets <code>sj gate --since</code> check red-before-green from history later.</p>
         </li>
         <li>
-          <h3>Open the PR</h3>
-          <p>CI runs <code>sj gate</code> (see <a href="#ci">Gate every PR</a>). To preview it locally:</p>
-<pre class="code"><span class="c-m">$</span> sj gate --base origin/main
-gate: pass — 1 scenario proven (1 red:compile)</pre>
+          <h3>Verify and open the PR</h3>
+<pre class="code"><span class="c-m">$</span> sj verify
+verify: ok
+<span class="c-m">$</span> sj gate --base origin/main        <span class="c-m"># what CI will run</span>
+gate: pass — 1 scenario proven (1 red:assert)</pre>
         </li>
         <li>
           <h3>Archive</h3>
-          <p>After merging, fold the delta into current specs with <code>/opsx:archive</code>. From the planned release, that's <code>sj spec archive</code>.</p>
+          <p>After merging, fold the delta into current specs:</p>
+<pre class="code">sj spec archive add-token-expiry   <span class="c-m"># → changes/archive/YYYY-MM-DD-add-token-expiry/</span></pre>
         </li>
       </ol>
     </section>
 
     <section id="agents">
       <h2>Set up your agent</h2>
-      <p>specjutsu never calls an LLM. Your agent runs <code>sj</code> like any other command and gets a few lines back. Until the Claude Code adapter ships, paste these rules into <code>CLAUDE.md</code> or <code>AGENTS.md</code>:</p>
-<pre class="code"><span class="c-k">## specjutsu</span>
-
-- Every spec scenario starts with a stable ID: `#### Scenario: AUTH-003 …`.
-  Use the capability's prefix and the next free number. Never reuse an ID.
-- For each scenario, write the test first, in `tests/`, named after the ID
-  (`auth_003_…`) or with `// spec: AUTH-003` on the line above.
-- Run the new test and confirm it fails before touching implementation code.
-  Commit it as `test(AUTH-003): red`, then implement and commit
-  `feat(AUTH-003): green`.
-- Before saying a task is done, run `sj trace`. It must show no gaps for the
-  change you are working on.
-- Never weaken or delete a test to make it pass. If a test is wrong, say so.
-- For a refactor with no behaviour change, add to the change's proposal.md:
-  `Exempt: refactor — &lt;reason&gt;`.</pre>
-      <div class="callout"><p><b>Why the CI gate still matters:</b> rules in a prompt are requests. If an agent skips them, <code>sj gate</code> refuses the merge anyway. When the adapter ships, a pre-edit hook will also block source edits until a failing test exists.</p></div>
+      <p>specjutsu never calls an LLM. Your agent runs <code>sj</code> like any other command and gets a few lines back.</p>
+<pre class="code">sj init --agents claude          <span class="c-m"># install</span>
+sj update                        <span class="c-m"># regenerate; hand-edited files are kept</span>
+sj init --remove-agents claude   <span class="c-m"># remove everything it added</span></pre>
+      <p>The Claude Code adapter writes three things and touches nothing else:</p>
+      <ul>
+        <li><strong>A block in <code>CLAUDE.md</code></strong> between <code>&lt;!-- specjutsu:begin --&gt;</code> and <code>&lt;!-- specjutsu:end --&gt;</code>, under 1,200 bytes.</li>
+        <li><strong>Nine skills</strong> under <code>.claude/skills/sj-*/</code>: explore, propose, clarify, principles, apply, debug, review, verify and finish.</li>
+        <li><strong>Two hooks</strong> in <code>.claude/settings.json</code>, added after yours. The file is edited as text, so your formatting, permissions and other hooks stay byte for byte.</li>
+      </ul>
+      <div class="tbl"><table>
+        <thead><tr><th>Hook</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>sj hook claude session-start</code></td><td>Prints the <code>sj status</code> lines and the active task, in at most 1,200 bytes.</td></tr>
+          <tr><td><code>sj hook claude pre-edit</code></td><td>Before <code>Edit</code>, <code>Write</code>, <code>MultiEdit</code> and <code>NotebookEdit</code> on a source file, blocks the edit until each scenario of the active task has a red run in the ledger. Tests, specs and docs are always allowed. <code>advisory</code> mode only warns.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><p><b>Using another agent?</b> The skills in <a href="https://github.com/nabour-labs/specjutsu/tree/main/skills"><code>skills/</code></a> are plain Markdown that call <code>sj</code>, so you can point Cursor, Codex or Copilot at them today. Adapters that install them for those agents come in v0.5. Whatever the agent does, <code>sj gate</code> in CI refuses unproven work.</p></div>
     </section>
 
     <section id="ci">
       <h2>Gate every pull request</h2>
-      <p>Add a job that installs a pinned <code>sj</code> and runs the gate against the PR's base. It needs the full history (<code>fetch-depth: 0</code>) to check out the base commit, and a Rust toolchain to build and run your tests on both sides.</p>
+      <p>Add a job that installs a pinned <code>sj</code> and runs the gate against the PR's base. It needs the full history (<code>fetch-depth: 0</code>) to check out the base commit, and the toolchains your suites use (Rust, Node, uv) to run tests on both sides.</p>
 <pre class="code"><span class="c-m"># .github/workflows/ci.yml</span>
 <span class="c-k">jobs:</span>
   <span class="c-k">gate:</span>
@@ -308,12 +377,12 @@ gate: pass — 1 scenario proven (1 red:compile)</pre>
       - <span class="c-k">uses:</span> actions/checkout@v4
         <span class="c-k">with:</span>
           <span class="c-k">fetch-depth:</span> 0
-      - <span class="c-k">uses:</span> dtolnay/rust-toolchain@stable
+      <span class="c-m"># set up your toolchains and install dependencies here</span>
       - <span class="c-k">name:</span> Install sj
         <span class="c-k">env:</span>
           <span class="c-k">GH_TOKEN:</span> ${{ github.token }}
         <span class="c-k">run:</span> |
-          gh release download v0.2.0 -R nabour-labs/specjutsu \
+          gh release download v0.3.0 -R nabour-labs/specjutsu \
             -p 'sj-x86_64-unknown-linux-gnu.tar.gz' -D "$RUNNER_TEMP"
           tar -xzf "$RUNNER_TEMP/sj-x86_64-unknown-linux-gnu.tar.gz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/sj-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
@@ -325,17 +394,19 @@ gate: pass — 1 scenario proven (1 red:compile)</pre>
         <thead><tr><th>Reason</th><th>What happened</th></tr></thead>
         <tbody>
           <tr><td><code>untested AUTH-004</code></td><td>An added, modified or newly implemented scenario has no test.</td></tr>
+          <tr><td><code>unidentified &lt;file&gt;:&lt;line&gt;</code></td><td>A new or edited scenario has no ID.</td></tr>
           <tr><td><code>failing AUTH-004 &lt;test&gt;</code></td><td>A mapped test fails on the PR head.</td></tr>
           <tr><td><code>not-run AUTH-004 &lt;test&gt;</code></td><td>A mapped test didn't run.</td></tr>
           <tr><td><code>green-on-base AUTH-004 &lt;test&gt;</code></td><td>The new test already passes on the old code.</td></tr>
-          <tr><td><code>unverifiable</code></td><td>The test is inline in a source file and can't be overlaid. Move it to <code>tests/</code>, or pass <code>--allow-unverifiable</code> to warn instead.</td></tr>
+          <tr><td><code>unverifiable AUTH-004 &lt;test&gt;</code></td><td>The test can't run on base: inline in a Rust source file, or in a suite with <code>red_on_base = "skip"</code>. Pass <code>--allow-unverifiable</code> to warn instead.</td></tr>
           <tr><td><code>orphan AUTH-003 &lt;test&gt;</code></td><td>A test points at a scenario that was removed.</td></tr>
           <tr><td><code>unspecified change</code></td><td>Source files changed with no added or modified scenario and no exemption.</td></tr>
           <tr><td><code>exemption needs a reason</code></td><td>An exemption line has no reason.</td></tr>
           <tr><td><code>spike cannot merge to main</code></td><td>A spike exemption targets <code>main</code>.</td></tr>
         </tbody>
       </table></div>
-      <p>Changes that touch only docs, specs, CI or other non-source files pass without an exemption. Unchanged scenarios without tests show up as warnings, not failures, so you can adopt specjutsu in an existing repo and tighten coverage as you go.</p>
+      <p>The gate fails closed: any changed file is source unless it's a test, a spec, documentation or media, repository metadata (<code>.github/</code>, <code>.gitignore</code>, <code>LICENSE</code>) or a manifest or lockfile. When a package declares <code>sources</code>, only files matching them count, and a top-level <code>non_source = ["infra/**"]</code> adds your own globs. With no test suite configured, the gate exits 2 and suggests <code>sj adopt</code> instead of passing changes it can't test.</p>
+      <p>Unchanged scenarios without tests show up as warnings, not failures, so you can adopt specjutsu in an existing repo and tighten coverage as you go. A commit that only adds IDs counts as unchanged.</p>
     </section>
 
     <section id="exemptions">
@@ -349,8 +420,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="tbl"><table>
         <thead><tr><th>Kind</th><th>Effect</th></tr></thead>
         <tbody>
-          <tr><td><code>refactor</code></td><td>Skips red-on-base and the unspecified-change rule; the full test suite must still pass.</td></tr>
-          <tr><td><code>docs</code>, <code>config</code>, <code>chore</code></td><td>No scenario required.</td></tr>
+          <tr><td><code>refactor</code>, <code>docs</code>, <code>config</code>, <code>chore</code></td><td>No scenario required and no red-on-base. When source files change, the full test suite still runs at head and must pass.</td></tr>
           <tr><td><code>spike</code></td><td>Allowed on <code>spike/*</code> branches; blocked from merging to <code>main</code>.</td></tr>
         </tbody>
       </table></div>
@@ -358,80 +428,161 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
 
     <section id="commands">
       <h2>Command reference</h2>
-      <p>Every command takes <code>--json</code> for tools and agents. Exit codes are shared: <strong>0</strong> pass, <strong>1</strong> fail, <strong>2</strong> usage or environment error.</p>
+      <p>Exit codes are shared: <strong>0</strong> pass, <strong>1</strong> fail, <strong>2</strong> usage or environment error. Most commands take <code>--json</code> for tools and agents, <code>--root &lt;dir&gt;</code> for the repository root, and <code>--spec-root &lt;dir&gt;</code> to override <code>spec_root</code>. Run <code>sj &lt;command&gt; --help</code> for the full list.</p>
 
+      <h3>Proof</h3>
       <div class="cmd">
-        <h3>sj trace <span class="badge live">v0.2.0</span></h3>
-        <p>Map spec scenario IDs to tests; list gaps and orphans.</p>
-        <dl>
-          <dt>--json</dt><dd>JSON instead of the compact report.</dd>
-          <dt>--strict</dt><dd>Exit 1 when there are gaps or orphans.</dd>
-          <dt>--spec-root &lt;dir&gt;</dt><dd>Spec folder, relative to the repo root. Default <code>openspec</code>.</dd>
-          <dt>--root &lt;dir&gt;</dt><dd>Repository root. Default: the current directory.</dd>
-        </dl>
+        <h3>sj trace</h3>
+        <p>Map spec scenario IDs to tests; list gaps and orphans. Each test in <code>--json</code> carries its package, suite and whether it's skipped.</p>
+        <dl><dt>--strict</dt><dd>Exit 1 when there are gaps or orphans.</dd></dl>
       </div>
-
       <div class="cmd">
-        <h3>sj gate <span class="badge live">v0.2.0</span></h3>
+        <h3>sj gate</h3>
         <p>CI check: every changed scenario tested, red on base, green on head.</p>
         <dl>
           <dt>--base &lt;ref&gt;</dt><dd>Base to compare against, e.g. <code>origin/main</code>. A ref that doesn't resolve exits 2 with a hint about <code>fetch-depth: 0</code>.</dd>
-          <dt>--since &lt;commit&gt;</dt><dd>Check commit history instead: every <code>feat(ID)</code> commit needs an earlier <code>test(ID): red</code>. IDs can be ranges (<code>TRACE-001..006</code>) or comma-separated.</dd>
-          <dt>--allow-unverifiable</dt><dd>Warn instead of failing when a test can't be overlaid on base.</dd>
-          <dt>--json, --root, --spec-root</dt><dd>As for <code>trace</code>.</dd>
+          <dt>--since &lt;commit&gt;</dt><dd>Check commit history instead: every <code>feat(ID)</code> commit needs an earlier <code>test(ID): red</code>.</dd>
+          <dt>--allow-unverifiable</dt><dd>Warn instead of failing when a test can't run on base.</dd>
         </dl>
       </div>
-
       <div class="cmd">
-        <h3>sj test [scope] <span class="badge next">v0.3</span></h3>
-        <p>Run the tests and print failures only. A green run is one summary line; each failure shows its scenario IDs and the first 20 lines of output. A compile error is reported as <code>build failed</code>, never as an empty run. Records the run in the ledger.</p>
+        <h3>sj test [scope]</h3>
+        <p>Run every suite and print failures only. A green run is one line; each failure shows its scenario IDs and the first 20 lines of output. A compile error is <code>build failed</code>, never an empty run. Records the run in the ledger.</p>
         <dl>
-          <dt>scope</dt><dd>A scenario ID (<code>AUTH-003</code>) runs just its tests; a Cargo package name runs that package. Omit to run everything.</dd>
+          <dt>scope</dt><dd>A scenario ID (<code>AUTH-003</code>), a package (<code>apps/api</code>) or one suite (<code>apps/app:playwright</code>). Omit to run everything.</dd>
           <dt>--no-ledger</dt><dd>Don't record this run.</dd>
-          <dt>--json, --root, --spec-root</dt><dd>As above.</dd>
         </dl>
       </div>
-
       <div class="cmd">
-        <h3>sj ledger [ID] <span class="badge next">v0.3</span></h3>
+        <h3>sj ledger [ID]</h3>
         <p>Per scenario: the latest result, and whether red-before-green is proven.</p>
+      </div>
+
+      <h3>Project setup</h3>
+      <div class="cmd">
+        <h3>sj init</h3>
+        <p>Write <code>specjutsu.toml</code> and create the spec folders.</p>
         <dl>
-          <dt>ID</dt><dd>Report only this scenario.</dd>
-          <dt>--json, --root</dt><dd>As above.</dd>
+          <dt>--agents claude</dt><dd>Install the Claude Code adapter. <code>--remove-agents claude</code> removes it.</dd>
+          <dt>--force</dt><dd>Replace an existing <code>specjutsu.toml</code>.</dd>
         </dl>
+      </div>
+      <div class="cmd">
+        <h3>sj adopt</h3>
+        <p>Detect an existing project's packages and runners and write <code>specjutsu.toml</code>. Never runs a tool.</p>
+        <dl><dt>--dry-run</dt><dd>Print the config instead of writing it.</dd><dt>--force</dt><dd>Replace an existing file.</dd></dl>
+      </div>
+      <div class="cmd">
+        <h3>sj doctor</h3>
+        <p>Check the project file, packages, runner executables and spec folders, one problem per line. Never installs anything.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj update</h3>
+        <p>Regenerate installed agent adapters. A file you edited by hand is kept and reported, and the command exits 1.</p>
+        <dl><dt>--force</dt><dd>Replace hand-edited files too.</dd></dl>
+      </div>
+      <div class="cmd">
+        <h3>sj ids</h3>
+        <p>List scenarios without IDs and the IDs they would get; exits 1 when there are any.</p>
+        <dl><dt>--write</dt><dd>Insert them, changing only the headings.</dd></dl>
+      </div>
+
+      <h3>Authoring</h3>
+      <div class="cmd">
+        <h3>sj spec new &lt;change&gt;</h3>
+        <p>Create <code>changes/&lt;change&gt;/</code> with <code>proposal.md</code>, <code>design.md</code>, <code>tasks.md</code> and <code>specs/</code>, and print the next free ID per prefix.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj spec list</h3>
+        <p>One line per open change: tasks done, scenarios added or modified.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj spec validate [change]</h3>
+        <p>Scenario IDs and steps, requirement wording, delta structure, and that every task names its scenarios. Each problem has a file and line.</p>
+        <dl><dt>--strict</dt><dd>Fail on warnings too.</dd></dl>
+      </div>
+      <div class="cmd">
+        <h3>sj spec check &lt;change&gt;</h3>
+        <p>Scenarios no task names, tasks naming unknown IDs, and <code>[NEEDS CLARIFICATION]</code> markers.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj spec archive &lt;change&gt;</h3>
+        <p>Merge the deltas into <code>specs/</code> (same bytes as <code>openspec archive</code>) and move the change to <code>changes/archive/YYYY-MM-DD-&lt;change&gt;/</code>.</p>
+        <dl><dt>--force</dt><dd>Archive despite validation errors and open tasks.</dd></dl>
+      </div>
+
+      <h3>Agent loop</h3>
+      <div class="cmd">
+        <h3>sj status [change]</h3>
+        <p>At most five lines per open change: tasks done, scenarios by evidence (proven, green-unproven, red, untested), and the next task.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj next [change]</h3>
+        <p>The next task, the text of each scenario it names, the files changed since the merge-base, <code>principles.md</code>, and a <code>sj test &lt;ID&gt;</code> command per scenario.</p>
+        <dl><dt>--parallel</dt><dd>List open <code>[P]</code> tasks in batches that share no test file.</dd><dt>--base &lt;ref&gt;</dt><dd>Base for changed files.</dd></dl>
+      </div>
+      <div class="cmd">
+        <h3>sj task done &lt;change&gt; &lt;task&gt;</h3>
+        <p>Tick the task's box and change no other byte. In <code>strict</code> mode it refuses unless every scenario the task names is proven.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj verify [change]</h3>
+        <p>The local check before a PR: the change's scenario tests, unproven scenarios, orphans, <code>sj spec check</code> problems, and the gate's rules against the merge-base, without red-on-base.</p>
+        <dl><dt>--base &lt;ref&gt;</dt><dd>Base to compare against.</dd></dl>
+      </div>
+
+      <h3>Migration</h3>
+      <div class="cmd">
+        <h3>sj import speckit</h3>
+        <p>Preview converting Spec Kit's <code>specs/NNN-*/</code> features to the OpenSpec layout. <code>--write</code> converts; it never touches <code>specs/</code> or <code>.specify/</code>.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj migrate --from &lt;tool&gt;</h3>
+        <p>Replace <code>openspec</code>, <code>speckit</code> or <code>superpowers</code> (repeatable). A dry run unless <code>--write</code>, which needs a clean git tree and leaves the changes uncommitted.</p>
       </div>
     </section>
 
-    <section id="from-openspec">
-      <h2>Coming from OpenSpec</h2>
-      <p>specjutsu keeps OpenSpec's format and replaces its workflow. Today you keep the <code>/opsx:*</code> commands and add <code>sj</code> for proof. As the planned releases land, each command gets a specjutsu equivalent, driven by a skill that calls the binary instead of reading whole folders.</p>
+    <section id="migrating">
+      <h2>Migrating from other tools</h2>
+      <p><code>sj migrate</code> replaces the old tool in one step, so two workflows don't compete for your agent. Every run writes <code>specjutsu.toml</code> if it's missing, installs the Claude Code adapter, then prints <code>sj doctor</code> and <code>sj spec validate</code>. Review with <code>git diff</code>; undo with <code>git restore . &amp;&amp; git clean -fd</code>.</p>
       <div class="tbl"><table>
-        <thead><tr><th>OpenSpec</th><th>Today</th><th>specjutsu (planned)</th></tr></thead>
+        <thead><tr><th>From</th><th>What <code>sj migrate</code> does</th></tr></thead>
         <tbody>
-          <tr><td><code>/opsx:explore</code></td><td>Keep using it</td><td><code>sj-explore</code> skill</td></tr>
-          <tr><td><code>/opsx:propose</code>, <code>/opsx:update</code></td><td>Keep using it; add scenario IDs</td><td><code>sj-propose</code> → <code>sj spec new</code>, <code>sj spec validate</code></td></tr>
-          <tr><td>none</td><td>none</td><td><code>sj-clarify</code> → <code>sj spec check</code>: uncovered scenarios, open questions</td></tr>
-          <tr><td><code>/opsx:apply</code></td><td>Keep using it, test first, then <code>sj trace</code></td><td><code>sj-apply</code> → <code>sj next</code>, <code>sj test &lt;ID&gt;</code>, <code>sj task done</code></td></tr>
-          <tr><td>none</td><td><code>sj gate</code> locally</td><td><code>sj-verify</code> → <code>sj verify</code></td></tr>
-          <tr><td><code>/opsx:archive</code>, <code>/opsx:sync</code></td><td>Keep using it</td><td><code>sj-finish</code> → <code>sj spec archive</code></td></tr>
+          <tr><td><code>openspec</code></td><td>Keeps <code>openspec/</code> as the spec root and gives every scenario an ID. Moves <code>config.yaml</code>'s guidance to <code>principles.md</code>. Removes OpenSpec's generated skills and <code>/opsx</code> commands; your own skills stay.</td></tr>
+          <tr><td><code>speckit</code></td><td>Imports every feature, then removes <code>.specify/</code>, the imported <code>specs/NNN-*/</code> folders and the agent files Spec Kit's manifests list.</td></tr>
+          <tr><td><code>superpowers</code></td><td>Removes the plugin, its marketplace and its permission rules from <code>.claude/settings.json</code>, keeping every other byte. Lists files under <code>docs/superpowers/</code> for you to review.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Where each workflow went</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>You used</th><th>specjutsu</th></tr></thead>
+        <tbody>
+          <tr><td><code>/opsx:explore</code>, Superpowers brainstorming</td><td><code>sj-explore</code></td></tr>
+          <tr><td><code>/opsx:propose</code>, <code>/opsx:update</code>, Spec Kit specify/plan/tasks/analyze, writing-plans</td><td><code>sj-propose</code> → <code>sj spec new</code>, <code>sj spec validate</code></td></tr>
+          <tr><td>Spec Kit clarify, constitution</td><td><code>sj-clarify</code> → <code>sj spec check</code>; <code>sj-principles</code></td></tr>
+          <tr><td><code>/opsx:apply</code>, Spec Kit implement, Superpowers TDD and executing-plans</td><td><code>sj-apply</code> → <code>sj next</code>, <code>sj test &lt;ID&gt;</code>, <code>sj task done</code></td></tr>
+          <tr><td>Superpowers systematic-debugging, code review</td><td><code>sj-debug</code>, <code>sj-review</code></td></tr>
+          <tr><td>Superpowers verification-before-completion</td><td><code>sj-verify</code> → <code>sj verify</code></td></tr>
+          <tr><td><code>/opsx:archive</code>, <code>/opsx:sync</code>, finishing-a-branch</td><td><code>sj-finish</code> → <code>sj spec archive</code></td></tr>
         </tbody>
       </table></div>
       <h3>What changes for you</h3>
       <ul>
-        <li><strong>Your agent stops reading folders.</strong> <code>sj status</code> answers "where am I" in ten lines; <code>sj next</code> returns only the current task, its scenarios and the exact test command.</li>
+        <li><strong>Your agent stops reading folders.</strong> <code>sj status</code> answers "where am I" in a few lines; <code>sj next</code> returns only the current task, its scenarios and the exact test command.</li>
         <li><strong>"Done" is checked, not claimed.</strong> In strict mode <code>sj task done</code> refuses to tick a task until the ledger shows its tests went red, then green.</li>
-        <li><strong>TDD is enforced, not requested.</strong> With the adapter, editing source before a failing test exists is blocked. Writing the test is always allowed.</li>
-        <li><strong>Your specs don't move.</strong> Same folders, same headings. The switch is a config change, not a migration.</li>
+        <li><strong>TDD is enforced, not requested.</strong> The pre-edit hook blocks source edits before a failing test exists. Writing the test is always allowed.</li>
+        <li><strong>Your specs don't move.</strong> OpenSpec folders stay where they are; Spec Kit features become the same layout.</li>
       </ul>
     </section>
 
     <section id="faq">
       <h2>FAQ</h2>
       <details class="faq"><summary>Does specjutsu call an AI model?</summary><div><p>No. It's a deterministic binary. Your agent calls it; it never calls your agent or any LLM.</p></div></details>
-      <details class="faq"><summary>Which languages work today?</summary><div><p>Rust with <code>cargo test</code>. pytest, Jest/Vitest, Playwright, Go, JUnit, dotnet, PHPUnit and RSpec are on the roadmap, mostly through JUnit XML reports.</p></div></details>
-      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings. Add IDs as you touch specs, and add <code>sj trace</code> to CI as a non-blocking report first.</p></div></details>
-      <details class="faq"><summary>Why must tests live in <code>tests/</code>?</summary><div><p>Red-on-base overlays the change's test files onto the base commit. A test inside a source file can't be moved without also moving the new code, so it's reported as unverifiable.</p></div></details>
-      <details class="faq"><summary>Is the local ledger trusted by CI?</summary><div><p>No. A local file is easy to forge, so CI recomputes red and green itself with red-on-base. The ledger is local evidence for your workflow and for strict mode.</p></div></details>
+      <details class="faq"><summary>Which languages work today?</summary><div><p>Rust (<code>cargo test</code>), TypeScript and JavaScript (vitest, Jest, Playwright) and Python (pytest), plus any runner that writes a JUnit XML report through a <code>junit</code> suite with your own <code>command</code>. Native test discovery for Go, dotnet, PHPUnit and RSpec is on the roadmap.</p></div></details>
+      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Run <code>sj adopt</code> and <code>sj ids --write</code>, or <code>sj migrate</code> if you're on OpenSpec, Spec Kit or Superpowers. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings.</p></div></details>
+      <details class="faq"><summary>Does it work in a monorepo?</summary><div><p>Yes. Each package in <code>specjutsu.toml</code> has its own suites, and a file belongs to the package with the longest matching path. <code>sj test apps/api</code> runs one package; the gate runs red-on-base per suite.</p></div></details>
+      <details class="faq"><summary>Do my tests have to live in <code>tests/</code>?</summary><div><p>Only Rust's. Red-on-base overlays every changed file that matches a suite's <code>tests</code> globs, so co-located <code>*.test.ts</code> files work. Rust tests inline in a source file can't be moved without the new code, so they're reported as unverifiable.</p></div></details>
+      <details class="faq"><summary>Is the local ledger trusted by CI?</summary><div><p>No. A local file is easy to forge, so CI recomputes red and green itself with red-on-base. The ledger is local evidence for the agent loop, the pre-edit hook and strict mode.</p></div></details>
       <details class="faq"><summary>Can I check red-before-green on work I've already done?</summary><div><p>If you used <code>test(ID): red</code> and <code>feat(ID): green</code> commit subjects, yes: <code>sj gate --since &lt;first-commit&gt;</code> checks the history.</p></div></details>
     </section>
   </main>

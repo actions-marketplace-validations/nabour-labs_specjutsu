@@ -10,16 +10,18 @@ refuses anything unproven.
 
 specjutsu is built to replace the OpenSpec, Spec Kit and Superpowers stack with
 one binary. Its spec format is OpenSpec's, so existing `openspec/` folders work
-unchanged. Today it adds the proof layer (`sj trace`, `sj gate`). Authoring
-commands and agent skills are on the roadmap; until they land, keep writing
-changes with OpenSpec.
+unchanged. It covers the whole loop: authoring (`sj spec`), the agent's working
+loop (`sj status`, `next`, `verify`), the proof layer (`sj trace`, `sj test`,
+`sj gate`), a Claude Code adapter with nine skills, and `sj migrate` to remove the
+tools it replaces.
 
 **Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/) ·
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha. `sj trace` and `sj test` work with Rust, vitest, Jest,
-Playwright and pytest tests. `sj gate` runs Rust tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
+**Status:** pre-alpha, v0.3.0. `sj trace`, `sj test` and `sj gate` work with
+Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
+Claude Code is the only agent adapter so far; the others follow in v0.5. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
 
 ## Install
@@ -28,7 +30,7 @@ Prebuilt binaries for macOS, Linux and Windows are on the
 [releases page](https://github.com/nabour-labs/specjutsu/releases). Or from source:
 
 ```bash
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.2.0 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu
 ```
 
 ## Quickstart
@@ -510,8 +512,8 @@ uncommitted. Review them with `git diff`, and undo them with
 | --- | --- |
 | v0.1 | `sj trace` on OpenSpec + `cargo test`; non-blocking CI report |
 | v0.2 | `sj gate` with red-on-base |
-| v0.3 | `status`, `next`, `test`; Claude Code adapter; self-hosting |
-| v0.5 | All runners and agents, importers, token benchmark, public launch |
+| v0.3 | vitest, Jest, Playwright, pytest and JUnit suites; `specjutsu.toml`; `sj ids`, `sj spec`, `status`, `next`, `verify`; Claude Code adapter and skills; Spec Kit import; `sj migrate` |
+| v0.5 | More agent adapters, token benchmark, public launch |
 
 ## Contributing
 

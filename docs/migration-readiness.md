@@ -3,6 +3,13 @@
 Nov 14, 2026 · review of code (v0.2.0 + `spec/test-ledger` branch), specs and docs
 against three projects planned to migrate to specjutsu.
 
+> **Status, Nov 18, 2026:** every change in the [replacement roadmap](#replacement-roadmap-proposed-openspec-changes)
+> below shipped in v0.3.0, ending with `sj migrate`. Trial migrations of copies of
+> `FridgeSense`, `ellesmere.ai` and `chrome-agent` completed. What `sj spec validate`
+> still reports is in those projects' own specs: 15 tasks in a FridgeSense change that
+> name scenarios by text, and chrome-agent's 40 FRs without scenarios. The review is kept as
+> written on Nov 14, so its verdict and findings describe v0.2.0.
+
 ## Verdict
 
 **specjutsu cannot replace the workflow in any of the three projects today, and the
@@ -163,12 +170,10 @@ match (PRs #7 and #8). The spec *format* stays OpenSpec's, so
 
 ## Replacement roadmap (proposed OpenSpec changes)
 
-Each change has a proposal and delta specs. Changes 0–2 are done and archived under
-`openspec/changes/archive/`. The rest wait on the `spec/replacement-proposals` branch,
-because the gate fails any merged scenario that has no test. Each one comes to `main`
-in the same PR as its implementation, with its design and tasks written when it is
-picked up. `polyglot-runners` was split in two when picked up: `sj test` across runners
-(3), and the gate's per-suite red-on-base (3b).
+Each change has a proposal and delta specs. All of them are done and archived under
+`openspec/changes/archive/` and shipped in v0.3.0. Each came to `main` in the same PR
+as its implementation, with its design and tasks written when it was picked up.
+`polyglot-runners` was split in two when picked up: `sj test` across runners (3), and the gate's per-suite red-on-base (3b).
 
 | # | Change | Capability (prefix) | Delivers | Needed by |
 | --- | --- | --- | --- | --- |
