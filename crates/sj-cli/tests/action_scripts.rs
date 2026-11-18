@@ -99,3 +99,188 @@ fn ci_007_a_tampered_download_is_refused() {
     assert!(!marker.exists(), "sj ran despite the checksum mismatch");
     assert!(!t.join("install/sj").exists());
 }
+
+/// A `gh api` that keeps comments as files in `$STUB_STATE/comments/<id>`, logs every call to
+/// `$STUB_STATE/calls`, and refuses writes with HTTP 403 when `STUB_READONLY=1`.
+const GH_API: &str = r#"#!/usr/bin/env bash
+set -euo pipefail
+state="$STUB_STATE"; mkdir -p "$state/comments"
+echo "$*" >> "$state/calls"
+[ "$1" = api ] || { echo "unexpected gh call: $*" >&2; exit 9; }
+shift
+method=GET; path=""; body=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -X) method="$2"; shift 2 ;;
+    -F|-f) case "$2" in body=@*) body="${2#body=@}" ;; esac; shift 2 ;;
+    --paginate) shift ;;
+    --jq) shift 2 ;;
+    *) path="$1"; shift ;;
+  esac
+done
+if [ "$method" != GET ] && [ "${STUB_READONLY:-}" = 1 ]; then
+  echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1
+fi
+case "$method $path" in
+  "GET repos/"*/issues/*/comments)
+    for f in "$state"/comments/*; do
+      [ -e "$f" ] || continue
+      if [ "$(head -n1 "$f")" = "<!-- specjutsu:gate -->" ]; then basename "$f"; fi
+    done ;;
+  "POST repos/"*/issues/*/comments)
+    n=$(( $(ls "$state/comments" | wc -l) + 1 )); cp "$body" "$state/comments/$n" ;;
+  "PATCH repos/"*/issues/comments/*)
+    cp "$body" "$state/comments/${path##*/}" ;;
+  *) echo "unexpected gh api: $method $path" >&2; exit 9 ;;
+esac
+"#;
+
+/// An `sj` that prints `$STUB_BODY` and exits `$STUB_GATE_EXIT`.
+const SJ_STUB: &str = r#"#!/usr/bin/env bash
+printf '%s\n' "$STUB_BODY"
+exit "${STUB_GATE_EXIT:-0}"
+"#;
+
+struct Action {
+    dir: tempfile::TempDir,
+}
+
+impl Action {
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        write_exe(&dir.path().join("bin/gh"), GH_API);
+        write_exe(&dir.path().join("bin/sj"), SJ_STUB);
+        std::fs::create_dir_all(dir.path().join("state/comments")).unwrap();
+        Action { dir }
+    }
+
+    fn state(&self) -> PathBuf {
+        self.dir.path().join("state")
+    }
+
+    fn summary(&self) -> String {
+        std::fs::read_to_string(self.dir.path().join("summary.md")).unwrap_or_default()
+    }
+
+    fn calls(&self) -> String {
+        std::fs::read_to_string(self.state().join("calls")).unwrap_or_default()
+    }
+
+    /// Bodies of the comments on the PR, in id order.
+    fn comments(&self) -> Vec<String> {
+        let mut ids: Vec<u32> = std::fs::read_dir(self.state().join("comments"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().parse().unwrap())
+            .collect();
+        ids.sort();
+        ids.iter()
+            .map(|id| std::fs::read_to_string(self.state().join(format!("comments/{id}"))).unwrap())
+            .collect()
+    }
+
+    fn gate_comments(&self) -> Vec<String> {
+        self.comments()
+            .into_iter()
+            .filter(|c| c.starts_with("<!-- specjutsu:gate -->"))
+            .collect()
+    }
+
+    fn run(&self, body: &str, gate_exit: i32, env: &[(&str, &str)]) -> Output {
+        let bin = self.dir.path().join("bin");
+        let mut cmd = Command::new("bash");
+        cmd.arg(script("comment.sh"))
+            .env(
+                "PATH",
+                format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+            )
+            .env("STUB_STATE", self.state())
+            .env("STUB_BODY", body)
+            .env("STUB_GATE_EXIT", gate_exit.to_string())
+            .env("GITHUB_STEP_SUMMARY", self.dir.path().join("summary.md"))
+            .env("GITHUB_REPOSITORY", "acme/shop")
+            .env("SJ_BASE", "origin/main")
+            .env("SJ_PR", "7")
+            .env("SJ_COMMENT", "true")
+            .env("SJ_FAIL_ON", "gate");
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        run(&mut cmd)
+    }
+}
+
+const PASS: &str = "<!-- specjutsu:gate -->\n### ✅ gate: pass — 2 scenarios proven";
+const FAIL: &str = "<!-- specjutsu:gate -->\n### ❌ gate: fail — 1 problem";
+
+#[test]
+fn ci_008_the_first_run_creates_the_comment() {
+    let a = Action::new();
+    std::fs::write(a.state().join("comments/1"), "LGTM\n").unwrap();
+    let out = a.run(PASS, 0, &[]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(a.gate_comments(), vec![format!("{PASS}\n")]);
+    assert_eq!(a.comments().len(), 2, "the unrelated comment is kept");
+    assert!(a.summary().contains(PASS), "{}", a.summary());
+}
+
+#[test]
+fn ci_009_later_runs_update_the_same_comment() {
+    let a = Action::new();
+    a.run(FAIL, 1, &[]);
+    let out = a.run(PASS, 0, &[]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(a.gate_comments(), vec![format!("{PASS}\n")]);
+    assert!(
+        a.calls()
+            .contains("-X PATCH repos/acme/shop/issues/comments/1"),
+        "{}",
+        a.calls()
+    );
+}
+
+#[test]
+fn ci_010_comments_can_be_turned_off() {
+    let a = Action::new();
+    let out = a.run(PASS, 0, &[("SJ_COMMENT", "false")]);
+    assert!(out.status.success());
+    assert_eq!(a.calls(), "", "gh was called");
+    assert!(a.summary().contains(PASS));
+}
+
+#[test]
+fn ci_011_a_read_only_token_skips_the_comment_not_the_gate() {
+    let a = Action::new();
+    let out = a.run(FAIL, 1, &[("STUB_READONLY", "1")]);
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.status.code(), Some(1), "{all}");
+    assert!(
+        all.contains("cannot comment on this pull request (read-only token); see the job summary"),
+        "{all}"
+    );
+    assert!(a.summary().contains(FAIL));
+    assert!(a.gate_comments().is_empty());
+}
+
+#[test]
+fn ci_012_fail_on_never_reports_without_blocking() {
+    let a = Action::new();
+    let out = a.run(FAIL, 1, &[("SJ_FAIL_ON", "never")]);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(a.gate_comments(), vec![format!("{FAIL}\n")]);
+    assert!(a.summary().contains(FAIL));
+
+    let env_error = a.run("", 2, &[("SJ_FAIL_ON", "never")]);
+    assert_eq!(env_error.status.code(), Some(2));
+}
