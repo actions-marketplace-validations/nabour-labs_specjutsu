@@ -27,9 +27,11 @@ and [analysis](docs/analysis.md).
 ## Install
 
 Prebuilt binaries for macOS, Linux and Windows are on the
-[releases page](https://github.com/nabour-labs/specjutsu/releases). Or from source:
+[releases page](https://github.com/nabour-labs/specjutsu/releases). Or with Cargo,
+from [crates.io](https://crates.io/crates/specjutsu) (from v0.3.1) or from the git tag:
 
 ```bash
+cargo install specjutsu
 cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu
 ```
 

@@ -26,6 +26,10 @@ crates/sj-cli`) so it's on your `PATH`; the Claude Code hooks in `.claude/` call
 
 Refactors, docs, config and chores don't need scenarios; say which in the PR.
 
+After editing anything in `skills/` or `adapters/claude/`, run
+`./scripts/sync-adapter-assets.sh`: the `sj-adapters` crate embeds a copy so it can be
+published, and `cargo test` fails while the copy is stale.
+
 ## Good first PRs
 
 - A test-runner adapter (`runner-adapter` label).
