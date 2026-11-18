@@ -245,7 +245,9 @@ fn mig_003_openspec_agent_files_are_removed_spec_content_kept() {
         assert!(!root.join(gone).exists(), "{gone}");
     }
     assert!(root.join(".claude/skills/deploy/SKILL.md").is_file());
-    assert!(root.join(".claude/skills/openspec-notes/SKILL.md").is_file());
+    assert!(root
+        .join(".claude/skills/openspec-notes/SKILL.md")
+        .is_file());
     let principles = std::fs::read_to_string(root.join("openspec/principles.md")).unwrap();
     assert_eq!(
         principles,
@@ -286,7 +288,9 @@ fn mig_004_spec_kit_files_go_only_after_a_good_import() {
         .stdout
         .clone();
     let root = repo.path();
-    assert!(root.join("openspec/specs/chrome-ai-agent/spec.md").is_file());
+    assert!(root
+        .join("openspec/specs/chrome-ai-agent/spec.md")
+        .is_file());
     assert!(root
         .join("openspec/changes/archive/2026-09-27-chrome-ai-agent/proposal.md")
         .is_file());
@@ -338,7 +342,9 @@ fn mig_006_project_hooks_survive_superpowers_removal() {
     assert!(settings.contains("node scripts/hooks/require-worktree.mjs"));
     assert!(settings.contains("sj hook claude pre-edit"));
     assert!(settings.contains("sj hook claude session-start"));
-    assert!(root.join("docs/superpowers/plans/2026-01-01-plan.md").is_file());
+    assert!(root
+        .join("docs/superpowers/plans/2026-01-01-plan.md")
+        .is_file());
 }
 
 #[test]

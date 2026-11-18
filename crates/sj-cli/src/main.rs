@@ -131,6 +131,17 @@ enum Command {
         #[command(subcommand)]
         command: ImportCommand,
     },
+    /// Replace OpenSpec, Spec Kit or Superpowers with specjutsu (dry run unless --write).
+    Migrate {
+        /// The tool to migrate from: openspec, speckit or superpowers. Repeatable.
+        #[arg(long = "from", required = true, value_parser = ["openspec", "speckit", "superpowers"])]
+        from: Vec<String>,
+        /// Apply the plan. Needs a clean git working tree.
+        #[arg(long)]
+        write: bool,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
     /// Where each open change stands: tasks, scenario evidence and the next task.
     Status {
         /// Only this change (default: every open change).
@@ -389,6 +400,7 @@ fn run() -> Result<ExitCode> {
                     json,
                 },
         } => import_speckit_cmd(&args, write, force, json),
+        Command::Migrate { from, write, root } => migrate_cmd(&root, &from, write),
         Command::Status { change, args, json } => status_cmd(change, &args, json),
         Command::Task {
             command: TaskCommand::Done { change, task, args },
@@ -907,6 +919,62 @@ fn import_speckit_cmd(args: &SpecArgs, write: bool, force: bool, json: bool) -> 
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn migrate_cmd(root: &Path, from: &[String], write: bool) -> Result<ExitCode> {
+    use sj_core::migrate::{self, Tool};
+    let tools: Vec<Tool> = from.iter().filter_map(|f| Tool::parse(f)).collect();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let plan = migrate::plan(root, &tools, &today)?;
+    let names: Vec<&str> = plan.tools.iter().map(|t| t.as_str()).collect();
+    if write {
+        migrate::apply(root, &plan)?;
+        println!("migrate: wrote {}", names.join(", "));
+    } else {
+        println!(
+            "migrate: {} (dry run; --write applies it)",
+            names.join(", ")
+        );
+    }
+    for l in &plan.lines {
+        println!("{l}");
+    }
+    if !write {
+        return Ok(ExitCode::SUCCESS);
+    }
+    let f = migrate::finish(root, &plan)?;
+    if f.doctor.is_empty() {
+        println!("doctor  ok");
+    }
+    for p in &f.doctor {
+        println!("doctor  {p}");
+    }
+    let r = &f.validate;
+    if r.errors.is_empty() && r.warnings.is_empty() {
+        println!("validate ok");
+    } else {
+        println!(
+            "validate {}, {}",
+            plural(r.errors.len(), "error"),
+            plural(r.warnings.len(), "warning")
+        );
+    }
+    for p in &r.errors {
+        println!("fail    {}", location(p, root));
+    }
+    for p in &r.warnings {
+        println!("warn    {}", location(p, root));
+    }
+    println!(
+        "git: {} created, {} changed, {} removed",
+        f.created, f.changed, f.removed
+    );
+    println!("rollback: git restore . && git clean -fd");
+    Ok(if f.is_clean() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
 }
 
 fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {
