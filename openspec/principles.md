@@ -2,7 +2,7 @@
 
 specjutsu is a Rust CLI (binary `sj`) that reads this very folder: specjutsu is built with itself.
 Every scenario name MUST start with a stable ID: `#### Scenario: TRACE-001 Short name`.
-One prefix per capability (TRACE, GATE, LEDGER, RUN, CONF, IDS, SPEC, IMP, LOOP, ADAPT, SKILL, MIG). Never reuse an ID.
+One prefix per capability (TRACE, GATE, LEDGER, RUN, CONF, IDS, SPEC, IMP, LOOP, ADAPT, SKILL, MIG, CI). Never reuse an ID.
 Tests carry the ID in their name, e.g. `fn trace_001_short_name()`.
 Must work on Windows, macOS and Linux. specjutsu never calls an LLM.
 
