@@ -9,6 +9,7 @@ pub mod gate;
 pub mod git;
 pub mod hook;
 pub mod ids;
+pub mod import;
 pub mod ledger;
 pub mod run;
 pub mod spec;

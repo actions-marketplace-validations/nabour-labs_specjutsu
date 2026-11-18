@@ -4,7 +4,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. Conversion (sj-core)
 
-- [ ] 1.1 `import::speckit::plan` with the spec, proposal and ID rules (design decisions 1–4) (IMP-002..005). Verify: `crates/sj-core/tests/import_speckit.rs` converts a trimmed fixture under `crates/sj-core/tests/fixtures/speckit/` (generic content): a finished feature with Created 2026-09-27 and an open one with 3 unchecked tasks; sees the US1.2 scenario name, ID and verbatim GIVEN/WHEN/THEN steps, a Given-only item turned into WHEN, FR requirements with their gaps and markers, and Clarifications, Edge Cases and other sections in the proposal.
+- [x] 1.1 `import::speckit::plan` with the spec, proposal and ID rules (design decisions 1–4) (IMP-002..005). Verify: `crates/sj-core/tests/import_speckit.rs` converts a trimmed fixture under `crates/sj-core/tests/fixtures/speckit/` (generic content): a finished feature with Created 2026-09-27 and an open one with 3 unchecked tasks; sees the US1.2 scenario name, ID and verbatim GIVEN/WHEN/THEN steps, a Given-only item turned into WHEN, FR requirements with their gaps and markers, and Clarifications, Edge Cases and other sections in the proposal.
 
 ## 2. Command (sj-core + sj-cli)
 
