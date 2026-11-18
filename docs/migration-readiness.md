@@ -3,6 +3,13 @@
 Nov 14, 2026 · review of code (v0.2.0 + `spec/test-ledger` branch), specs and docs
 against three projects planned to migrate to specjutsu.
 
+> **Status, Nov 18, 2026:** every change in the [replacement roadmap](#replacement-roadmap-proposed-openspec-changes)
+> below shipped in v0.3.0, ending with `sj migrate`. Trial migrations of copies of
+> `FridgeSense`, `ellesmere.ai` and `chrome-agent` completed. What `sj spec validate`
+> still reports is in those projects' own specs: 15 tasks in a FridgeSense change that
+> name scenarios by text, and chrome-agent's 40 FRs without scenarios. The review is kept as
+> written on Nov 14, so its verdict and findings describe v0.2.0.
+
 ## Verdict
 
 **specjutsu cannot replace the workflow in any of the three projects today, and the

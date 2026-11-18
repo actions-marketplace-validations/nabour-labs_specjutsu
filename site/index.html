@@ -129,13 +129,15 @@
       <div class="step">
         <div class="n">02 · test</div>
         <h3>Reference it from a test</h3>
-        <p>By test name or by a comment above it. No library needed.</p>
-<pre class="code"><span class="c-m">#[test]</span>
-<span class="c-k">fn</span> <span class="c-s">auth_003</span>_rejects_expired_token() { … }
+        <p>By test name, title or a comment above it, in Rust, TypeScript or Python. No library needed.</p>
+<pre class="code"><span class="c-m">// vitest, Jest, Playwright</span>
+<span class="c-k">it</span>("<span class="c-s">AUTH-003</span> rejects expired token", …)
 
-<span class="c-m">// spec: </span><span class="c-s">AUTH-003</span>
-<span class="c-m">#[test]</span>
-<span class="c-k">fn</span> rejects_expired() { … }</pre>
+<span class="c-m"># pytest</span>
+<span class="c-k">def</span> test_<span class="c-s">auth_003</span>_rejects_expired(): …
+
+<span class="c-m">// Rust</span>
+<span class="c-k">fn</span> <span class="c-s">auth_003</span>_rejects_expired_token() { … }</pre>
       </div>
       <div class="step">
         <div class="n">03 · prove</div>
@@ -257,7 +259,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
     <div class="moat">
       <div><b>Verification, not prompts</b><span>Markdown workflows are easy to copy. A trace-and-gate engine isn't.</span></div>
       <div><b>Red-on-base proof</b><span>CI runs new tests against base. No other tool does this.</span></div>
-      <div><b>Zero-migration start</b><span>Your <code>openspec/</code> folders work as-is. Spec Kit import is on the roadmap.</span></div>
+      <div><b>One-command migration</b><span>Your <code>openspec/</code> folders work as-is. <code>sj migrate</code> replaces OpenSpec, Spec Kit or Superpowers in one step.</span></div>
       <div><b>Zero runtime</b><span>One Rust binary. Works in Java, PHP, Go or Python repos.</span></div>
       <div><b>Token economics</b><span>Deterministic commands return a few lines, not raw logs.</span></div>
     </div>
@@ -278,9 +280,11 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
         <li><strong>Failures-only output:</strong> a green run prints one line; a red run shows only the failing tests and their scenarios.</li>
         <li><strong>Machine-readable everything:</strong> every command takes <code>--json</code>.</li>
         <li><strong>Can't be talked around:</strong> where a tool can't block an edit, the CI gate still refuses unproven work.</li>
-        <li><strong>Any language, any repo:</strong> test runners are adapters. Rust first, then pytest, Jest/Vitest, Go, JUnit, dotnet, PHPUnit and RSpec.</li>
+        <li><strong>TDD at the keyboard:</strong> a pre-edit hook blocks source edits until the active task's scenarios have a failing test.</li>
+        <li><strong>Nine <code>sj-*</code> skills:</strong> explore, propose, clarify, principles, apply, debug, review, verify and finish, each driven by <code>sj</code> commands.</li>
+        <li><strong>Any language, any repo:</strong> Rust, vitest, Jest, Playwright and pytest today, plus any runner that writes JUnit XML. Monorepos get per-package suites.</li>
       </ul>
-      <p style="color:var(--muted);font-size:14px;margin-top:16px">Claude Code adapter lands in v0.3; the other four follow in v0.5.</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:16px">The Claude Code adapter ships in v0.3.0 (<code>sj init --agents claude</code>). Cursor, Antigravity, Codex and Copilot follow in v0.5.</p>
     </div>
   </div>
 </section>
@@ -295,7 +299,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
         <h3><span class="num">1</span>Install</h3>
         <p>One binary, no runtime. Pick your platform from the release, or build it.</p>
 <pre class="code"><span class="c-m"># prebuilt binary (macOS arm64 shown)</span>
-gh release download v0.2.0 \
+gh release download v0.3.0 \
   -R nabour-labs/specjutsu \
   -p 'sj-aarch64-apple-darwin.tar.gz'
 tar -xzf sj-aarch64-apple-darwin.tar.gz
@@ -310,10 +314,15 @@ cargo install --tag v0.3.0 \
 sj --version</pre>
       </div>
       <div class="qs-card qs-run">
-        <h3><span class="num">2</span>Trace locally</h3>
-        <p>See which scenarios have tests and which don't.</p>
-<pre class="code">sj trace          <span class="c-m"># list gaps and orphans</span>
-sj trace --json   <span class="c-m"># for tools and agents</span></pre>
+        <h3><span class="num">2</span>Adopt and trace</h3>
+        <p>Detect your runners, give every scenario an ID, see what has tests.</p>
+<pre class="code">sj adopt          <span class="c-m"># write specjutsu.toml</span>
+sj ids --write    <span class="c-m"># add scenario IDs</span>
+sj trace          <span class="c-m"># list gaps and orphans</span>
+sj init --agents claude  <span class="c-m"># skills + hooks</span>
+
+<span class="c-m"># or replace your old tool in one go</span>
+sj migrate --from openspec --write</pre>
       </div>
       <div class="qs-card qs-gate">
         <h3><span class="num">3</span>Gate every PR</h3>
@@ -335,8 +344,8 @@ sj trace --json   <span class="c-m"># for tools and agents</span></pre>
     <div class="road">
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.1</div><p><code>sj trace</code> on OpenSpec + <code>cargo test</code>; CI report.</p></div>
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.2</div><p><code>sj gate</code> with red-on-base. Blocking on this repo.</p></div>
-      <div class="milestone next"><span class="state">next</span><div class="v">v0.3</div><p><code>status</code>, <code>next</code>, <code>test</code>, evidence ledger; Claude Code adapter.</p></div>
-      <div class="milestone"><span class="state">launch</span><div class="v">v0.5</div><p>All runners and agents, importers, token benchmark, public launch.</p></div>
+      <div class="milestone done"><span class="state">shipped</span><div class="v">v0.3</div><p>vitest, Jest, Playwright, pytest and JUnit; monorepos; <code>sj spec</code>, <code>status</code>, <code>next</code>, <code>verify</code>; Claude Code adapter and skills; <code>sj migrate</code>.</p></div>
+      <div class="milestone next"><span class="state">next</span><div class="v">v0.5</div><p>Cursor, Antigravity, Codex and Copilot adapters; token benchmark; public launch.</p></div>
     </div>
   </div>
 </section>

@@ -10,16 +10,18 @@ refuses anything unproven.
 
 specjutsu is built to replace the OpenSpec, Spec Kit and Superpowers stack with
 one binary. Its spec format is OpenSpec's, so existing `openspec/` folders work
-unchanged. Today it adds the proof layer (`sj trace`, `sj gate`). Authoring
-commands and agent skills are on the roadmap; until they land, keep writing
-changes with OpenSpec.
+unchanged. It covers the whole loop: authoring (`sj spec`), the agent's working
+loop (`sj status`, `next`, `verify`), the proof layer (`sj trace`, `sj test`,
+`sj gate`), a Claude Code adapter with nine skills, and `sj migrate` to remove the
+tools it replaces.
 
 **Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/) ·
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha. `sj trace` and `sj test` work with Rust, vitest, Jest,
-Playwright and pytest tests. `sj gate` runs Rust tests (`cargo test`). See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
+**Status:** pre-alpha, v0.3.0. `sj trace`, `sj test` and `sj gate` work with
+Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
+Claude Code is the only agent adapter so far; the others follow in v0.5. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
 
 ## Install
