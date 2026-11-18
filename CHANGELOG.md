@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-18
+
 ### Added
 - Releases publish `specjutsu`, `sj-core`, `sj-runners` and `sj-adapters` to
   crates.io, so `cargo install specjutsu` works. CI checks that every crate builds
@@ -150,6 +152,7 @@ All notable changes are recorded here. The format follows
 - `sj gate --since <commit>`: check every `feat(ID)` commit has an earlier `test(ID): red`.
 - `cargo test` runner with libtest result parsing.
 
-[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/nabour-labs/specjutsu/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nabour-labs/specjutsu/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nabour-labs/specjutsu/releases/tag/v0.2.0
