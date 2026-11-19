@@ -38,6 +38,8 @@ jobs:
           want="${GITHUB_REF_NAME#v}"
           have=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME != Cargo.toml $have"; exit 1; }
+          action=$(awk '/^  version:/{f=1} f && /default:/{gsub(/[" ]/,"",$2); print $2; exit}' action.yml)
+          [ "$want" = "$action" ] || { echo "tag $GITHUB_REF_NAME != action.yml version default $action"; exit 1; }
       - run: cargo build --release --locked -p specjutsu --target ${{ matrix.target }}
       - name: Package
         run: |

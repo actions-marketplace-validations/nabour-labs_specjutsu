@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- A GitHub Action, `uses: nabour-labs/specjutsu@v0`. It installs a pinned `sj`
+  verified against `SHA256SUMS`, runs the gate on pull requests, keeps one PR
+  comment up to date and writes the job summary. `fail-on: never` reports without
+  blocking, and `badge: true` publishes a spec coverage badge to the `sj-badge`
+  branch.
+- `sj gate --format markdown` prints the gate result as a PR comment body: one row
+  per changed scenario with its evidence and a fix hint, failures first, at most
+  60,000 bytes. `--format json` is the same as `--json`.
+- `sj badge [--out <path>]` writes a shields.io endpoint badge with the share of
+  tested scenarios in `specs/`.
+
 ## [0.3.1] - 2026-11-18
 
 ### Added

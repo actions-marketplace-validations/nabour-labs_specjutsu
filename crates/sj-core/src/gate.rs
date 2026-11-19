@@ -172,6 +172,19 @@ pub struct GateReport {
     pub proven: Vec<Proven>,
     /// Every scenario whose classification is not `unchanged`, with its kind.
     pub changes: BTreeMap<String, Change>,
+    /// One row per added, modified or implemented scenario, for `--format markdown`.
+    #[serde(skip)]
+    pub rows: Vec<Row>,
+}
+
+/// A changed scenario's evidence: `untested`, the first failure kind of its tests (e.g.
+/// `green-on-base`), or its red-on-base kind when it is proven.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
+    pub id: String,
+    pub evidence: String,
+    pub tests: Vec<String>,
+    pub failed: bool,
 }
 
 /// Failures of the exemption rules: unknown kinds, missing reasons, and a spike merging to main.
@@ -278,10 +291,17 @@ pub fn evaluate(input: &Input) -> GateReport {
     for id in &targets {
         let Some(m) = input.trace.mapped.iter().find(|m| &&m.id == id) else {
             r.failures.push(format!("untested {id}"));
+            r.rows.push(Row {
+                id: id.to_string(),
+                evidence: "untested".to_string(),
+                tests: Vec::new(),
+                failed: true,
+            });
             continue;
         };
         let mut ok = true;
         let mut weakest: Option<Red> = None;
+        let failures_before = r.failures.len();
         for t in &m.tests {
             let head = if is_cargo(t) {
                 input.head_run.as_ref().and_then(|run| run.outcome(&t.name))
@@ -342,6 +362,23 @@ pub fn evaluate(input: &Input) -> GateReport {
                 });
             }
         }
+        // The first failure's kind is its first word (`green-on-base AUTH-005 …`).
+        let first_failure = r.failures[failures_before..]
+            .first()
+            .and_then(|f| f.split_whitespace().next())
+            .map(str::to_string);
+        let evidence = match (&first_failure, weakest) {
+            (Some(kind), _) => kind.clone(),
+            (None, Some(Red::Compile)) => "red:compile".to_string(),
+            (None, Some(_)) => "red:assert".to_string(),
+            (None, None) => "green (exempt)".to_string(),
+        };
+        r.rows.push(Row {
+            id: id.to_string(),
+            evidence,
+            tests: m.tests.iter().map(|t| t.name.clone()).collect(),
+            failed: !ok,
+        });
     }
 
     // Unchanged gaps only warn.

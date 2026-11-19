@@ -2,18 +2,34 @@
 
 **Master the art of the spec.**
 
-specjutsu is an open-source, single-binary CLI that makes AI coding agents prove
-their work: every spec scenario gets a test, every test fails first, and CI
-refuses anything unproven.
+**The quality gate for AI-generated code.** specjutsu stops your coding agent from
+shipping work it can't prove: every spec scenario gets a test, every test must fail
+before the code exists, and the pull request is refused until both hold. It's one
+open-source binary and one GitHub Action, with no LLM in the loop: every check is
+deterministic, so CI gives the same answer every time.
 
-> One tool from spec to proof. Bring your OpenSpec folders; specjutsu takes it from there.
+```yaml
+# .github/workflows/specjutsu.yml
+on: pull_request
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: nabour-labs/specjutsu@v0
+```
 
-specjutsu is built to replace the OpenSpec, Spec Kit and Superpowers stack with
-one binary. Its spec format is OpenSpec's, so existing `openspec/` folders work
-unchanged. It covers the whole loop: authoring (`sj spec`), the agent's working
-loop (`sj status`, `next`, `verify`), the proof layer (`sj trace`, `sj test`,
-`sj gate`), a Claude Code adapter with nine skills, and `sj migrate` to remove the
-tools it replaces.
+Every PR gets one comment, updated on each push, listing the scenarios the change
+touches, the evidence for each (`red:assert`, `red:compile`, `untested`,
+`green-on-base`, …) and how to fix what fails. See [The GitHub Action](#the-github-action).
+
+Under the Action is `sj`, a CLI that covers the whole loop: authoring (`sj spec`),
+the agent's working loop (`sj status`, `next`, `verify`), the proof layer
+(`sj trace`, `sj test`, `sj gate`), a Claude Code adapter with nine skills, and
+`sj migrate`. Its spec format is OpenSpec's, so existing `openspec/` folders work
+unchanged, and it replaces the OpenSpec, Spec Kit and Superpowers stack.
 
 **Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/) ·
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
@@ -167,6 +183,46 @@ imports a function that doesn't exist yet, counts as `red:compile`.
 When a package declares `sources`, only changed files matching them need a scenario,
 and files elsewhere in that package don't. A top-level `non_source = ["infra/**"]`
 adds globs to the built-in non-source list.
+
+## The GitHub Action
+
+`uses: nabour-labs/specjutsu@v0` installs a pinned `sj` release (checked against the
+release's `SHA256SUMS`), runs `sj gate` against the pull request's base, writes the
+result to the job summary and keeps one PR comment up to date. It runs on Linux,
+macOS and Windows runners. The checkout needs `fetch-depth: 0` so the base commit is
+there, and the job needs the toolchains your suites use (Rust, Node, uv) to run
+tests on both sides.
+
+| Input | Default | What it does |
+| --- | --- | --- |
+| `version` | the release the action is tagged with | `sj` version to install |
+| `base` | `origin/<PR base branch>` | ref to compare against |
+| `comment` | `true` | post and update the PR comment; `false` writes only the job summary |
+| `fail-on` | `gate` | `never` reports without failing the step, to try specjutsu without blocking merges |
+| `badge` | `false` | on pushes to the default branch, publish `badge.json` to the `sj-badge` branch |
+| `github-token` | `github.token` | token for the download, the comment and the badge push |
+
+The comment needs `pull-requests: write`. On pull requests from forks the default
+token is read-only, so the action warns and leaves the result in the job summary.
+An environment error (gate exit 2) always fails the step.
+
+The same output works in any CI: `sj gate --format markdown` prints the comment
+body (at most 60,000 bytes, failures first), and `sj gate --json` the data.
+
+### Spec coverage badge
+
+`sj badge` writes a [shields.io endpoint](https://shields.io/badges/endpoint-badge)
+file: scenarios in `specs/` with at least one test that isn't skipped, out of all of
+them, coloured green from 90%, yellow from 70% and red below. Turn on `badge: true`
+in a workflow that runs on pushes to the default branch with `contents: write`, then
+add to your README:
+
+```markdown
+![specs](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repo>/sj-badge/badge.json)
+```
+
+The badge says *tested*, not *proven*: red-before-green is checked per change by the
+gate, not for the whole project at once.
 
 ## The project file
 
