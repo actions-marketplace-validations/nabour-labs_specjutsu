@@ -310,6 +310,9 @@ pub struct DriftFinding {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
     pub severity: Severity,
+    /// The commit of the coverage map a code-drift finding came from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
 }
 
 impl DriftFinding {
@@ -419,6 +422,7 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
                 file: None,
                 line: None,
                 severity,
+                commit: None,
             });
         }
     }
@@ -502,6 +506,7 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
                 file: Some(file),
                 line: Some(line),
                 severity,
+                commit: report.commit.clone(),
             });
         }
     }

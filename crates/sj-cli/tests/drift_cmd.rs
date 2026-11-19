@@ -234,5 +234,8 @@ fn drift_012_json_lists_each_finding() {
     assert_eq!(f["id"], "AUTH-003");
     assert_eq!(f["file"], "src/auth.rs");
     assert_eq!(f["line"], 15);
-    assert_eq!(f["commit"], commit, "each finding names the map's commit: {v}");
+    assert_eq!(
+        f["commit"], commit,
+        "each finding names the map's commit: {v}"
+    );
 }
