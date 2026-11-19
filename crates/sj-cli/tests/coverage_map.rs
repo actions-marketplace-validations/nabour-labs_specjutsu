@@ -73,7 +73,7 @@ impl Project {
             r,
             "specjutsu.toml",
             &format!(
-                "schema = 1\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n[[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**/*.rs\"]\ncoverage = '{copy}'\n"
+                "schema = 1\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n[[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**/*.rs\"]\ncoverage = '''{copy}'''\n"
             ),
         );
         write(r, ".gitignore", ".specjutsu/\n");
