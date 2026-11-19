@@ -25,6 +25,11 @@ Every PR gets one comment, updated on each push, listing the scenarios the chang
 touches, the evidence for each (`red:assert`, `red:compile`, `untested`,
 `green-on-base`, …) and how to fix what fails. See [The GitHub Action](#the-github-action).
 
+**No specs yet?** Start with `command: audit`. It needs no setup and catches the ways
+an agent makes checks pass without doing the work: deleted, skipped or focused
+tests, lost assertions, and dependencies that don't exist. See
+[Works without specs](#works-without-specs-sj-audit).
+
 Under the Action is `sj`, a CLI that covers the whole loop: authoring (`sj spec`),
 the agent's working loop (`sj status`, `next`, `verify`), the proof layer
 (`sj trace`, `sj test`, `sj gate`), a Claude Code adapter with nine skills, and
@@ -195,6 +200,7 @@ tests on both sides.
 
 | Input | Default | What it does |
 | --- | --- | --- |
+| `command` | `gate` | `audit` runs `sj audit --registry` instead, for repositories without specs |
 | `version` | the release the action is tagged with | `sj` version to install |
 | `base` | `origin/<PR base branch>` | ref to compare against |
 | `comment` | `true` | post and update the PR comment; `false` writes only the job summary |
@@ -223,6 +229,46 @@ add to your README:
 
 The badge says *tested*, not *proven*: red-before-green is checked per change by the
 gate, not for the whole project at once.
+
+## Works without specs: `sj audit`
+
+`sj audit --base origin/main` compares the change's tests with the base and needs
+no `specjutsu.toml` and no spec folder. Without a config it finds tests with
+default globs (`*.rs` with `#[test]`, `*.test.ts`/`*.spec.js` and friends,
+`test_*.py`/`*_test.py`); with one it uses each suite's globs. It reports:
+
+| Finding | What happened | Severity |
+| --- | --- | --- |
+| `removed-test` | a test was deleted (a test moved or renamed with the same body is not) | fail |
+| `skipped-test` | a skip marker was added: `#[ignore]`, `.skip`, `.todo`, `xit`, `@pytest.mark.skip`, `pytest.skip(` … | fail |
+| `focused-test` | a focus marker was added (`.only`, `fit`, `fdescribe`); reported once per `describe` | fail |
+| `weakened-test` | a test has fewer assertions than on base, e.g. `(5 → 2 assertions)` | fail |
+| `assertion-free-test` | a new test asserts nothing | fail |
+| `rewritten-expectation` | an expected literal changed in a change that also edits source, e.g. `108 → 110` | warn |
+| `unknown-package` | with `--registry`: an added dependency doesn't exist on crates.io, npm or PyPI | fail |
+| `new-package` | with `--registry`: an added dependency was first published under 30 days ago | warn |
+
+Assertions are counted per language: `assert*!`, `panic!` and `#[should_panic]`
+in Rust; `expect(` and `assert(` in JS/TS; `assert`, `pytest.raises` and
+`self.assert*` in Python. Add your own helpers in `specjutsu.toml`:
+
+```toml
+[audit]
+assert_helpers = ["assert_snapshot", "expect_json"]
+```
+
+When a finding is intended, allow it in a commit trailer with a reason. The audit
+then lists it as `allowed` instead of failing:
+
+```text
+Specjutsu-Allow: removed-test tests/test_export.py › test_legacy_export — legacy export removed in #212
+```
+
+`--registry` is the only part that uses the network. Without it the audit makes
+no requests, and an unreachable registry only warns. `sj gate` runs the test
+checks (not the registry ones) on every change and fails on their failures. The
+output and exit codes match the gate's (`--json`, `--format markdown`; 0 pass,
+1 fail, 2 error).
 
 ## The project file
 

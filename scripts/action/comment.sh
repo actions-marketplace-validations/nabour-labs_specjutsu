@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
-# Run the gate, write the job summary, and create or update the PR comment (CI-008..012).
-# Env: SJ_BASE, SJ_PR, SJ_COMMENT (true|false), SJ_FAIL_ON (gate|never), GITHUB_REPOSITORY,
-#      GITHUB_STEP_SUMMARY, GH_TOKEN.
+# Run the gate (or the audit), write the job summary, and create or update the PR comment
+# (CI-008..012, CI-014).
+# Env: SJ_COMMAND (gate|audit), SJ_BASE, SJ_PR, SJ_COMMENT (true|false), SJ_FAIL_ON
+#      (gate|never), GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY, GH_TOKEN.
 set -uo pipefail
-marker='<!-- specjutsu:gate -->'
 body=$(mktemp)
 
-sj gate --base "$SJ_BASE" --format markdown > "$body"
-code=$?
+case "${SJ_COMMAND:-gate}" in
+  gate)
+    marker='<!-- specjutsu:gate -->'
+    sj gate --base "$SJ_BASE" --format markdown > "$body"
+    code=$? ;;
+  audit)
+    marker='<!-- specjutsu:audit -->'
+    sj audit --base "$SJ_BASE" --registry --format markdown > "$body"
+    code=$? ;;
+  *)
+    echo "::error::unknown command '$SJ_COMMAND' (expected gate or audit)"
+    exit 2 ;;
+esac
 
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 if [ "$code" -eq 2 ]; then
-  echo "sj gate could not run (exit 2); see the step log." >> "$summary"
+  echo "sj ${SJ_COMMAND:-gate} could not run (exit 2); see the step log." >> "$summary"
   exit 2
 fi
 cat "$body" >> "$summary"

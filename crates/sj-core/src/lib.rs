@@ -2,6 +2,7 @@
 
 pub mod adopt;
 pub mod agent_loop;
+pub mod audit;
 pub mod authoring;
 pub mod ci;
 pub mod config;
@@ -13,6 +14,7 @@ pub mod ids;
 pub mod import;
 pub mod ledger;
 pub mod migrate;
+pub mod registry;
 pub mod run;
 pub mod spec;
 pub mod testscan;

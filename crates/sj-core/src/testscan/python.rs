@@ -129,6 +129,7 @@ pub fn scan_python(file: &Path, content: &str) -> Vec<TestFn> {
                     comment_ids,
                     name_ids,
                     skipped: p.skipped || classes.iter().any(|b| b.skipped),
+                    end_line: block_end(content, i, indent),
                     ..TestFn::default()
                 });
             }
@@ -192,6 +193,22 @@ fn balance(s: &str) -> i32 {
         }
     }
     depth
+}
+
+/// The 1-based last line of the block opened on 0-based line `start` at `indent`: the last
+/// non-blank line before the first one indented at or under `indent`.
+fn block_end(content: &str, start: usize, indent: usize) -> usize {
+    let mut end = start + 1;
+    for (i, line) in content.lines().enumerate().skip(start + 1) {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if indent_of(line) <= indent {
+            break;
+        }
+        end = i + 1;
+    }
+    end
 }
 
 fn indent_of(line: &str) -> usize {

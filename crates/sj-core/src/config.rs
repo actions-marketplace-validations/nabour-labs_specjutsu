@@ -153,6 +153,8 @@ pub struct Config {
     /// `[ids.prefixes]`: capability folder name to the prefix `sj ids` gives its new scenarios.
     pub id_prefixes: BTreeMap<String, String>,
     pub packages: Vec<Package>,
+    /// `[audit] assert_helpers`: functions or macros `sj audit` counts as assertions.
+    pub assert_helpers: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -164,8 +166,16 @@ struct RawConfig {
     #[serde(default)]
     non_source: Vec<String>,
     ids: Option<RawIds>,
+    audit: Option<RawAudit>,
     #[serde(default, rename = "package")]
     packages: Vec<RawPackage>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawAudit {
+    #[serde(default)]
+    assert_helpers: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -230,6 +240,7 @@ impl Config {
             spec_root: DEFAULT_SPEC_ROOT.into(),
             mode: Mode::default(),
             non_source: Vec::new(),
+            assert_helpers: Vec::new(),
             id_prefixes: BTreeMap::new(),
             packages,
         }
@@ -351,6 +362,7 @@ impl Config {
             non_source: raw.non_source,
             id_prefixes,
             packages,
+            assert_helpers: raw.audit.map(|a| a.assert_helpers).unwrap_or_default(),
         })
     }
 

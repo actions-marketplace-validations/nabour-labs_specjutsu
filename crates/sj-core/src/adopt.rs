@@ -96,6 +96,7 @@ pub fn detect(root: &Path) -> Result<Detected> {
             non_source: Vec::new(),
             id_prefixes: Default::default(),
             packages,
+            assert_helpers: Vec::new(),
         },
         notes,
     })

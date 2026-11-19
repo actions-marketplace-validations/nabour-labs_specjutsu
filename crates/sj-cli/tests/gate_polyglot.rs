@@ -245,7 +245,7 @@ fn gate_034_an_e2e_suite_that_skips_red_on_base_is_unverifiable() {
     write(
         r,
         "apps/app/e2e/chat.spec.ts",
-        "import { test } from '@playwright/test'\n\n// spec: CHAT-002\ntest(\"sends a message\", async () => {})\n",
+        "import { test, expect } from '@playwright/test'\n\n// spec: CHAT-002\ntest(\"sends a message\", async ({ page }) => {\n  await expect(page.getByText(\"sent\")).toBeVisible()\n})\n",
     );
     repo.commit("CHAT-002");
     let line = "unverifiable CHAT-002 sends a message (needs staging API)";

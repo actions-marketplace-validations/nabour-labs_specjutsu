@@ -63,6 +63,7 @@ pub fn scan_js(file: &Path, content: &str) -> Vec<TestFn> {
         title: String,
         ids: Vec<String>,
         skipped: bool,
+        focused: bool,
         end: usize,
     }
     let mut groups: Vec<Group> = Vec::new();
@@ -84,9 +85,17 @@ pub fn scan_js(file: &Path, content: &str) -> Vec<TestFn> {
                 title: call.title,
                 ids: comment,
                 skipped: call.skipped,
+                focused: call.focused,
                 end: call.end,
             });
         } else {
+            let marker_group = groups.iter().position(|g| g.skipped || g.focused).map(|k| {
+                groups[..=k]
+                    .iter()
+                    .map(|g| g.title.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" > ")
+            });
             let mut titles: Vec<&str> = groups.iter().map(|g| g.title.as_str()).collect();
             titles.push(&call.title);
             let mut comment_ids: Vec<String> = groups.iter().flat_map(|g| g.ids.clone()).collect();
@@ -101,6 +110,9 @@ pub fn scan_js(file: &Path, content: &str) -> Vec<TestFn> {
                 comment_ids,
                 name_ids,
                 skipped: call.skipped || groups.iter().any(|g| g.skipped),
+                end_line: toks[call.end].line,
+                focused: call.focused || groups.iter().any(|g| g.focused),
+                marker_group,
                 ..TestFn::default()
             });
         }
@@ -115,6 +127,7 @@ struct Call {
     group: bool,
     title: String,
     skipped: bool,
+    focused: bool,
     /// Index of the `)` that closes the call.
     end: usize,
     /// Index to resume scanning from.
@@ -158,6 +171,7 @@ fn match_call(toks: &[Token], close: &[Option<usize>], i: usize) -> Option<Call>
         return None;
     }
     let skipped = root.starts_with('x') || mods.iter().any(|m| SKIPPING.contains(m));
+    let focused = root.starts_with('f') || mods.contains(&"only");
 
     if toks.get(j).map(|t| &t.tok) != Some(&Tok::Punct('(')) {
         return None;
@@ -176,6 +190,7 @@ fn match_call(toks: &[Token], close: &[Option<usize>], i: usize) -> Option<Call>
             group,
             title: text.clone(),
             skipped,
+            focused,
             end,
             body_start: j + 2,
         }),
