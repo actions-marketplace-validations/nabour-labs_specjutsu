@@ -115,6 +115,8 @@ pub struct Suite {
     pub red_on_base: RedOnBase,
     /// Why red-on-base is skipped (required with `red_on_base = "skip"`).
     pub reason: Option<String>,
+    /// A command that runs the selected tests and writes LCOV to `{lcov}` (DRIFT-001).
+    pub coverage: Option<String>,
 }
 
 impl Suite {
@@ -129,6 +131,7 @@ impl Suite {
             support: Vec::new(),
             red_on_base: RedOnBase::Run,
             reason: None,
+            coverage: None,
         }
     }
 }
@@ -210,6 +213,7 @@ struct RawSuite {
     support: Vec<String>,
     red_on_base: Option<String>,
     reason: Option<String>,
+    coverage: Option<String>,
 }
 
 /// Load `<root>/specjutsu.toml`, or the defaults for `root` when it does not exist.
@@ -306,6 +310,13 @@ impl Config {
                         )
                     })?;
                 let what = format!("{FILE}: package {}: {} suite", p.path, s.runner);
+                if s.coverage.as_ref().is_some_and(|c| !c.contains("{lcov}")) {
+                    bail!(
+                        "{FILE}: suite {} ({}): coverage must contain {{lcov}}",
+                        s.runner,
+                        p.path
+                    );
+                }
                 match (runner, &s.command, &s.report) {
                     (Runner::Junit, None, _) => bail!("{what} needs `command`"),
                     (Runner::Junit, _, None) => bail!("{what} needs `report`"),
@@ -346,6 +357,7 @@ impl Config {
                     support: s.support,
                     red_on_base,
                     reason: s.reason,
+                    coverage: s.coverage,
                 });
             }
             packages.push(Package {
