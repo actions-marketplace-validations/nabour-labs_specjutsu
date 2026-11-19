@@ -384,6 +384,60 @@ pub fn check_tests(base: &[AuditTest], head: &[AuditTest], source_changed: bool)
     out
 }
 
+/// A `Specjutsu-Allow: <kind> <target> — <reason>` trailer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Allow {
+    pub kind: String,
+    pub target: String,
+    pub reason: String,
+}
+
+/// Parse every `Specjutsu-Allow:` line in `text`. The reason follows the first spaced dash
+/// (` — `, ` – ` or ` - `), so paths and names with hyphens stay whole.
+pub fn parse_allows(text: &str) -> Vec<Allow> {
+    text.lines()
+        .filter_map(|l| l.trim().strip_prefix("Specjutsu-Allow:"))
+        .filter_map(|rest| {
+            let rest = rest.trim();
+            let cut = [" — ", " – ", " - "]
+                .iter()
+                .filter_map(|sep| rest.find(sep).map(|i| (i, sep.len())))
+                .min();
+            let (what, reason) = match cut {
+                Some((i, n)) => (&rest[..i], rest[i + n..].trim()),
+                None => (rest, ""),
+            };
+            let (kind, target) = what.trim().split_once(' ')?;
+            Some(Allow {
+                kind: kind.to_string(),
+                target: target.trim().to_string(),
+                reason: reason.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Mark findings named by an allow as allowed; an allow without a reason is a failure.
+pub fn apply_allows(findings: &mut Vec<Finding>, allows: &[Allow]) {
+    for a in allows {
+        if a.reason.is_empty() {
+            findings.push(Finding::new(
+                "allow without reason",
+                format!("{} {}", a.kind, a.target),
+                String::new(),
+                Severity::Fail,
+            ));
+            continue;
+        }
+        for f in findings.iter_mut() {
+            if f.kind == a.kind && f.target == a.target && f.severity != Severity::Allowed {
+                f.severity = Severity::Allowed;
+                f.reason = a.reason.clone();
+            }
+        }
+    }
+}
+
 /// Run the audit between the merge base of `opts.base` and the working tree.
 pub fn run(opts: &Options) -> Result<AuditReport> {
     let root = &opts.root;
@@ -423,9 +477,12 @@ pub fn run(opts: &Options) -> Result<AuditReport> {
     let source_changed = changed
         .iter()
         .any(|f| !test_files.contains(f.as_str()) && classifier.is_impl(f));
-    Ok(AuditReport::from_findings(check_tests(
-        &base,
-        &head,
-        source_changed,
-    )))
+    let mut findings = check_tests(&base, &head, source_changed);
+    let allows: Vec<Allow> = git
+        .log(&format!("{mb}..HEAD"))?
+        .iter()
+        .flat_map(|c| parse_allows(&c.body))
+        .collect();
+    apply_allows(&mut findings, &allows);
+    Ok(AuditReport::from_findings(findings))
 }
