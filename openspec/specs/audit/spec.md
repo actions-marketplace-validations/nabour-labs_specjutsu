@@ -31,7 +31,7 @@ For a test present at base and at head, the audit SHALL report `skipped-test` wh
 - **THEN** `sj audit` reports exactly one `focused-test src/cart.test.ts › cart` finding
 
 ### Requirement: Tests that lose or lack assertions are reported
-The audit SHALL count assertions in each test body: Rust `assert*!` and `panic!` macros and `#[should_panic]`; JS/TS `expect(` and `assert` calls; Python `assert` statements, `pytest.raises` and `self.assert*` calls. A test present at base and head whose count dropped SHALL be reported as `weakened-test <file> › <name> (<before> → <after> assertions)`. A test added at head with a count of zero SHALL be reported as `assertion-free-test`. A helper named in the config's `[audit] assert_helpers` list SHALL count as an assertion.
+The audit SHALL count assertions in each test body: Rust `assert*!` and `panic!` macros, `#[should_panic]` and `.assert()` method calls (assert_cmd's entry point); JS/TS `expect(` and `assert` calls; Python `assert` statements, `pytest.raises` and `self.assert*` calls. A test present at base and head whose count dropped SHALL be reported as `weakened-test <file> › <name> (<before> → <after> assertions)`. A test added at head with a count of zero SHALL be reported as `assertion-free-test`. A helper named in the config's `[audit] assert_helpers` list SHALL count as an assertion.
 
 #### Scenario: AUDIT-005 Removing assertions weakens a test
 - **WHEN** the change edits `test_total_with_discount` from five `assert` statements to two
@@ -44,6 +44,10 @@ The audit SHALL count assertions in each test body: Rust `assert*!` and `panic!`
 #### Scenario: AUDIT-007 A configured assertion helper counts
 - **WHEN** `specjutsu.toml` has `[audit] assert_helpers = ["assert_snapshot"]` and a new test's only check is `assert_snapshot(out)`
 - **THEN** `sj audit` reports no `assertion-free-test` for it
+
+#### Scenario: AUDIT-014 An assert_cmd chain counts as an assertion
+- **WHEN** the change adds `#[test] fn runs() { Command::cargo_bin("x").unwrap().assert().success(); }` to `tests/cli.rs`
+- **THEN** `sj audit` prints `audit: clean` and exits 0
 
 ### Requirement: Rewritten expectations are flagged when source also changed
 For a test present at base and head, when a literal argument of an assertion changed and the same change modifies at least one non-test source file, the audit SHALL report `rewritten-expectation <file> › <name>` as a warning, not a failure, showing the old and new literal.
