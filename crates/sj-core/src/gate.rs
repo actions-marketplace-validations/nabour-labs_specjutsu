@@ -168,6 +168,9 @@ pub struct GateReport {
     pub summary: String,
     pub failures: Vec<String>,
     pub warnings: Vec<String>,
+    /// Findings that never fail the gate, e.g. code drift in a refactor (DRIFT-011).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub info: Vec<String>,
     pub exemptions: Vec<String>,
     pub proven: Vec<Proven>,
     /// Every scenario whose classification is not `unchanged`, with its kind.
@@ -951,7 +954,31 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         registry: false,
     })?;
     merge_audit(&mut gate, &audit);
+    // DRIFT-010/011: spec drift, failing only with `[drift] fail = true`.
+    let drift = crate::drift::run(&crate::drift::Options {
+        root: root.to_path_buf(),
+        spec_root: opts.spec_root.clone(),
+        base: opts.base.clone(),
+    })?;
+    merge_drift(&mut gate, &drift);
     Ok(gate)
+}
+
+/// Add drift findings to a gate report by severity.
+pub fn merge_drift(gate: &mut GateReport, drift: &crate::drift::DriftReport) {
+    use crate::drift::Severity;
+    let before = gate.failures.len();
+    for f in &drift.findings {
+        match f.severity {
+            Severity::Fail => gate.failures.push(f.reason()),
+            Severity::Warn => gate.warnings.push(f.text()),
+            Severity::Info => gate.info.push(f.text()),
+        }
+    }
+    if gate.failures.len() > before {
+        gate.pass = false;
+        gate.summary = format!("gate: fail — {}", plural(gate.failures.len(), "problem"));
+    }
 }
 
 /// Add audit findings to a gate report: failures fail the gate, the rest are listed.

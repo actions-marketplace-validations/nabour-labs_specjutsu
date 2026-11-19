@@ -7,6 +7,7 @@ pub mod authoring;
 pub mod ci;
 pub mod config;
 pub mod doctor;
+pub mod drift;
 pub mod gate;
 pub mod git;
 pub mod hook;

@@ -115,6 +115,8 @@ pub struct Suite {
     pub red_on_base: RedOnBase,
     /// Why red-on-base is skipped (required with `red_on_base = "skip"`).
     pub reason: Option<String>,
+    /// A command that runs the selected tests and writes LCOV to `{lcov}` (DRIFT-001).
+    pub coverage: Option<String>,
 }
 
 impl Suite {
@@ -129,6 +131,7 @@ impl Suite {
             support: Vec::new(),
             red_on_base: RedOnBase::Run,
             reason: None,
+            coverage: None,
         }
     }
 }
@@ -155,7 +158,15 @@ pub struct Config {
     pub packages: Vec<Package>,
     /// `[audit] assert_helpers`: functions or macros `sj audit` counts as assertions.
     pub assert_helpers: Vec<String>,
+    /// `[drift] fail`: drift findings fail the gate (DRIFT-010).
+    pub drift_fail: bool,
+    /// `[drift] shared_threshold` in thousandths (default 500): lines run by more than this
+    /// share of mapped scenarios are shared, not owned (DRIFT-003).
+    pub drift_shared_permille: u32,
 }
+
+/// The default `[drift] shared_threshold`, in thousandths.
+pub const DRIFT_SHARED_PERMILLE: u32 = 500;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -167,8 +178,17 @@ struct RawConfig {
     non_source: Vec<String>,
     ids: Option<RawIds>,
     audit: Option<RawAudit>,
+    drift: Option<RawDrift>,
     #[serde(default, rename = "package")]
     packages: Vec<RawPackage>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawDrift {
+    #[serde(default)]
+    fail: bool,
+    shared_threshold: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -210,6 +230,7 @@ struct RawSuite {
     support: Vec<String>,
     red_on_base: Option<String>,
     reason: Option<String>,
+    coverage: Option<String>,
 }
 
 /// Load `<root>/specjutsu.toml`, or the defaults for `root` when it does not exist.
@@ -241,6 +262,8 @@ impl Config {
             mode: Mode::default(),
             non_source: Vec::new(),
             assert_helpers: Vec::new(),
+            drift_fail: false,
+            drift_shared_permille: DRIFT_SHARED_PERMILLE,
             id_prefixes: BTreeMap::new(),
             packages,
         }
@@ -306,6 +329,13 @@ impl Config {
                         )
                     })?;
                 let what = format!("{FILE}: package {}: {} suite", p.path, s.runner);
+                if s.coverage.as_ref().is_some_and(|c| !c.contains("{lcov}")) {
+                    bail!(
+                        "{FILE}: suite {} ({}): coverage must contain {{lcov}}",
+                        s.runner,
+                        p.path
+                    );
+                }
                 match (runner, &s.command, &s.report) {
                     (Runner::Junit, None, _) => bail!("{what} needs `command`"),
                     (Runner::Junit, _, None) => bail!("{what} needs `report`"),
@@ -346,6 +376,7 @@ impl Config {
                     support: s.support,
                     red_on_base,
                     reason: s.reason,
+                    coverage: s.coverage,
                 });
             }
             packages.push(Package {
@@ -355,6 +386,16 @@ impl Config {
             });
         }
 
+        let (drift_fail, drift_shared_permille) = match &raw.drift {
+            Some(d) => {
+                let t = d.shared_threshold.unwrap_or(0.5);
+                if !(0.0..=1.0).contains(&t) {
+                    bail!("{FILE}: [drift] shared_threshold must be between 0 and 1, got {t}");
+                }
+                (d.fail, (t * 1000.0).round() as u32)
+            }
+            None => (false, DRIFT_SHARED_PERMILLE),
+        };
         Ok(Config {
             schema,
             spec_root,
@@ -363,6 +404,8 @@ impl Config {
             id_prefixes,
             packages,
             assert_helpers: raw.audit.map(|a| a.assert_helpers).unwrap_or_default(),
+            drift_fail,
+            drift_shared_permille,
         })
     }
 
