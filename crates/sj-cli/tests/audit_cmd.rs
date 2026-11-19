@@ -269,3 +269,42 @@ fn audit_007_a_configured_assertion_helper_counts() {
     assert_eq!(out.trim(), "audit: clean", "{out}");
     assert_eq!(code, Some(0));
 }
+
+#[test]
+fn audit_008_editing_the_expected_value_next_to_a_source_change_warns() {
+    let test =
+        "it(\"adds tax\", () => {\n  const total = cart([100])\n  expect(total).toBe(108)\n})\n";
+    let files = [
+        (
+            "src/cart.ts",
+            "export const cart = (xs: number[]) => xs[0] * 1.08\n",
+        ),
+        ("src/cart.test.ts", test),
+    ];
+    let f = Fixture::new(&files);
+    f.write(
+        "src/cart.ts",
+        "export const cart = (xs: number[]) => xs[0] * 1.1\n",
+    );
+    f.write("src/cart.test.ts", &test.replace("108", "110"));
+    f.commit("raise tax");
+
+    let (code, out) = f.audit(&[]);
+    let line = out
+        .lines()
+        .find(|l| l.contains("rewritten-expectation"))
+        .unwrap_or_else(|| panic!("no warning in:\n{out}"));
+    assert!(line.starts_with("warn"), "{line}");
+    assert!(
+        line.ends_with("rewritten-expectation src/cart.test.ts › adds tax: 108 → 110"),
+        "{line}"
+    );
+    assert_eq!(code, Some(0), "{out}");
+
+    // The same edit without a source change is a spec-driven fix, not a rewrite.
+    let g = Fixture::new(&files);
+    g.write("src/cart.test.ts", &test.replace("108", "110"));
+    g.commit("fix expectation");
+    let (_, out) = g.audit(&[]);
+    assert!(!out.contains("rewritten-expectation"), "{out}");
+}
