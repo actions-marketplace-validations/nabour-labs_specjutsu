@@ -108,13 +108,13 @@ state="$STUB_STATE"; mkdir -p "$state/comments"
 echo "$*" >> "$state/calls"
 [ "$1" = api ] || { echo "unexpected gh call: $*" >&2; exit 9; }
 shift
-method=GET; path=""; body=""
+method=GET; path=""; body=""; marker="<!-- specjutsu:gate -->"
 while [ $# -gt 0 ]; do
   case "$1" in
     -X) method="$2"; shift 2 ;;
     -F|-f) case "$2" in body=@*) body="${2#body=@}" ;; esac; shift 2 ;;
     --paginate) shift ;;
-    --jq) shift 2 ;;
+    --jq) re='startswith\("([^"]*)"\)'; [[ "$2" =~ $re ]] && marker="${BASH_REMATCH[1]}"; shift 2 ;;
     *) path="$1"; shift ;;
   esac
 done
@@ -125,7 +125,7 @@ case "$method $path" in
   "GET repos/"*/issues/*/comments)
     for f in "$state"/comments/*; do
       [ -e "$f" ] || continue
-      if [ "$(head -n1 "$f")" = "<!-- specjutsu:gate -->" ]; then basename "$f"; fi
+      if [ "$(head -n1 "$f")" = "$marker" ]; then basename "$f"; fi
     done ;;
   "POST repos/"*/issues/*/comments)
     n=$(( $(ls "$state/comments" | wc -l) + 1 )); cp "$body" "$state/comments/$n" ;;
@@ -382,4 +382,68 @@ fn ci_013_the_badge_branch_is_updated_only_when_the_badge_changes() {
         "",
         "work tree was touched"
     );
+}
+
+#[test]
+fn ci_014_a_repository_without_specs_gets_an_audit_comment() {
+    let a = Action::new();
+    let repo = a.dir.path().join("shop");
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    let test = "it(\"checkout\", () => {\n  expect(pay()).toBe(true)\n})\n\nit(\"refund\", () => {\n  expect(refund()).toBe(true)\n})\n";
+    std::fs::write(repo.join("src/cart.test.ts"), test).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-qm", "init"]);
+    git(&repo, &["checkout", "-qb", "feature"]);
+    std::fs::write(
+        repo.join("src/cart.test.ts"),
+        test.replacen("it(", "it.only(", 1),
+    )
+    .unwrap();
+    git(&repo, &["commit", "-qam", "focus"]);
+
+    // The real sj, with the stub gh in front of it.
+    std::fs::remove_file(a.dir.path().join("bin/sj")).unwrap();
+    let sj_dir = Path::new(env!("CARGO_BIN_EXE_sj"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let path = format!(
+        "{}:{}:{}",
+        a.dir.path().join("bin").display(),
+        sj_dir.display(),
+        std::env::var("PATH").unwrap()
+    );
+    let out = run(Command::new("bash")
+        .arg(script("comment.sh"))
+        .current_dir(&repo)
+        .env("PATH", path)
+        .env("STUB_STATE", a.state())
+        .env("GITHUB_STEP_SUMMARY", a.dir.path().join("summary.md"))
+        .env("GITHUB_REPOSITORY", "acme/shop")
+        .env("SJ_BASE", "main")
+        .env("SJ_PR", "7")
+        .env("SJ_COMMENT", "true")
+        .env("SJ_FAIL_ON", "gate")
+        .env("SJ_COMMAND", "audit"));
+
+    let comments = a.comments();
+    assert_eq!(
+        comments.len(),
+        1,
+        "{comments:#?} {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let body = &comments[0];
+    assert!(body.starts_with("<!-- specjutsu:audit -->\n"), "{body}");
+    let row = body
+        .lines()
+        .find(|l| l.contains("focused-test"))
+        .unwrap_or_else(|| panic!("no focused-test row:\n{body}"));
+    assert!(
+        row.contains("remove .only; it stops every other test in the file from running"),
+        "{row}"
+    );
+    assert!(!out.status.success(), "the step passed");
+    assert!(a.summary().contains("focused-test"));
 }
