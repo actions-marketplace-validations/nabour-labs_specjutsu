@@ -97,6 +97,8 @@ pub fn detect(root: &Path) -> Result<Detected> {
             id_prefixes: Default::default(),
             packages,
             assert_helpers: Vec::new(),
+            drift_fail: false,
+            drift_shared_permille: crate::config::DRIFT_SHARED_PERMILLE,
         },
         notes,
     })

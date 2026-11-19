@@ -35,10 +35,18 @@ All notable changes are recorded here. The format follows
   (`unknown-package`, `new-package`). `Specjutsu-Allow:` trailers with a reason
   allow a finding, and `[audit] assert_helpers` adds assertion helpers.
 - The action's `command: audit` input runs `sj audit` instead of the gate.
+- `sj coverage map` runs each scenario's tests under its suite's new `coverage`
+  command and records the source lines they run in `.specjutsu/coverage-map.json`.
+  Lines most scenarios run are dropped as shared.
+- `sj drift --base <ref>` reports `code-drift` (code a scenario's tests run changed
+  while its spec and tests did not) and `stale-test` (a scenario's spec changed
+  while its tests did not). A map from an older commit is translated to the base.
 
 ### Changed
 - `sj gate` also runs the audit's test checks and fails on their failures, for
   example a test that gained `#[ignore]` or a new test that asserts nothing.
+- `sj gate` reports spec drift as warnings, as failures with `[drift] fail = true`,
+  and as `info` lines in a `refactor` change.
 
 ## [0.3.1] - 2026-11-18
 
