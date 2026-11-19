@@ -160,15 +160,16 @@ pub fn badge(
                 .any(|m| m.id == **id && m.tests.iter().any(|t| !t.skipped))
         })
         .count();
-    let (message, color) = if total == 0 {
-        ("no specs".to_string(), "lightgrey")
-    } else {
-        let color = match tested * 100 / total {
-            90.. => "brightgreen",
-            70.. => "yellow",
-            _ => "red",
-        };
-        (format!("{tested}/{total} tested"), color)
+    let (message, color) = match (tested * 100).checked_div(total) {
+        None => ("no specs".to_string(), "lightgrey"),
+        Some(percent) => {
+            let color = match percent {
+                90.. => "brightgreen",
+                70.. => "yellow",
+                _ => "red",
+            };
+            (format!("{tested}/{total} tested"), color)
+        }
     };
     Badge {
         schema_version: 1,
