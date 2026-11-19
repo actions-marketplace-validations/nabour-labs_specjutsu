@@ -9,7 +9,7 @@ A suite in `specjutsu.toml` MAY set `coverage`, a command that runs the suite's 
 
 #### Scenario: DRIFT-001 A coverage command without {lcov} is rejected
 - **WHEN** a suite sets `coverage = "cargo llvm-cov --lcov"`
-- **THEN** `sj doctor` reports `suite cargo (.): coverage must contain {lcov}` and exits 2
+- **THEN** `sj doctor` reports `suite cargo (.): coverage must contain {lcov}` as a config problem and exits 1
 
 ### Requirement: sj coverage map records the lines each scenario runs
 `sj coverage map` SHALL run, for every scenario with mapped tests in a suite with `coverage`, that scenario's tests under the coverage command. It SHALL write `.specjutsu/coverage-map.json` holding the commit it was built on and, for each scenario ID, the source files and line ranges with a hit count above zero. Only files matching the package's `sources` SHALL be kept. Lines run by more than `[drift] shared_threshold` of the mapped scenarios (default 0.5) SHALL be dropped from every scenario and counted as shared.

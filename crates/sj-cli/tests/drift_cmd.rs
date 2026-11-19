@@ -16,7 +16,7 @@ fn drift_001_a_coverage_command_without_lcov_is_rejected() {
         .args(["doctor", "--root"])
         .arg(dir.path())
         .assert()
-        .code(2)
+        .code(1)
         .stdout(predicate::str::contains(
             "suite cargo (.): coverage must contain {lcov}",
         ));
