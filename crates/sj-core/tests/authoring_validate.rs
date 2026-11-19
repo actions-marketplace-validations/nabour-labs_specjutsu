@@ -459,3 +459,19 @@ fn spec_007_questions_in_inline_code_are_ignored() {
     let qs: Vec<&str> = r.clarify.iter().map(|c| c.question.as_str()).collect();
     assert_eq!(qs, ["real one?"]);
 }
+
+#[test]
+fn spec_012_clarify_questions_keep_their_inline_code() {
+    let dir = tree();
+    put(
+        dir.path(),
+        "changes/add-refresh/design.md",
+        "## Context\n\n[NEEDS CLARIFICATION: do `PreToolUse` hooks fire for `apply_patch` file edits?]\n",
+    );
+    let r = check(dir.path(), "add-refresh").unwrap();
+    let qs: Vec<&str> = r.clarify.iter().map(|c| c.question.as_str()).collect();
+    assert_eq!(
+        qs,
+        ["do `PreToolUse` hooks fire for `apply_patch` file edits?"]
+    );
+}
