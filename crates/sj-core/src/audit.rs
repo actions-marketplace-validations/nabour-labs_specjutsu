@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use regex::Regex;
 use serde::Serialize;
 
 use crate::config::{Config, FILE as CONFIG_FILE};
@@ -133,10 +134,38 @@ pub struct AuditTest {
     pub skipped: bool,
     pub focused: bool,
     pub marker_group: Option<String>,
+    pub assertions: usize,
+}
+
+/// Count assertions in a test's text by its file's language (design decision 3).
+pub fn count_assertions(file: &str, text: &str, above: &[&str], helpers: &[String]) -> usize {
+    use std::sync::OnceLock;
+    static RS: OnceLock<Regex> = OnceLock::new();
+    static JS: OnceLock<Regex> = OnceLock::new();
+    static PY: OnceLock<Regex> = OnceLock::new();
+    let re = if file.ends_with(".rs") {
+        RS.get_or_init(|| Regex::new(r"\b(?:debug_)?assert\w*!|\bpanic!").unwrap())
+    } else if file.ends_with(".py") {
+        PY.get_or_init(|| {
+            Regex::new(r"(?m)^\s*assert\b|\bpytest\.raises\b|\bself\.assert\w+\s*\(").unwrap()
+        })
+    } else {
+        JS.get_or_init(|| Regex::new(r"\bexpect\s*\(|\bassert(?:\.\w+)*\s*\(").unwrap())
+    };
+    let mut n = re.find_iter(text).count();
+    if above.iter().any(|l| l.contains("should_panic")) {
+        n += 1;
+    }
+    for h in helpers {
+        if let Ok(r) = Regex::new(&format!(r"\b{}\s*[!(]", regex::escape(h))) {
+            n += r.find_iter(text).count();
+        }
+    }
+    n
 }
 
 impl AuditTest {
-    fn from(t: &TestFn, content: &str) -> Self {
+    fn from(t: &TestFn, content: &str, helpers: &[String]) -> Self {
         let lines: Vec<&str> = content.lines().collect();
         let start = t.line.saturating_sub(1).min(lines.len());
         let end = t.end_line.max(t.line).min(lines.len());
@@ -162,9 +191,12 @@ impl AuditTest {
         let skipped = t.skipped
             || above.iter().any(|l| l.trim().starts_with("#[ignore"))
             || text.contains("pytest.skip(");
+        let file = t.file.to_string_lossy().replace('\\', "/");
+        let assertions = count_assertions(&file, &text, &above, helpers);
         AuditTest {
-            file: t.file.to_string_lossy().replace('\\', "/"),
+            file,
             name: t.name.clone(),
+            assertions,
             text,
             body_key,
             skipped,
@@ -207,6 +239,7 @@ fn scan_side(
     root: &Path,
     config: Option<&Config>,
     paths: &[String],
+    helpers: &[String],
     read: impl Fn(&str) -> Option<String>,
 ) -> Result<Vec<AuditTest>> {
     let mut out = Vec::new();
@@ -230,7 +263,7 @@ fn scan_side(
     for t in &tests {
         let rel = t.file.to_string_lossy().replace('\\', "/");
         if let Some(content) = contents.get(&rel) {
-            out.push(AuditTest::from(t, content));
+            out.push(AuditTest::from(t, content, helpers));
         }
     }
     Ok(out)
@@ -254,6 +287,14 @@ pub fn check_tests(base: &[AuditTest], head: &[AuditTest]) -> Vec<Finding> {
         let Some(b) = base_by_name.get(&(h.file.as_str(), h.name.as_str())) else {
             continue;
         };
+        if h.assertions < b.assertions {
+            out.push(Finding::new(
+                "weakened-test",
+                h.target(),
+                format!("({} → {} assertions)", b.assertions, h.assertions),
+                Severity::Fail,
+            ));
+        }
         for (kind, now, before) in [
             ("skipped-test", h.skipped, b.skipped),
             ("focused-test", h.focused, b.focused),
@@ -267,6 +308,19 @@ pub fn check_tests(base: &[AuditTest], head: &[AuditTest]) -> Vec<Finding> {
                     out.push(Finding::new(kind, target, String::new(), Severity::Fail));
                 }
             }
+        }
+    }
+    let base_bodies: BTreeSet<&str> = base.iter().map(|t| t.body_key.as_str()).collect();
+    for h in head {
+        let new = !base_by_name.contains_key(&(h.file.as_str(), h.name.as_str()))
+            && !base_bodies.contains(h.body_key.as_str());
+        if new && h.assertions == 0 {
+            out.push(Finding::new(
+                "assertion-free-test",
+                h.target(),
+                String::new(),
+                Severity::Fail,
+            ));
         }
     }
     for b in base {
@@ -301,13 +355,17 @@ pub fn run(opts: &Options) -> Result<AuditReport> {
         None
     };
     let base_files: BTreeSet<String> = git.ls_tree(&mb)?.into_iter().collect();
-    let base = scan_side(root, config.as_ref(), &changed, |rel| {
+    let helpers = config
+        .as_ref()
+        .map(|c| c.assert_helpers.clone())
+        .unwrap_or_default();
+    let base = scan_side(root, config.as_ref(), &changed, &helpers, |rel| {
         base_files
             .contains(rel)
             .then(|| git.show(&mb, rel).ok())
             .flatten()
     })?;
-    let head = scan_side(root, config.as_ref(), &changed, |rel| {
+    let head = scan_side(root, config.as_ref(), &changed, &helpers, |rel| {
         std::fs::read_to_string(root.join(rel)).ok()
     })?;
     Ok(AuditReport::from_findings(check_tests(&base, &head)))
