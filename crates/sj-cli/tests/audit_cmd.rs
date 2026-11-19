@@ -215,3 +215,57 @@ fn audit_004_a_newly_focused_test_is_reported() {
     );
     assert_eq!(code, Some(1));
 }
+
+#[test]
+fn audit_005_removing_assertions_weakens_a_test() {
+    let before = "def test_total_with_discount():\n    cart = Cart([10, 20])\n    assert cart.total() == 30\n    assert cart.discount(0.1) == 27\n    assert cart.items == 2\n    assert cart.currency == \"EUR\"\n    assert not cart.empty\n";
+    let after = "def test_total_with_discount():\n    cart = Cart([10, 20])\n    assert cart.total() == 30\n    assert cart.items == 2\n";
+    let f = Fixture::new(&[("tests/test_cart.py", before)]);
+    f.write("tests/test_cart.py", after);
+    f.commit("simplify");
+
+    let (code, out) = f.audit(&[]);
+    assert!(
+        out.contains(
+            "weakened-test tests/test_cart.py › test_total_with_discount (5 → 2 assertions)"
+        ),
+        "{out}"
+    );
+    assert_eq!(code, Some(1));
+}
+
+#[test]
+fn audit_006_a_new_test_without_assertions_is_reported() {
+    let f = Fixture::new(&[("tests/cart.rs", "use demo::total;\n")]);
+    f.write(
+        "tests/cart.rs",
+        "use demo::total;\n\n#[test]\nfn computes_total() { let _ = total(&cart); }\n\n#[test]\nfn totals_match() { assert_eq!(total(&cart), 3); }\n",
+    );
+    f.commit("add tests");
+
+    let (code, out) = f.audit(&[]);
+    assert!(
+        out.contains("assertion-free-test tests/cart.rs › computes_total"),
+        "{out}"
+    );
+    assert!(!out.contains("totals_match"), "{out}");
+    assert_eq!(code, Some(1));
+}
+
+#[test]
+fn audit_007_a_configured_assertion_helper_counts() {
+    let config = "schema = 1\n\n[audit]\nassert_helpers = [\"assert_snapshot\"]\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n[[package.suite]]\nrunner = \"vitest\"\ntests = [\"src/**/*.test.ts\"]\n";
+    let f = Fixture::new(&[
+        ("specjutsu.toml", config),
+        ("src/view.test.ts", "import { render } from \"./view\"\n"),
+    ]);
+    f.write(
+        "src/view.test.ts",
+        "import { render } from \"./view\"\n\nit(\"renders\", () => {\n  const out = render()\n  assert_snapshot(out)\n})\n",
+    );
+    f.commit("snapshot test");
+
+    let (code, out) = f.audit(&[]);
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
