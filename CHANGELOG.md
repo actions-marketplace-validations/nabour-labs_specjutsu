@@ -17,6 +17,17 @@ All notable changes are recorded here. The format follows
   60,000 bytes. `--format json` is the same as `--json`.
 - `sj badge [--out <path>]` writes a shields.io endpoint badge with the share of
   tested scenarios in `specs/`.
+- `sj audit --base <ref>` checks a change's tests with no specjutsu setup
+  needed. It fails on removed, newly skipped or focused, weakened and
+  assertion-free tests, and warns on expected values rewritten next to a source
+  change. `--registry` also looks up added dependencies on crates.io, npm and PyPI
+  (`unknown-package`, `new-package`). `Specjutsu-Allow:` trailers with a reason
+  allow a finding, and `[audit] assert_helpers` adds assertion helpers.
+- The action's `command: audit` input runs `sj audit` instead of the gate.
+
+### Changed
+- `sj gate` also runs the audit's test checks and fails on their failures, for
+  example a test that gained `#[ignore]` or a new test that asserts nothing.
 
 ## [0.3.1] - 2026-11-18
 
