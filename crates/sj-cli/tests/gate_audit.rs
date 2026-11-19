@@ -4,7 +4,6 @@
 mod support;
 
 use assert_cmd::Command;
-use predicates::prelude::*;
 use support::Repo;
 
 const ADD_BUG: &str = "pub fn add(a: i32, b: i32) -> i32 { a - b }\n";
@@ -27,16 +26,19 @@ fn audit_013_skipping_a_test_fails_the_gate() {
     );
     repo.commit("feat(MATH-001): green");
 
-    Command::cargo_bin("sj")
+    let out = Command::cargo_bin("sj")
         .unwrap()
         .arg("gate")
         .arg("--root")
         .arg(repo.path())
         .args(["--base", "main"])
-        .assert()
-        .code(1)
-        .stdout(predicate::str::starts_with("gate: fail — 1 problem\n"))
-        .stdout(predicate::str::contains(
-            "fail    skipped-test tests/trace.rs › trace_004_matches_ids",
-        ));
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+    assert!(stdout.starts_with("gate: fail — 1 problem\n"), "{stdout}");
+    assert!(
+        stdout.contains("fail    skipped-test tests/trace.rs › trace_004_matches_ids"),
+        "{stdout}"
+    );
 }
