@@ -95,3 +95,83 @@ fn drift_008_no_map_means_only_stale_test_runs() {
         "{out}"
     );
 }
+
+/// `src/auth.rs` with 40 numbered lines.
+fn auth_rs(edit: Option<(usize, &str)>) -> String {
+    (1..=40)
+        .map(|n| match edit {
+            Some((l, text)) if l == n => format!("{text}\n"),
+            _ => format!("// auth line {n}\n"),
+        })
+        .collect()
+}
+
+/// `auth_repo` plus `src/auth.rs`, ignoring `.specjutsu/`, with a coverage map built on `main`
+/// in which AUTH-003 owns `src/auth.rs` lines 10–30.
+fn mapped_repo() -> Repo {
+    let repo = Repo::with_lib("pub fn add(a: i32, b: i32) -> i32 { a + b }\n");
+    repo.write(".gitignore", "target/\nCargo.lock\n.specjutsu/\n");
+    repo.write("openspec/specs/auth/spec.md", &auth_spec(401));
+    repo.write("tests/auth.rs", AUTH_TESTS);
+    repo.write("src/auth.rs", &auth_rs(None));
+    repo.commit("auth");
+    let commit = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
+    repo.branch("feature");
+    write_map(&repo, &commit, &[("AUTH-003", "src/auth.rs", 10, 30)]);
+    repo
+}
+
+fn write_map(repo: &Repo, commit: &str, owned: &[(&str, &str, usize, usize)]) {
+    let mut scenarios = serde_json::Map::new();
+    for (id, file, a, b) in owned {
+        scenarios.insert(id.to_string(), serde_json::json!({ *file: [[a, b]] }));
+    }
+    let map = serde_json::json!({
+        "commit": commit,
+        "tree": "0000",
+        "shared_lines": 0,
+        "scenarios": scenarios,
+    });
+    repo.write(".specjutsu/coverage-map.json", &map.to_string());
+}
+
+#[test]
+fn drift_005_changing_a_scenario_s_code_without_its_spec_or_tests_is_drift() {
+    let repo = mapped_repo();
+    repo.write(
+        "src/auth.rs",
+        &auth_rs(Some((15, "// expiry is now 48 hours"))),
+    );
+    repo.commit("fix: longer expiry");
+
+    let (code, out) = drift(&repo, &[]);
+    assert!(
+        out.contains(
+            "code-drift AUTH-003 src/auth.rs:15 — code its tests run changed; spec and tests did not"
+        ),
+        "{out}"
+    );
+    assert!(!out.contains("AUTH-002"), "{out}");
+    assert_eq!(code, Some(0), "warnings only: {out}");
+}
+
+#[test]
+fn drift_006_updating_the_scenario_s_test_clears_the_drift() {
+    let repo = mapped_repo();
+    repo.write(
+        "src/auth.rs",
+        &auth_rs(Some((15, "// expiry is now 48 hours"))),
+    );
+    repo.commit("fix: longer expiry");
+    let (_, before) = drift(&repo, &[]);
+    assert!(before.contains("code-drift AUTH-003"), "{before}");
+
+    repo.write(
+        "tests/auth.rs",
+        &AUTH_TESTS.replace("demo::add(2, 2), 4", "demo::add(2, 3), 5"),
+    );
+    repo.commit("test: expiry");
+    let (_, after) = drift(&repo, &[]);
+    assert!(!after.contains("AUTH-003"), "{after}");
+    assert_eq!(after.lines().next(), Some("drift: none"), "{after}");
+}
