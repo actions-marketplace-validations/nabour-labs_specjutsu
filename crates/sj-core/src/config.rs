@@ -163,6 +163,8 @@ pub struct Config {
     /// `[drift] shared_threshold` in thousandths (default 500): lines run by more than this
     /// share of mapped scenarios are shared, not owned (DRIFT-003).
     pub drift_shared_permille: u32,
+    /// `language`: the BCP-47 tag specs are written in (CONF-012); `None` means English.
+    pub language: Option<String>,
 }
 
 /// The default `[drift] shared_threshold`, in thousandths.
@@ -174,6 +176,7 @@ struct RawConfig {
     schema: Option<u32>,
     spec_root: Option<String>,
     mode: Option<String>,
+    language: Option<String>,
     #[serde(default)]
     non_source: Vec<String>,
     ids: Option<RawIds>,
@@ -233,6 +236,20 @@ struct RawSuite {
     coverage: Option<String>,
 }
 
+/// Whether `tag` is a well-formed BCP-47 language tag: a 2–3 letter language, then optional
+/// script, region and variant subtags (`fr`, `pt-BR`, `zh-Hant-TW`, `de-CH-1996`).
+pub fn is_language_tag(tag: &str) -> bool {
+    use std::sync::OnceLock;
+    static R: OnceLock<regex::Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        regex::Regex::new(
+            r"^[A-Za-z]{2,3}(-[A-Za-z]{4})?(-(?:[A-Za-z]{2}|[0-9]{3}))?(-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*$",
+        )
+        .unwrap()
+    })
+    .is_match(tag)
+}
+
 /// Load `<root>/specjutsu.toml`, or the defaults for `root` when it does not exist.
 pub fn load(root: &Path) -> Result<Config> {
     let path = root.join(FILE);
@@ -264,6 +281,7 @@ impl Config {
             assert_helpers: Vec::new(),
             drift_fail: false,
             drift_shared_permille: DRIFT_SHARED_PERMILLE,
+            language: None,
             id_prefixes: BTreeMap::new(),
             packages,
         }
@@ -297,6 +315,12 @@ impl Config {
                     )
                 })?,
         };
+
+        if let Some(tag) = &raw.language {
+            if !is_language_tag(tag) {
+                bail!("{FILE}: language `{tag}` is not a BCP-47 tag (for example `fr` or `pt-BR`)");
+            }
+        }
 
         let id_prefixes = raw.ids.map(|i| i.prefixes).unwrap_or_default();
         for (cap, prefix) in &id_prefixes {
@@ -406,6 +430,7 @@ impl Config {
             assert_helpers: raw.audit.map(|a| a.assert_helpers).unwrap_or_default(),
             drift_fail,
             drift_shared_permille,
+            language: raw.language,
         })
     }
 
@@ -417,6 +442,9 @@ impl Config {
             quote(&self.spec_root),
             quote(self.mode.as_str())
         );
+        if let Some(l) = &self.language {
+            out.push_str(&format!("language = {}\n", quote(l)));
+        }
         if !self.non_source.is_empty() {
             out.push_str(&format!("non_source = {}\n", list(&self.non_source)));
         }

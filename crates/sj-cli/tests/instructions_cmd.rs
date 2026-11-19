@@ -146,7 +146,7 @@ fn conf_017_a_translated_keyword_is_flagged() {
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         text.lines().any(|l| l.starts_with("warn")
-            && l.contains("openspec/changes/add-oauth-login/specs/auth/spec.md:9")
+            && l.contains("openspec/changes/add-oauth-login/specs/auth/spec.md:10")
             && l.contains("#### Scenario:")),
         "{text}"
     );

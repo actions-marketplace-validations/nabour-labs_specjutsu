@@ -69,6 +69,7 @@ pub fn validate(spec_root: &Path, change: Option<&str>) -> Result<Report> {
             }
         }
         if scoped.is_none() {
+            check_keywords(&mut r, &file, &lines, &mask);
             let blocks = blocks::blocks_in(&lines, &mask, all);
             for b in &blocks {
                 check_block(&mut r, &file, &lines, &mask, b);
@@ -93,6 +94,70 @@ fn dup(id: &str, first: &(PathBuf, usize), spec_root: &Path) -> String {
         rel.to_string_lossy().replace('\\', "/"),
         first.1
     )
+}
+
+/// Known translations of the structural keywords, lowercased, with the English heading.
+const TRANSLATED: &[(&str, &str)] = &[
+    ("scénario", "#### Scenario:"),
+    ("escenario", "#### Scenario:"),
+    ("cenário", "#### Scenario:"),
+    ("cenario", "#### Scenario:"),
+    ("szenario", "#### Scenario:"),
+    ("scenariusz", "#### Scenario:"),
+    ("сценарий", "#### Scenario:"),
+    ("senaryo", "#### Scenario:"),
+    ("シナリオ", "#### Scenario:"),
+    ("场景", "#### Scenario:"),
+    ("場景", "#### Scenario:"),
+    ("시나리오", "#### Scenario:"),
+    ("exigence", "### Requirement:"),
+    ("exigência", "### Requirement:"),
+    ("requisito", "### Requirement:"),
+    ("requerimiento", "### Requirement:"),
+    ("anforderung", "### Requirement:"),
+    ("wymaganie", "### Requirement:"),
+    ("требование", "### Requirement:"),
+    ("gereksinim", "### Requirement:"),
+    ("vereiste", "### Requirement:"),
+    ("要件", "### Requirement:"),
+    ("需求", "### Requirement:"),
+    ("요구사항", "### Requirement:"),
+    ("objectif", "## Purpose"),
+    ("propósito", "## Purpose"),
+    ("zweck", "## Purpose"),
+];
+
+/// Warn on a heading that starts with a translated structural keyword (CONF-017).
+fn check_keywords(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool]) {
+    for (i, line) in lines.iter().enumerate() {
+        if mask[i] {
+            continue;
+        }
+        let Some(rest) = line.trim_start_matches('#').strip_prefix(' ') else {
+            continue;
+        };
+        let hashes = line.len() - line.trim_start_matches('#').len();
+        if !(2..=4).contains(&hashes) {
+            continue;
+        }
+        let word: String = rest
+            .trim_start()
+            .split(|c: char| c == ':' || c.is_whitespace())
+            .next()
+            .unwrap_or("")
+            .to_lowercase();
+        if let Some((_, english)) = TRANSLATED.iter().find(|(w, _)| *w == word) {
+            let shown = line.split(':').next().unwrap_or(line).trim_end();
+            let colon = if english.ends_with(':') { ":" } else { "" };
+            r.warn(
+                format!(
+                    "translated keyword `{shown}{colon}`: structural keywords stay English, use `{english}`"
+                ),
+                file,
+                i + 1,
+            );
+        }
+    }
 }
 
 /// A requirement needs a scenario and a SHALL or MUST; each scenario needs an ID, WHEN and THEN.
@@ -187,6 +252,7 @@ fn validate_change(
         let lines: Vec<&str> = text.split('\n').collect();
         let mask = blocks::fence_mask(&lines);
         let d = blocks::parse_delta(&text);
+        check_keywords(out, &file, &lines, &mask);
         let rel = file.strip_prefix(&specs_dir).unwrap_or(&file);
         let target = spec_root.join("specs").join(rel);
         let before = target_names(&target, &[])?;

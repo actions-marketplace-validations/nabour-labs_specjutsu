@@ -399,6 +399,16 @@ spec folders, one per line. It never installs anything: pytest is checked on
 
 `sj trace`, `sj test` and `sj gate` read the packages and suites.
 
+### Spec language
+
+`language = "fr"` (any BCP-47 tag, such as `pt-BR`) says the specs are written in
+that language. `sj instructions` then asks for prose in it, with the structural
+keywords kept in English: `### Requirement:`, `#### Scenario:`, `WHEN`, `THEN`,
+`SHALL`, `MUST`, `## Purpose` and the delta section headers. The parsers only see
+those English words. `sj spec validate` warns at a heading that looks translated,
+such as `#### Scénario:`. An invalid tag exits 2. When `specjutsu.toml` sets no
+`language`, an unmigrated `openspec/config.yaml`'s `language` is used.
+
 ## Adding IDs to existing scenarios
 
 Trace and gate only see scenarios with an ID. `sj ids` lists every scenario
@@ -447,6 +457,15 @@ folders work unchanged.
 - **`sj spec new <change>`** creates `changes/<change>/` with `proposal.md`,
   `design.md`, `tasks.md` and an empty `specs/`. The name must be kebab-case. It
   prints the next free ID for every prefix in use.
+- **`sj instructions <change> [<artifact>]`** tells an agent what to write
+  next: the file and its template, the project context, the rules for that
+  artifact, the next free ID per prefix, the language and the command that checks
+  it. With no artifact it picks the first of `proposal`, `specs`, `design` and
+  `tasks` that is missing or still the template. `--json` prints the same data.
+- **`sj templates`** lists the four templates (`proposal.md`, `spec.md`,
+  `design.md`, `tasks.md`) and where each comes from. A file in
+  `<spec_root>/templates/` overrides the built-in, for `sj spec new` and
+  `sj instructions` alike.
 - **`sj spec list`** prints one line per open change:
   `add-oauth-login  3/7 tasks  4 scenarios`.
 - **`sj spec validate [<change>]`** reports each problem with its file and line:
@@ -473,6 +492,16 @@ folders work unchanged.
   bytes. Like OpenSpec, it writes LF line endings and one blank line between
   requirements. A MODIFIED block that would drop a scenario is an error. Nothing
   is written unless every delta merges.
+
+### Project context and rules
+
+`principles.md` in the spec root is read on every run. Its text before
+`## Rules` is the project context, and each `### <artifact>` section under
+`## Rules` holds that artifact's rules: `### tasks` rules show only in
+`sj instructions <change> tasks`. A project that still has OpenSpec's
+`openspec/config.yaml` keeps its `context` and `rules`: they are read, never
+written, and listed after `principles.md`'s, each under its file name.
+`sj migrate --from openspec` is still the way to move them over.
 
 ## Test runs and the evidence ledger
 

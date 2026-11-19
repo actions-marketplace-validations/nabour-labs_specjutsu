@@ -7,6 +7,17 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- `sj instructions <change> [<artifact>]` prints what to write next for a
+  change's proposal, specs, design or tasks: the file and template, the project
+  context, that artifact's rules, the next free IDs, the language and the check
+  command. `--json` prints the same data.
+- `sj templates` lists the templates and where each resolves from. A file in
+  `<spec_root>/templates/` overrides the built-in, and `sj spec new` uses it.
+- Project context and per-artifact rules are read live from `principles.md`,
+  and from an unmigrated `openspec/config.yaml` (read-only) after it.
+- A `language` key in `specjutsu.toml` (a BCP-47 tag) for specs written in
+  another language, with a fallback to `config.yaml`'s. `sj spec validate` warns
+  on a translated structural keyword such as `#### Scénario:`.
 - A GitHub Action, `uses: nabour-labs/specjutsu@v0`. It installs a pinned `sj`
   verified against `SHA256SUMS`, runs the gate on pull requests, keeps one PR
   comment up to date and writes the job summary. `fail-on: never` reports without

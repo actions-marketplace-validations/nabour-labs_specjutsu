@@ -6,6 +6,7 @@ pub mod audit;
 pub mod authoring;
 pub mod ci;
 pub mod config;
+pub mod context;
 pub mod doctor;
 pub mod drift;
 pub mod gate;
