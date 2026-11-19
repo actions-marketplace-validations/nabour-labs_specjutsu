@@ -11,13 +11,13 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 - [x] 2.1 `stale-test` and the no-map path (DRIFT-007, DRIFT-008).
 - [x] 2.2 `code-drift` with the map, and the test-changed rule (DRIFT-005, DRIFT-006).
-- [ ] 2.3 Line translation through `git diff` for an older map (DRIFT-009).
-- [ ] 2.4 Output and JSON (DRIFT-012).
+- [x] 2.3 Line translation through `git diff` for an older map (DRIFT-009).
+- [x] 2.4 Output and JSON (DRIFT-012).
 
 ## 3. Gate
 
-- [ ] 3.1 Drift lines in `sj gate`, `[drift] fail`, refactor exemption as info (DRIFT-010, DRIFT-011).
+- [x] 3.1 Drift lines in `sj gate`, `[drift] fail`, refactor exemption as info (DRIFT-010, DRIFT-011).
 
 ## 4. Docs
 
-- [ ] 4.1 README "Spec drift" section with coverage commands for cargo, vitest, Jest and pytest, and the CI recipe that caches the map from the default branch; add the `DRIFT` prefix to `openspec/principles.md`; CHANGELOG entry (no-scenario: docs).
+- [x] 4.1 README "Spec drift" section with coverage commands for cargo, vitest, Jest and pytest, and the CI recipe that caches the map from the default branch; add the `DRIFT` prefix to `openspec/principles.md`; CHANGELOG entry (no-scenario: docs).
