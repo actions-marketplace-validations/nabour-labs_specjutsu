@@ -14,6 +14,7 @@ pub mod ids;
 pub mod import;
 pub mod ledger;
 pub mod migrate;
+pub mod registry;
 pub mod run;
 pub mod spec;
 pub mod testscan;

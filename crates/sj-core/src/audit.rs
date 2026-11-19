@@ -36,7 +36,7 @@ pub struct Finding {
 }
 
 impl Finding {
-    fn new(kind: &str, target: String, detail: String, severity: Severity) -> Self {
+    pub(crate) fn new(kind: &str, target: String, detail: String, severity: Severity) -> Self {
         Finding {
             kind: kind.to_string(),
             target,
@@ -119,6 +119,8 @@ fn plural(n: usize, word: &str) -> String {
 pub struct Options {
     pub root: PathBuf,
     pub base: String,
+    /// Look up added dependencies on their registries (AUDIT-009, AUDIT-010).
+    pub registry: bool,
 }
 
 /// A test with the text the checks read.
@@ -478,6 +480,27 @@ pub fn run(opts: &Options) -> Result<AuditReport> {
         .iter()
         .any(|f| !test_files.contains(f.as_str()) && classifier.is_impl(f));
     let mut findings = check_tests(&base, &head, source_changed);
+    if opts.registry {
+        let mut added = BTreeSet::new();
+        for rel in &changed {
+            let Some(eco) = crate::registry::Ecosystem::for_manifest(rel) else {
+                continue;
+            };
+            let before = base_files
+                .contains(rel)
+                .then(|| git.show(&mb, rel).ok())
+                .flatten()
+                .map(|t| crate::registry::dependencies(eco, &t))
+                .unwrap_or_default();
+            let after = std::fs::read_to_string(root.join(rel))
+                .map(|t| crate::registry::dependencies(eco, &t))
+                .unwrap_or_default();
+            for name in after.difference(&before) {
+                added.insert((eco, name.clone()));
+            }
+        }
+        findings.extend(crate::registry::check(&added));
+    }
     let allows: Vec<Allow> = git
         .log(&format!("{mb}..HEAD"))?
         .iter()

@@ -38,6 +38,9 @@ enum Command {
         root: PathBuf,
         #[arg(long)]
         json: bool,
+        /// Look up added dependencies on crates.io, npm and PyPI (makes network requests).
+        #[arg(long)]
+        registry: bool,
     },
     /// Write a shields.io endpoint badge with the share of tested scenarios.
     Badge {
@@ -454,8 +457,17 @@ fn run() -> Result<ExitCode> {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
         }
-        Command::Audit { base, root, json } => {
-            let report = sj_core::audit::run(&sj_core::audit::Options { root, base })?;
+        Command::Audit {
+            base,
+            root,
+            json,
+            registry,
+        } => {
+            let report = sj_core::audit::run(&sj_core::audit::Options {
+                root,
+                base,
+                registry,
+            })?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
