@@ -308,3 +308,28 @@ fn audit_008_editing_the_expected_value_next_to_a_source_change_warns() {
     let (_, out) = g.audit(&[]);
     assert!(!out.contains("rewritten-expectation"), "{out}");
 }
+
+#[test]
+fn audit_011_an_allowed_removal_is_reported_not_failed() {
+    let export = "def test_legacy_export():\n    assert export_v1() == b\"\"\n\ndef test_export():\n    assert export() == b\"\"\n";
+    let kept = "def test_export():\n    assert export() == b\"\"\n";
+    let f = Fixture::new(&[("tests/test_export.py", export)]);
+    f.write("tests/test_export.py", kept);
+    f.commit("remove legacy export\n\nSpecjutsu-Allow: removed-test tests/test_export.py › test_legacy_export — legacy export removed in #212");
+
+    let (code, out) = f.audit(&[]);
+    assert!(
+        out.contains("allowed removed-test tests/test_export.py › test_legacy_export (legacy export removed in #212)"),
+        "{out}"
+    );
+    assert!(!out.contains("fail"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+
+    // A trailer without a reason is itself a failure.
+    let g = Fixture::new(&[("tests/test_export.py", export)]);
+    g.write("tests/test_export.py", kept);
+    g.commit("remove legacy export\n\nSpecjutsu-Allow: removed-test tests/test_export.py › test_legacy_export");
+    let (code, out) = g.audit(&[]);
+    assert!(out.contains("allow without reason"), "{out}");
+    assert_eq!(code, Some(1));
+}
