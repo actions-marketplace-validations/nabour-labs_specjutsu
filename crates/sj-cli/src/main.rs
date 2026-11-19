@@ -45,6 +45,23 @@ enum Command {
         #[arg(long)]
         registry: bool,
     },
+    /// Find scenarios whose code changed while their spec and tests did not, and the reverse.
+    Drift {
+        /// Base ref to compare against, e.g. origin/main.
+        #[arg(long)]
+        base: String,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Coverage per scenario, for spec drift detection.
+    Coverage {
+        #[command(subcommand)]
+        command: CoverageCommand,
+    },
     /// Write a shields.io endpoint badge with the share of tested scenarios.
     Badge {
         #[arg(long, default_value = ".")]
@@ -358,6 +375,9 @@ fn run() -> Result<ExitCode> {
                 for w in &report.warnings {
                     println!("warn    {w}");
                 }
+                for i in &report.info {
+                    println!("info    {i}");
+                }
                 for e in &report.exemptions {
                     println!("exempt  {e}");
                 }
@@ -488,6 +508,53 @@ fn run() -> Result<ExitCode> {
             } else {
                 ExitCode::from(1)
             })
+        }
+        Command::Drift {
+            base,
+            root,
+            spec_root,
+            json,
+        } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
+            let report = sj_core::drift::run(&sj_core::drift::Options {
+                root,
+                spec_root,
+                base,
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print!("{}", report.render());
+            }
+            Ok(if report.pass {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
+        }
+        Command::Coverage {
+            command: CoverageCommand::Map { root, spec_root },
+        } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
+            match sj_core::drift::build_map(&root, &spec_root)? {
+                sj_core::drift::MapOutcome::UpToDate => println!("coverage map up to date"),
+                sj_core::drift::MapOutcome::Built {
+                    scenarios,
+                    files,
+                    shared_lines,
+                } => {
+                    println!(
+                        "coverage map: {} over {} → {}",
+                        plural(scenarios, "scenario"),
+                        plural(files, "file"),
+                        sj_core::drift::MAP_PATH
+                    );
+                    if shared_lines > 0 {
+                        println!("{} dropped", plural(shared_lines, "shared line"));
+                    }
+                }
+            }
+            Ok(ExitCode::SUCCESS)
         }
         Command::Badge {
             root,
@@ -1287,4 +1354,16 @@ enum GateFormat {
     Text,
     Json,
     Markdown,
+}
+
+#[derive(Subcommand)]
+enum CoverageCommand {
+    /// Run each scenario's tests under its suite's `coverage` command and record the lines
+    /// they run in .specjutsu/coverage-map.json.
+    Map {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
+    },
 }
