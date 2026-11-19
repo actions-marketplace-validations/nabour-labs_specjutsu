@@ -270,6 +270,83 @@ checks (not the registry ones) on every change and fails on their failures. The
 output and exit codes match the gate's (`--json`, `--format markdown`; 0 pass,
 1 fail, 2 error).
 
+## Spec drift
+
+The gate proves the scenarios a change touches. Drift is about the ones it
+doesn't touch: an agent fixes a bug in `src/pricing.rs`, which also decides how
+discounts work, and the discount scenarios now describe behaviour the code no
+longer has. specjutsu finds that without reading the code: coverage says which
+lines each scenario's tests run, and the diff says which of them changed.
+
+```bash
+sj coverage map              # run each scenario's tests under coverage; write .specjutsu/coverage-map.json
+sj drift --base origin/main  # what the change did to code its scenarios own
+```
+
+`sj drift` reports two things:
+
+- `code-drift AUTH-003 src/auth.rs:15` means lines AUTH-003's tests run changed,
+  but AUTH-003's spec and the files holding its tests did not.
+- `stale-test AUTH-002` means AUTH-002's spec text changed but none of its tests
+  did. This one needs no map.
+
+Lines that more than half of the mapped scenarios run (setup, `main`, shared
+helpers) are dropped from the map as shared, so they don't flag everything. A map
+built on an older commit is translated to the base through `git diff`, and lines
+changed in between are dropped. Without a map, `sj drift` runs only `stale-test`
+and says so. `sj gate` reports drift as warnings. With `[drift] fail = true`
+they fail it, and in a change exempted as `refactor` code drift is only `info`.
+
+```toml
+[drift]
+fail = true             # drift findings fail the gate (default false)
+shared_threshold = 0.5  # share of scenarios above which a line is shared
+```
+
+Each suite that takes part declares a `coverage` command. `{lcov}` is the LCOV
+file to write and `{tests}` the scenario's tests in the runner's own syntax
+(test names for cargo, files for vitest and Jest, `file::name` for pytest):
+
+```toml
+[[package.suite]]
+runner = "cargo"
+coverage = "cargo llvm-cov --lcov --output-path {lcov} -- {tests}"
+
+[[package.suite]]
+runner = "vitest"
+coverage = "npx vitest run --coverage.enabled --coverage.reporter=lcov --coverage.reportsDirectory=.sj-cov {tests} && mv .sj-cov/lcov.info {lcov}"
+
+[[package.suite]]
+runner = "jest"
+coverage = "npx jest --coverage --coverageReporters=lcov --coverageDirectory=.sj-cov {tests} && mv .sj-cov/lcov.info {lcov}"
+
+[[package.suite]]
+runner = "pytest"
+coverage = "uv run pytest --cov --cov-report=lcov:{lcov} {tests}"
+```
+
+The map runs each scenario's tests once, so build it on the default branch and
+reuse it on pull requests:
+
+```yaml
+# On pushes to main
+- run: sj coverage map
+- uses: actions/cache/save@v4
+  with:
+    path: .specjutsu/coverage-map.json
+    key: sj-coverage-${{ github.sha }}
+
+# On pull requests, before the gate
+- uses: actions/cache/restore@v4
+  with:
+    path: .specjutsu/coverage-map.json
+    key: sj-coverage-${{ github.event.pull_request.base.sha }}
+    restore-keys: sj-coverage-
+```
+
+A restored map from a commit that isn't an ancestor of the base is not used, and
+`sj drift` says so.
+
 ## The project file
 
 `specjutsu.toml` at the repository root says where the specs are and which
