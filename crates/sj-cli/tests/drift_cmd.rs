@@ -4,7 +4,6 @@
 mod support;
 
 use assert_cmd::Command;
-use predicates::prelude::*;
 use support::Repo;
 
 /// The auth spec with AUTH-002's THEN status, and AUTH-003.
@@ -56,15 +55,18 @@ fn drift_001_a_coverage_command_without_lcov_is_rejected() {
         "schema = 1\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n[[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**/*.rs\"]\ncoverage = \"cargo llvm-cov --lcov\"\n",
     )
     .unwrap();
-    Command::cargo_bin("sj")
+    let out = Command::cargo_bin("sj")
         .unwrap()
         .args(["doctor", "--root"])
         .arg(dir.path())
-        .assert()
-        .code(1)
-        .stdout(predicate::str::contains(
-            "suite cargo (.): coverage must contain {lcov}",
-        ));
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+    assert!(
+        stdout.contains("suite cargo (.): coverage must contain {lcov}"),
+        "{stdout}"
+    );
 }
 
 #[test]
