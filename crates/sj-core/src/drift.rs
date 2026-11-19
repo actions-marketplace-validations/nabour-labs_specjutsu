@@ -423,11 +423,57 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
         }
     }
 
-    match CoverageMap::load(root)? {
-        None => report
+    let Some(map) = CoverageMap::load(root)? else {
+        report
             .notes
-            .push("no coverage map: code drift not checked (run sj coverage map)".to_string()),
-        Some(_map) => {}
+            .push("no coverage map: code drift not checked (run sj coverage map)".to_string());
+        return Ok(report.finish());
+    };
+    report.commit = Some(map.commit.clone());
+    let git = Git::new(root);
+
+    // DRIFT-005/006: base lines the change modifies or deletes, in files the map knows.
+    let mapped_files: BTreeSet<&str> = map
+        .scenarios
+        .values()
+        .flat_map(|files| files.keys().map(String::as_str))
+        .collect();
+    // First changed line per scenario.
+    let mut first: BTreeMap<String, (String, usize)> = BTreeMap::new();
+    for file in prep
+        .changed_files
+        .iter()
+        .filter(|f| mapped_files.contains(f.as_str()))
+    {
+        let mut lines: Vec<usize> = git
+            .hunks(&prep.mb, None, file)?
+            .iter()
+            .flat_map(|h| h.old_lines())
+            .collect();
+        lines.sort();
+        for line in lines {
+            for id in map.owners(file, line) {
+                first
+                    .entry(id.to_string())
+                    .or_insert_with(|| (file.clone(), line));
+            }
+        }
+    }
+    for (id, (file, line)) in first {
+        let text_unchanged = matches!(
+            prep.changes.get(&id),
+            None | Some(crate::gate::Change::Unchanged | crate::gate::Change::Implemented)
+        );
+        let tests_changed = test_files(&id).iter().any(|f| changed.contains(f.as_str()));
+        if text_unchanged && !tests_changed {
+            report.findings.push(DriftFinding {
+                kind: "code-drift".into(),
+                id,
+                file: Some(file),
+                line: Some(line),
+                severity,
+            });
+        }
     }
     Ok(report.finish())
 }

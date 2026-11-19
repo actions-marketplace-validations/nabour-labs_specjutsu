@@ -79,6 +79,17 @@ impl Git {
         Ok(files)
     }
 
+    /// `git diff -U0` hunks of `path` from `from` to `to` (the working tree when `None`), as
+    /// `(old_start, old_len, new_start, new_len)`.
+    pub fn hunks(&self, from: &str, to: Option<&str>, path: &str) -> Result<Vec<Hunk>> {
+        let mut args = vec!["diff", "-U0", "--no-color", "--no-renames", from];
+        if let Some(t) = to {
+            args.push(t);
+        }
+        args.extend(["--", path]);
+        Ok(parse_hunks(&self.run(&args)?))
+    }
+
     /// Every file path in the tree of `rev`.
     pub fn ls_tree(&self, rev: &str) -> Result<Vec<String>> {
         Ok(self
@@ -141,4 +152,46 @@ impl Git {
         self.run_env(&["add", "-A", "--", ":/"], &env)?;
         Ok(self.run_env(&["write-tree"], &env)?.trim().to_string())
     }
+}
+
+/// One `@@ -a,b +c,d @@` hunk header: `old_len` 0 is a pure insertion after `old_start`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hunk {
+    pub old_start: usize,
+    pub old_len: usize,
+    pub new_start: usize,
+    pub new_len: usize,
+}
+
+impl Hunk {
+    /// Base lines the hunk modifies or deletes.
+    pub fn old_lines(&self) -> std::ops::Range<usize> {
+        self.old_start..self.old_start + self.old_len
+    }
+}
+
+/// Parse the hunk headers of a unified diff.
+pub fn parse_hunks(diff: &str) -> Vec<Hunk> {
+    let side = |s: &str| -> Option<(usize, usize)> {
+        let (start, len) = match s.split_once(',') {
+            Some((a, b)) => (a.parse().ok()?, b.parse().ok()?),
+            None => (s.parse().ok()?, 1),
+        };
+        Some((start, len))
+    };
+    diff.lines()
+        .filter_map(|l| l.strip_prefix("@@ -"))
+        .filter_map(|rest| {
+            let (old, rest) = rest.split_once(" +")?;
+            let new = rest.split_once(' ').map(|(n, _)| n).unwrap_or(rest);
+            let (old_start, old_len) = side(old)?;
+            let (new_start, new_len) = side(new)?;
+            Some(Hunk {
+                old_start,
+                old_len,
+                new_start,
+                new_len,
+            })
+        })
+        .collect()
 }
