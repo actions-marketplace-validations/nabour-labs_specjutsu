@@ -178,3 +178,83 @@ pub fn badge(
         color: color.to_string(),
     }
 }
+
+/// First line of every audit comment.
+pub const AUDIT_MARKER: &str = "<!-- specjutsu:audit -->";
+
+/// The one-line fix hint for an audit finding's kind.
+pub fn audit_hint(kind: &str) -> &'static str {
+    match kind {
+        "removed-test" => {
+            "restore the test, or allow the removal with a `Specjutsu-Allow:` trailer and a reason"
+        }
+        "skipped-test" => {
+            "remove the skip marker, or allow it with a `Specjutsu-Allow:` trailer and a reason"
+        }
+        "focused-test" => "remove .only; it stops every other test in the file from running",
+        "weakened-test" => "restore the assertions the test lost, or allow it with a reason",
+        "assertion-free-test" => "assert the behaviour the test exercises",
+        "rewritten-expectation" => {
+            "check the new expected value comes from the spec, not from the code's output"
+        }
+        "unknown-package" => {
+            "no such package on the registry; check the name before installing anything"
+        }
+        "new-package" => "first published recently; check it is the package you meant",
+        "allow without reason" => {
+            "add a reason after a dash: `Specjutsu-Allow: <kind> <target> — <reason>`"
+        }
+        _ => "",
+    }
+}
+
+/// Render an audit result as a PR comment body of at most [`MAX_BYTES`] bytes.
+pub fn render_audit_markdown(report: &crate::audit::AuditReport, base: &str) -> String {
+    use crate::audit::Severity;
+    let icon = if report.pass { "✅" } else { "❌" };
+    let mut out = format!("{AUDIT_MARKER}\n### {icon} {}\n", report.summary);
+    if report.findings.is_empty() {
+        return out;
+    }
+    out.push_str("\n| | Finding | Test or package | Fix |\n| --- | --- | --- | --- |\n");
+    let mut findings: Vec<_> = report.findings.iter().collect();
+    findings.sort_by_key(|f| match f.severity {
+        Severity::Fail => 0,
+        Severity::Warn => 1,
+        Severity::Allowed => 2,
+    });
+    let budget = MAX_BYTES - FOOTER_ROOM;
+    let mut omitted = 0usize;
+    for f in findings {
+        let sev = match f.severity {
+            Severity::Fail => "fail",
+            Severity::Warn => "warn",
+            Severity::Allowed => "allowed",
+        };
+        let mut what = f.target.clone();
+        if !f.detail.is_empty() {
+            what.push_str(if f.detail.starts_with(':') { "" } else { " " });
+            what.push_str(&f.detail);
+        }
+        if f.severity == Severity::Allowed {
+            what.push_str(&format!(" ({})", f.reason));
+        }
+        let line = format!(
+            "| {sev} | {} | {} | {} |\n",
+            cell(&f.kind),
+            cell(&what),
+            cell(audit_hint(&f.kind))
+        );
+        if omitted > 0 || out.len() + line.len() > budget {
+            omitted += 1;
+            continue;
+        }
+        out.push_str(&line);
+    }
+    if omitted > 0 {
+        out.push_str(&format!(
+            "\n_{omitted} more findings not shown; run `sj audit --base {base}` locally for the full list._\n"
+        ));
+    }
+    out
+}

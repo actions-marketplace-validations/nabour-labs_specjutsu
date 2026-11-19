@@ -6,6 +6,9 @@ branding:
   color: green
 
 inputs:
+  command:
+    description: "`gate` checks specs and tests; `audit` checks tests and dependencies only, for repositories without specs."
+    default: gate
   version:
     description: sj release to install (without the leading v).
     default: "0.4.0"
@@ -34,11 +37,12 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       run: bash "$GITHUB_ACTION_PATH/scripts/action/install.sh" "${{ inputs.version }}"
 
-    - name: Gate
+    - name: Check
       if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.base != ''
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        SJ_COMMAND: ${{ inputs.command }}
         SJ_BASE: ${{ inputs.base != '' && inputs.base || format('origin/{0}', github.base_ref) }}
         SJ_COMMENT: ${{ inputs.comment }}
         SJ_FAIL_ON: ${{ inputs.fail-on }}

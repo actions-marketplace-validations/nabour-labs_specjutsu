@@ -36,8 +36,11 @@ enum Command {
         base: String,
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "format")]
         json: bool,
+        /// Output format: text (default), json, or markdown (a PR comment body).
+        #[arg(long, value_enum)]
+        format: Option<GateFormat>,
         /// Look up added dependencies on crates.io, npm and PyPI (makes network requests).
         #[arg(long)]
         registry: bool,
@@ -461,17 +464,24 @@ fn run() -> Result<ExitCode> {
             base,
             root,
             json,
+            format,
             registry,
         } => {
             let report = sj_core::audit::run(&sj_core::audit::Options {
                 root,
-                base,
+                base: base.clone(),
                 registry,
             })?;
-            if json {
-                println!("{}", serde_json::to_string_pretty(&report)?);
+            match format.unwrap_or(if json {
+                GateFormat::Json
             } else {
-                print!("{}", report.render());
+                GateFormat::Text
+            }) {
+                GateFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                GateFormat::Markdown => {
+                    print!("{}", sj_core::ci::render_audit_markdown(&report, &base))
+                }
+                GateFormat::Text => print!("{}", report.render()),
             }
             Ok(if report.pass {
                 ExitCode::SUCCESS
