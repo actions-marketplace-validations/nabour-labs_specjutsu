@@ -149,12 +149,25 @@ impl AuditTest {
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect();
+        // Attributes and decorators directly above the declaration (Rust `#[ignore]`).
+        let above: Vec<&str> = lines[..start]
+            .iter()
+            .rev()
+            .take_while(|l| {
+                let l = l.trim();
+                l.starts_with("#[") || l.starts_with("//") || l.starts_with('@')
+            })
+            .copied()
+            .collect();
+        let skipped = t.skipped
+            || above.iter().any(|l| l.trim().starts_with("#[ignore"))
+            || text.contains("pytest.skip(");
         AuditTest {
             file: t.file.to_string_lossy().replace('\\', "/"),
             name: t.name.clone(),
             text,
             body_key,
-            skipped: t.skipped,
+            skipped,
             focused: t.focused,
             marker_group: t.marker_group.clone(),
         }
@@ -230,7 +243,32 @@ pub fn check_tests(base: &[AuditTest], head: &[AuditTest]) -> Vec<Finding> {
         .map(|t| (t.file.as_str(), t.name.as_str()))
         .collect();
     let head_bodies: BTreeSet<&str> = head.iter().map(|t| t.body_key.as_str()).collect();
+    let base_by_name: BTreeMap<(&str, &str), &AuditTest> = base
+        .iter()
+        .map(|t| ((t.file.as_str(), t.name.as_str()), t))
+        .collect();
     let mut out = Vec::new();
+    // A marker on a group is reported once for the group (AUDIT-004).
+    let mut marked: BTreeSet<(String, String)> = BTreeSet::new();
+    for h in head {
+        let Some(b) = base_by_name.get(&(h.file.as_str(), h.name.as_str())) else {
+            continue;
+        };
+        for (kind, now, before) in [
+            ("skipped-test", h.skipped, b.skipped),
+            ("focused-test", h.focused, b.focused),
+        ] {
+            if now && !before {
+                let target = match &h.marker_group {
+                    Some(g) => format!("{} › {g}", h.file),
+                    None => h.target(),
+                };
+                if marked.insert((kind.to_string(), target.clone())) {
+                    out.push(Finding::new(kind, target, String::new(), Severity::Fail));
+                }
+            }
+        }
+    }
     for b in base {
         let kept = head_by_name.contains(&(b.file.as_str(), b.name.as_str()));
         if !kept && !head_bodies.contains(b.body_key.as_str()) {
