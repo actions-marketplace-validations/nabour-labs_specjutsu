@@ -269,8 +269,45 @@ fn scan_side(
     Ok(out)
 }
 
-/// The test checks over two sides of a change.
-pub fn check_tests(base: &[AuditTest], head: &[AuditTest]) -> Vec<Finding> {
+/// Lines of `text` that hold an assertion, by the file's language.
+fn assertion_lines<'a>(file: &str, text: &'a str) -> Vec<&'a str> {
+    text.lines()
+        .filter(|l| count_assertions(file, l, &[], &[]) > 0)
+        .collect()
+}
+
+/// A line's literals (numbers and quoted strings), and the line with each replaced by `#`.
+fn literals(line: &str) -> (String, Vec<String>) {
+    use std::sync::OnceLock;
+    static LIT: OnceLock<Regex> = OnceLock::new();
+    let re = LIT.get_or_init(|| {
+        Regex::new(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b-?\d+(?:\.\d+)?\b"#).unwrap()
+    });
+    let lits = re.find_iter(line).map(|m| m.as_str().to_string()).collect();
+    (re.replace_all(line, "#").trim().to_string(), lits)
+}
+
+/// The first expected literal that changed between two versions of a test, if the assertion
+/// lines are otherwise the same.
+fn rewritten(file: &str, base: &str, head: &str) -> Option<(String, String)> {
+    let (b, h) = (assertion_lines(file, base), assertion_lines(file, head));
+    if b.len() != h.len() {
+        return None;
+    }
+    for (bl, hl) in b.iter().zip(&h) {
+        let (bs, blits) = literals(bl);
+        let (hs, hlits) = literals(hl);
+        if bs == hs && blits != hlits {
+            let (o, n) = blits.iter().zip(&hlits).find(|(o, n)| o != n)?;
+            return Some((o.clone(), n.clone()));
+        }
+    }
+    None
+}
+
+/// The test checks over two sides of a change. `source_changed` says whether the change also
+/// edits implementation files (AUDIT-008).
+pub fn check_tests(base: &[AuditTest], head: &[AuditTest], source_changed: bool) -> Vec<Finding> {
     let head_by_name: BTreeSet<(&str, &str)> = head
         .iter()
         .map(|t| (t.file.as_str(), t.name.as_str()))
@@ -287,6 +324,16 @@ pub fn check_tests(base: &[AuditTest], head: &[AuditTest]) -> Vec<Finding> {
         let Some(b) = base_by_name.get(&(h.file.as_str(), h.name.as_str())) else {
             continue;
         };
+        if source_changed && h.text != b.text {
+            if let Some((old, new)) = rewritten(&h.file, &b.text, &h.text) {
+                out.push(Finding::new(
+                    "rewritten-expectation",
+                    h.target(),
+                    format!(": {old} → {new}"),
+                    Severity::Warn,
+                ));
+            }
+        }
         if h.assertions < b.assertions {
             out.push(Finding::new(
                 "weakened-test",
@@ -368,5 +415,17 @@ pub fn run(opts: &Options) -> Result<AuditReport> {
     let head = scan_side(root, config.as_ref(), &changed, &helpers, |rel| {
         std::fs::read_to_string(root.join(rel)).ok()
     })?;
-    Ok(AuditReport::from_findings(check_tests(&base, &head)))
+    let classifier = match &config {
+        Some(c) => crate::gate::Classifier::new(c, &c.spec_root)?,
+        None => crate::gate::Classifier::builtin(crate::config::DEFAULT_SPEC_ROOT),
+    };
+    let test_files: BTreeSet<&str> = base.iter().chain(&head).map(|t| t.file.as_str()).collect();
+    let source_changed = changed
+        .iter()
+        .any(|f| !test_files.contains(f.as_str()) && classifier.is_impl(f));
+    Ok(AuditReport::from_findings(check_tests(
+        &base,
+        &head,
+        source_changed,
+    )))
 }
