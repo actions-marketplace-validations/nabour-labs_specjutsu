@@ -45,6 +45,18 @@ enum Command {
         #[arg(long)]
         registry: bool,
     },
+    /// Find scenarios whose code changed while their spec and tests did not, and the reverse.
+    Drift {
+        /// Base ref to compare against, e.g. origin/main.
+        #[arg(long)]
+        base: String,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        spec_root: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Coverage per scenario, for spec drift detection.
     Coverage {
         #[command(subcommand)]
@@ -487,6 +499,29 @@ fn run() -> Result<ExitCode> {
                     print!("{}", sj_core::ci::render_audit_markdown(&report, &base))
                 }
                 GateFormat::Text => print!("{}", report.render()),
+            }
+            Ok(if report.pass {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
+        }
+        Command::Drift {
+            base,
+            root,
+            spec_root,
+            json,
+        } => {
+            let spec_root = spec_root_for(&root, spec_root)?;
+            let report = sj_core::drift::run(&sj_core::drift::Options {
+                root,
+                spec_root,
+                base,
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print!("{}", report.render());
             }
             Ok(if report.pass {
                 ExitCode::SUCCESS

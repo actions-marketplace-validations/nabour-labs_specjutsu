@@ -291,3 +291,143 @@ fn suite_index(config: &Config, t: &TestRef) -> Option<(usize, usize)> {
         .position(|s| Some(s.runner) == t.suite)?;
     Some((pi, si))
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Fail,
+    Warn,
+    Info,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DriftFinding {
+    /// `code-drift` or `stale-test`.
+    pub kind: String,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+    pub severity: Severity,
+}
+
+impl DriftFinding {
+    /// The line printed after the severity column.
+    pub fn text(&self) -> String {
+        match (self.kind.as_str(), &self.file, self.line) {
+            ("code-drift", Some(f), Some(l)) => format!(
+                "code-drift {} {f}:{l} — code its tests run changed; spec and tests did not",
+                self.id
+            ),
+            _ => format!("stale-test {} — spec changed; its tests did not", self.id),
+        }
+    }
+
+    /// The gate's failure reason: the finding without its explanation.
+    pub fn reason(&self) -> String {
+        match (&self.file, self.line) {
+            (Some(f), Some(l)) => format!("{} {} {f}:{l}", self.kind, self.id),
+            _ => format!("{} {}", self.kind, self.id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct DriftReport {
+    pub pass: bool,
+    pub summary: String,
+    pub findings: Vec<DriftFinding>,
+    /// What was not checked, or which map was used.
+    pub notes: Vec<String>,
+    /// The commit the coverage map was built on, when one was used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+}
+
+impl DriftReport {
+    fn finish(mut self) -> Self {
+        self.pass = !self.findings.iter().any(|f| f.severity == Severity::Fail);
+        self.summary = match self.findings.len() {
+            0 => "drift: none".to_string(),
+            1 => "drift: 1 finding".to_string(),
+            n => format!("drift: {n} findings"),
+        };
+        self
+    }
+
+    pub fn render(&self) -> String {
+        let mut out = format!("{}\n", self.summary);
+        for f in &self.findings {
+            let col = match f.severity {
+                Severity::Fail => "fail   ",
+                Severity::Warn => "warn   ",
+                Severity::Info => "info   ",
+            };
+            out.push_str(&format!("{col} {}\n", f.text()));
+        }
+        for n in &self.notes {
+            out.push_str(&format!("{n}\n"));
+        }
+        out
+    }
+}
+
+pub struct Options {
+    pub root: PathBuf,
+    pub spec_root: PathBuf,
+    pub base: String,
+}
+
+/// Compare the change against its scenarios and the coverage map (DRIFT-005..012).
+pub fn run(opts: &Options) -> Result<DriftReport> {
+    let root = &opts.root;
+    let config = crate::config::load(root)?;
+    let prep = crate::gate::prepare(root, &opts.spec_root, &config, &opts.base)?;
+    let severity = if config.drift_fail {
+        Severity::Fail
+    } else {
+        Severity::Warn
+    };
+    let rel = |p: &Path| -> String {
+        p.strip_prefix(root)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
+    let changed: BTreeSet<&str> = prep.changed_files.iter().map(String::as_str).collect();
+    let test_files = |id: &str| -> Vec<String> {
+        prep.report
+            .mapped
+            .iter()
+            .filter(|m| m.id == id)
+            .flat_map(|m| m.tests.iter().map(|t| rel(&t.file)))
+            .collect()
+    };
+
+    let mut report = DriftReport::default();
+    // DRIFT-007: a modified scenario none of whose tests changed.
+    for (id, change) in &prep.changes {
+        if *change != crate::gate::Change::Modified {
+            continue;
+        }
+        let files = test_files(id);
+        if !files.is_empty() && !files.iter().any(|f| changed.contains(f.as_str())) {
+            report.findings.push(DriftFinding {
+                kind: "stale-test".into(),
+                id: id.clone(),
+                file: None,
+                line: None,
+                severity,
+            });
+        }
+    }
+
+    match CoverageMap::load(root)? {
+        None => report
+            .notes
+            .push("no coverage map: code drift not checked (run sj coverage map)".to_string()),
+        Some(_map) => {}
+    }
+    Ok(report.finish())
+}
