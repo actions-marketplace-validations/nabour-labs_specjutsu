@@ -2,6 +2,7 @@
 
 pub mod adopt;
 pub mod agent_loop;
+pub mod audit;
 pub mod authoring;
 pub mod ci;
 pub mod config;

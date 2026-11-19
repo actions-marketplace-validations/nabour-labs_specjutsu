@@ -29,6 +29,16 @@ enum Command {
         #[arg(long)]
         strict: bool,
     },
+    /// Check the change's tests for removals, skips, focus and lost assertions; works without specs.
+    Audit {
+        /// Base ref to compare against, e.g. origin/main.
+        #[arg(long)]
+        base: String,
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
     /// Write a shields.io endpoint badge with the share of tested scenarios.
     Badge {
         #[arg(long, default_value = ".")]
@@ -443,6 +453,19 @@ fn run() -> Result<ExitCode> {
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
+        }
+        Command::Audit { base, root, json } => {
+            let report = sj_core::audit::run(&sj_core::audit::Options { root, base })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print!("{}", report.render());
+            }
+            Ok(if report.pass {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
         }
         Command::Badge {
             root,

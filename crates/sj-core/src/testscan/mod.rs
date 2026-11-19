@@ -35,6 +35,15 @@ pub struct TestFn {
     pub package: Option<String>,
     /// Suite runner, when found through the project config.
     pub suite: Option<Runner>,
+    /// Last line of the test (closing brace, closing paren, or last indented line), 1-based.
+    #[serde(skip)]
+    pub end_line: usize,
+    /// Marked focused (`.only`, `fit`, `fdescribe`), directly or through its group (JS/TS).
+    #[serde(skip)]
+    pub focused: bool,
+    /// The group whose marker skips or focuses this test, as its titles joined with ` > `.
+    #[serde(skip)]
+    pub marker_group: Option<String>,
 }
 
 /// Find test functions (`fn` items carrying a `#[...test...]` attribute) in one Rust file.
@@ -76,6 +85,7 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
                     name: c[1].to_string(),
                     file: file.to_path_buf(),
                     line: i + 1,
+                    end_line: rust_body_end(content, i),
                     comment_ids: std::mem::take(&mut pending_ids),
                     name_ids: ids_in_name(&c[1]),
                     ..TestFn::default()
@@ -86,6 +96,47 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
         pending_ids.clear();
     }
     out
+}
+
+/// The 1-based line of the `}` closing the item whose header is on 0-based line `start`.
+/// Skips strings, char literals of braces and comments; falls back to `start + 1`.
+fn rust_body_end(content: &str, start: usize) -> usize {
+    let mut depth = 0usize;
+    let mut opened = false;
+    for (i, line) in content.lines().enumerate().skip(start) {
+        let b = line.as_bytes();
+        let mut j = 0;
+        let mut in_str = false;
+        while j < b.len() {
+            let c = b[j];
+            if in_str {
+                if c == b'\\' {
+                    j += 1;
+                } else if c == b'"' {
+                    in_str = false;
+                }
+            } else if c == b'"' {
+                in_str = true;
+            } else if c == b'/' && b.get(j + 1) == Some(&b'/') {
+                break;
+            } else if c == b'\''
+                && matches!(b.get(j + 1), Some(b'{' | b'}'))
+                && b.get(j + 2) == Some(&b'\'')
+            {
+                j += 2;
+            } else if c == b'{' {
+                depth += 1;
+                opened = true;
+            } else if c == b'}' {
+                depth = depth.saturating_sub(1);
+                if opened && depth == 0 {
+                    return i + 1;
+                }
+            }
+            j += 1;
+        }
+    }
+    start + 1
 }
 
 /// Walk `root` for `*.rs` files (respecting .gitignore, skipping `target/` and `fixtures/`) and scan each.

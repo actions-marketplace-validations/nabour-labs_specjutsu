@@ -101,6 +101,7 @@ pub fn scan_js(file: &Path, content: &str) -> Vec<TestFn> {
                 comment_ids,
                 name_ids,
                 skipped: call.skipped || groups.iter().any(|g| g.skipped),
+                end_line: toks[call.end].line,
                 ..TestFn::default()
             });
         }
