@@ -854,6 +854,7 @@ dependencies = [
  "regex",
  "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -910,6 +911,7 @@ dependencies = [
  "sj-adapters",
  "sj-core",
  "tempfile",
+ "toml",
 ]
 
 [[package]]

@@ -117,7 +117,12 @@ pub fn pre_edit(root: &Path, payload: &str) -> Result<Decision> {
     else {
         return Ok(Decision::Allow);
     };
+    decide(root, target)
+}
 
+/// The pre-edit decision for one target path, absolute or relative to `root`, with no
+/// agent-specific input or output. Every agent's hook protocol ends here.
+pub fn decide(root: &Path, target: &str) -> Result<Decision> {
     let config = config::load(root)?;
     let root_abs = resolve(&std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf()));
     let target = Path::new(target);

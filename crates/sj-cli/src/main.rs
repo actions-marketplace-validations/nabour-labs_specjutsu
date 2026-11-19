@@ -97,18 +97,20 @@ enum Command {
         /// Replace an existing specjutsu.toml.
         #[arg(long)]
         force: bool,
-        /// Install agent adapters (comma-separated; known: claude).
+        /// Install agent adapters (comma-separated: claude, codex, cursor, cline, agents-md, auto).
         #[arg(long, value_delimiter = ',')]
         agents: Vec<String>,
-        /// Remove agent adapters (comma-separated; known: claude).
+        /// Remove agent adapters (comma-separated, as for --agents).
         #[arg(long, value_delimiter = ',', conflicts_with = "agents")]
         remove_agents: Vec<String>,
     },
-    /// Hook entrypoint for agent tools: `sj hook claude session-start|pre-edit`.
+    /// Hook entrypoint for agent tools: `sj hook claude session-start|pre-edit`,
+    /// `sj hook codex|cursor pre-edit`, or
+    /// `sj hook check-edit <path>` (exit 0 allows, 2 blocks) for any other tool.
     Hook {
-        /// The agent tool (claude).
+        /// The agent tool (claude, codex, cursor), or check-edit.
         agent: String,
-        /// The hook event: session-start or pre-edit.
+        /// The hook event (session-start or pre-edit), or the path for check-edit.
         event: String,
         /// Project root (default: $CLAUDE_PROJECT_DIR, else the current directory).
         #[arg(long)]
@@ -391,31 +393,45 @@ fn run() -> Result<ExitCode> {
                 return init_cmd(&root, force);
             }
             check_agents(&agents)?;
+            let auto = agents.iter().any(|a| a == "auto");
+            let (agents, found) = resolve_agents(&root, &agents);
+            if auto {
+                let note = if found { "" } else { " (no agent files found)" };
+                println!("agents: {}{note}", agents.join(", "));
+            }
             if force || !root.join(sj_core::config::FILE).exists() {
                 // Its exit code is always success; errors come back as `Err`.
                 let _ = init_cmd(&root, force)?;
             }
-            agents_cmd(&root, false, false)
+            agents_cmd(&root, &agents, false, false)
         }
         Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
         Command::Update { root, force } => {
-            if !sj_adapters::claude::is_installed(&root) {
+            let installed = installed_agents(&root);
+            if installed.is_empty() {
                 println!("no adapters installed");
                 return Ok(ExitCode::SUCCESS);
             }
-            agents_cmd(&root, force, true)
+            agents_cmd(&root, &installed, force, true)
         }
         Command::Doctor { root } => {
             let problems = sj_core::doctor::check(&root);
             if problems.is_empty() {
                 println!("doctor: ok");
-                return Ok(ExitCode::SUCCESS);
+            } else {
+                println!("doctor: {}", plural(problems.len(), "problem"));
             }
-            println!("doctor: {}", plural(problems.len(), "problem"));
             for p in &problems {
                 println!("{p}");
             }
-            Ok(ExitCode::from(1))
+            for (agent, level) in sj_adapters::enforcement::levels(&root) {
+                println!("{agent}: {level}");
+            }
+            Ok(if problems.is_empty() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
         }
         Command::Adopt {
             root,
@@ -567,6 +583,15 @@ fn hook_cmd(agent: &str, event: &str, root: Option<PathBuf>) -> ExitCode {
     let root = root
         .or_else(|| std::env::var_os("CLAUDE_PROJECT_DIR").map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("."));
+    if agent == "check-edit" {
+        return check_edit(&root, event);
+    }
+    if agent == "cursor" && event == "pre-edit" {
+        return cursor_pre_edit(&root);
+    }
+    if agent == "codex" && event == "pre-edit" {
+        return codex_pre_edit(&root);
+    }
     if agent != "claude" {
         eprintln!("specjutsu: hook error: unknown agent `{agent}`");
         return ExitCode::SUCCESS;
@@ -602,21 +627,188 @@ fn hook_cmd(agent: &str, event: &str, root: Option<PathBuf>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-const AGENTS: [&str; 1] = ["claude"];
+/// `sj hook cursor pre-edit`: always one JSON answer on stdout, since Cursor blocks on
+/// anything else. Unreadable input and internal errors allow, with a warning on stderr.
+fn cursor_pre_edit(root: &Path) -> ExitCode {
+    use sj_adapters::cursor;
+    use sj_core::hook::{self, Decision};
+    let mut input = String::new();
+    let decided = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+        .map_err(anyhow::Error::from)
+        .and_then(|_| cursor::target(&input))
+        .and_then(|path| hook::decide(root, &path));
+    match decided {
+        Ok(Decision::Block(reasons)) => print!("{}", cursor::deny(&reasons)),
+        Ok(Decision::Warn(reasons)) => {
+            for r in reasons {
+                eprintln!("specjutsu: {r}");
+            }
+            print!("{}", cursor::allow());
+        }
+        Ok(Decision::Allow) => print!("{}", cursor::allow()),
+        Err(e) => {
+            eprintln!("specjutsu: hook error: {e:#}");
+            print!("{}", cursor::allow());
+        }
+    }
+    ExitCode::SUCCESS
+}
 
+/// `sj hook codex pre-edit`: deny the patch when any file it touches is blocked, naming
+/// that file; print nothing to allow. Unreadable input and internal errors allow, with a
+/// warning on stderr.
+fn codex_pre_edit(root: &Path) -> ExitCode {
+    use sj_adapters::codex;
+    use sj_core::hook::{self, Decision};
+    let mut input = String::new();
+    let paths = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+        .map_err(anyhow::Error::from)
+        .and_then(|_| codex::targets(&input));
+    let paths = match paths {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("specjutsu: hook error: {e:#}");
+            return ExitCode::SUCCESS;
+        }
+    };
+    let mut blocked = Vec::new();
+    for path in &paths {
+        match hook::decide(root, path) {
+            Ok(Decision::Allow) => {}
+            Ok(Decision::Warn(reasons)) => {
+                for r in reasons {
+                    eprintln!("specjutsu: {path}: {r}");
+                }
+            }
+            Ok(Decision::Block(reasons)) => {
+                blocked.extend(reasons.into_iter().map(|r| format!("{path}: {r}")));
+            }
+            Err(e) => eprintln!("specjutsu: hook error: {path}: {e:#}"),
+        }
+    }
+    if !blocked.is_empty() {
+        print!("{}", codex::deny(&blocked));
+    }
+    ExitCode::SUCCESS
+}
+
+/// `sj hook check-edit <path>`: exit 0 to allow, 2 to block, reasons on stderr. Like the
+/// agent hooks, an internal error warns and allows.
+fn check_edit(root: &Path, path: &str) -> ExitCode {
+    use sj_core::hook::{self, Decision};
+    match hook::decide(root, path) {
+        Ok(Decision::Allow) => {}
+        Ok(Decision::Warn(reasons)) => {
+            for r in reasons {
+                eprintln!("specjutsu: {r}");
+            }
+        }
+        Ok(Decision::Block(reasons)) => {
+            for r in reasons {
+                eprintln!("{r}");
+            }
+            return ExitCode::from(2);
+        }
+        Err(e) => eprintln!("specjutsu: hook error: {e:#}"),
+    }
+    ExitCode::SUCCESS
+}
+
+/// Every name `--agents` accepts.
+const AGENTS: [&str; 6] = ["claude", "codex", "cursor", "cline", "agents-md", "auto"];
+
+/// A usage error naming the first unknown agent; checked before anything is written.
 fn check_agents(agents: &[String]) -> Result<()> {
     for a in agents {
         if !AGENTS.contains(&a.as_str()) {
-            anyhow::bail!("unknown agent `{a}` (known: {})", AGENTS.join(", "));
+            anyhow::bail!("unknown agent {a} (supported: {})", AGENTS.join(", "));
         }
     }
     Ok(())
 }
 
-/// Install or refresh the Claude Code adapter and print what changed.
-fn agents_cmd(root: &Path, force: bool, update: bool) -> Result<ExitCode> {
-    use sj_adapters::claude::{self, Change};
-    let changes = claude::install(root, force)?;
+/// The agents whose files the repository already has, in `AGENTS` order.
+fn detect_agents(root: &Path) -> Vec<&'static str> {
+    let has = |p: &str| root.join(p).exists();
+    let mut out = Vec::new();
+    if has(".claude") || has("CLAUDE.md") {
+        out.push("claude");
+    }
+    if has(".codex") {
+        out.push("codex");
+    }
+    if has(".cursor") {
+        out.push("cursor");
+    }
+    if has(".clinerules") {
+        out.push("cline");
+    }
+    if has("AGENTS.md") {
+        out.push("agents-md");
+    }
+    out
+}
+
+/// The list with `auto` expanded, `agents-md` added for the agents that read AGENTS.md, and
+/// duplicates dropped, in `AGENTS` order. The flag is false when `auto` found no agent files
+/// and fell back to `agents-md`.
+fn resolve_agents(root: &Path, agents: &[String]) -> (Vec<String>, bool) {
+    let mut wanted: Vec<&str> = agents.iter().map(String::as_str).collect();
+    let mut found = true;
+    if wanted.contains(&"auto") {
+        let detected = detect_agents(root);
+        found = !detected.is_empty();
+        wanted.extend(if found { detected } else { vec!["agents-md"] });
+    }
+    if wanted
+        .iter()
+        .any(|a| matches!(*a, "codex" | "cursor" | "cline"))
+    {
+        wanted.push("agents-md");
+    }
+    let out = AGENTS
+        .iter()
+        .filter(|a| **a != "auto" && wanted.contains(a))
+        .map(|a| a.to_string())
+        .collect();
+    (out, found)
+}
+
+/// The adapters already installed in `root`, which `sj update` refreshes.
+fn installed_agents(root: &Path) -> Vec<String> {
+    use sj_adapters::{agents_md, claude, codex, cursor};
+    let mut out = Vec::new();
+    if claude::is_installed(root) {
+        out.push("claude".to_string());
+    }
+    if codex::is_installed(root) {
+        out.push("codex".to_string());
+    }
+    if cursor::is_installed(root) {
+        out.push("cursor".to_string());
+    }
+    if agents_md::is_installed(root) {
+        out.push("agents-md".to_string());
+    }
+    out
+}
+
+/// Install or refresh each named adapter and print what changed. `agents` is resolved:
+/// no `auto`, and `agents-md` listed where it is implied.
+fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
+    use sj_adapters::{agents_md, claude, claude::Change, codex, cursor};
+    let mut changes = Vec::new();
+    for a in agents {
+        match a.as_str() {
+            "claude" => changes.extend(claude::install(root, force)?),
+            "codex" => changes.extend(codex::install(root)?),
+            "cursor" => changes.extend(cursor::install(root)?),
+            // Cline's hooks run only in its CLI, so it gets the shared instructions only.
+            "cline" => {}
+            "agents-md" => changes.extend(agents_md::install(root)?),
+            other => anyhow::bail!("unknown agent {other}"),
+        }
+    }
     if changes.is_empty() {
         println!("adapters up to date");
     }
@@ -631,9 +823,32 @@ fn agents_cmd(root: &Path, force: bool, update: bool) -> Result<ExitCode> {
     })
 }
 
+/// Remove each named adapter. The AGENTS.md block goes when `agents-md` is named, or when
+/// an agent that reads it is removed and no Codex or Cursor hook is left that needs it.
 fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
+    use sj_adapters::{agents_md, claude, codex, cursor};
     check_agents(agents)?;
-    let changes = sj_adapters::claude::remove(root)?;
+    let agents: Vec<String> = if agents.iter().any(|a| a == "auto") {
+        installed_agents(root)
+    } else {
+        agents.to_vec()
+    };
+    let mut changes = Vec::new();
+    for a in &agents {
+        match a.as_str() {
+            "claude" => changes.extend(claude::remove(root)?),
+            "codex" => changes.extend(codex::remove(root)?),
+            "cursor" => changes.extend(cursor::remove(root)?),
+            _ => {}
+        }
+    }
+    let readers = agents
+        .iter()
+        .any(|a| matches!(a.as_str(), "codex" | "cursor" | "cline"));
+    let still_needed = codex::is_installed(root) || cursor::is_installed(root);
+    if agents.iter().any(|a| a == "agents-md") || (readers && !still_needed) {
+        changes.extend(agents_md::remove(root)?);
+    }
     if changes.is_empty() {
         println!("no adapter files to remove");
     }

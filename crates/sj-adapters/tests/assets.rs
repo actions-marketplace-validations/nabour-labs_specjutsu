@@ -12,10 +12,16 @@ fn embedded_assets_match_the_repository_sources() {
         return;
     }
     let assets = crate_dir.join("assets");
-    let mut pairs = vec![(
-        repo.join("adapters/claude/CLAUDE.block.md"),
-        assets.join("claude/CLAUDE.block.md"),
-    )];
+    let mut pairs = vec![
+        (
+            repo.join("adapters/claude/CLAUDE.block.md"),
+            assets.join("claude/CLAUDE.block.md"),
+        ),
+        (
+            repo.join("adapters/agents-md/AGENTS.block.md"),
+            assets.join("agents-md/AGENTS.block.md"),
+        ),
+    ];
     let mut names: Vec<String> = std::fs::read_dir(repo.join("skills"))
         .unwrap()
         .filter_map(|e| e.ok())
