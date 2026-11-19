@@ -213,3 +213,26 @@ fn drift_009_lines_shift_with_insertions_before_them() {
         "{out}"
     );
 }
+
+#[test]
+fn drift_012_json_lists_each_finding() {
+    let repo = mapped_repo();
+    let commit = repo.git(&["rev-parse", "main"]).trim().to_string();
+    repo.write(
+        "src/auth.rs",
+        &auth_rs(Some((15, "// expiry is now 48 hours"))),
+    );
+    repo.commit("fix: longer expiry");
+
+    let (code, out) = drift(&repo, &["--json"]);
+    assert_eq!(code, Some(0), "{out}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let findings = v["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{v}");
+    let f = &findings[0];
+    assert_eq!(f["kind"], "code-drift");
+    assert_eq!(f["id"], "AUTH-003");
+    assert_eq!(f["file"], "src/auth.rs");
+    assert_eq!(f["line"], 15);
+    assert_eq!(f["commit"], commit, "each finding names the map's commit: {v}");
+}
