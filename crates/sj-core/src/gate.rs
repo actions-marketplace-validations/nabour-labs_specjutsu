@@ -926,7 +926,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         }
     }
 
-    Ok(evaluate(&Input {
+    let mut gate = evaluate(&Input {
         changes,
         trace: report,
         changed_files,
@@ -943,7 +943,32 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_failing,
         head_build_failed,
         reasons,
-    }))
+    });
+    // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
+    let audit = crate::audit::run(&crate::audit::Options {
+        root: root.to_path_buf(),
+        base: opts.base.clone(),
+        registry: false,
+    })?;
+    merge_audit(&mut gate, &audit);
+    Ok(gate)
+}
+
+/// Add audit findings to a gate report: failures fail the gate, the rest are listed.
+pub fn merge_audit(gate: &mut GateReport, audit: &crate::audit::AuditReport) {
+    use crate::audit::Severity;
+    let before = gate.failures.len();
+    for f in &audit.findings {
+        match f.severity {
+            Severity::Fail => gate.failures.push(f.line()),
+            Severity::Warn => gate.warnings.push(f.line()),
+            Severity::Allowed => gate.exemptions.push(format!("allowed {}", f.line())),
+        }
+    }
+    if gate.failures.len() > before {
+        gate.pass = false;
+        gate.summary = format!("gate: fail — {}", plural(gate.failures.len(), "problem"));
+    }
 }
 
 /// The (package, suite) indexes of a traced test's suite.
