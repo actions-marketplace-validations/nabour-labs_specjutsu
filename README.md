@@ -19,7 +19,7 @@ tools it replaces.
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha, v0.3.0. `sj trace`, `sj test` and `sj gate` work with
+**Status:** pre-alpha, v0.3.1. `sj trace`, `sj test` and `sj gate` work with
 Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
 Claude Code is the only agent adapter so far; the others follow in v0.5. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
@@ -28,11 +28,11 @@ and [analysis](docs/analysis.md).
 
 Prebuilt binaries for macOS, Linux and Windows are on the
 [releases page](https://github.com/nabour-labs/specjutsu/releases). Or with Cargo,
-from [crates.io](https://crates.io/crates/specjutsu) (from v0.3.1) or from the git tag:
+from [crates.io](https://crates.io/crates/specjutsu) or from the git tag:
 
 ```bash
 cargo install specjutsu
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.1 specjutsu
 ```
 
 ## Quickstart

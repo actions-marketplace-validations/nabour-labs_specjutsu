@@ -130,7 +130,7 @@
 
   <main class="prose">
     <header>
-      <p class="eyebrow">User manual · v0.3.0</p>
+      <p class="eyebrow">User manual · v0.3.1</p>
       <h1>Using <span class="grad-text">specjutsu</span></h1>
       <p class="lead">Everything you need to go from an <code>openspec/</code> folder, a Spec Kit project or a Superpowers setup to pull requests that can't merge unless every scenario is tested and every test was red first.</p>
     </header>
@@ -171,14 +171,14 @@
         </tbody>
       </table></div>
 <pre class="code"><span class="c-m"># download, verify and install (macOS Apple silicon shown)</span>
-gh release download v0.3.0 -R nabour-labs/specjutsu \
+gh release download v0.3.1 -R nabour-labs/specjutsu \
   -p 'sj-aarch64-apple-darwin.tar.gz' -p SHA256SUMS
 grep ' sj-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
 tar -xzf sj-aarch64-apple-darwin.tar.gz
 install sj-aarch64-apple-darwin/sj ~/.local/bin/
 
-<span class="c-m"># or build from source (needs Rust)</span>
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.0 specjutsu
+<span class="c-m"># or with Cargo (needs Rust), from crates.io</span>
+cargo install specjutsu
 
 sj --version</pre>
     </section>
@@ -382,7 +382,7 @@ sj init --remove-agents claude   <span class="c-m"># remove everything it added<
         <span class="c-k">env:</span>
           <span class="c-k">GH_TOKEN:</span> ${{ github.token }}
         <span class="c-k">run:</span> |
-          gh release download v0.3.0 -R nabour-labs/specjutsu \
+          gh release download v0.3.1 -R nabour-labs/specjutsu \
             -p 'sj-x86_64-unknown-linux-gnu.tar.gz' -D "$RUNNER_TEMP"
           tar -xzf "$RUNNER_TEMP/sj-x86_64-unknown-linux-gnu.tar.gz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/sj-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
