@@ -493,6 +493,8 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
             }
         }
     }
+    // DRIFT-011: a refactor says behaviour did not change, so code drift is information.
+    let refactor = prep.exemptions.iter().any(|e| e.kind == "refactor");
     for (id, (file, line)) in first {
         let text_unchanged = matches!(
             prep.changes.get(&id),
@@ -505,7 +507,7 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
                 id,
                 file: Some(file),
                 line: Some(line),
-                severity,
+                severity: if refactor { Severity::Info } else { severity },
                 commit: report.commit.clone(),
             });
         }

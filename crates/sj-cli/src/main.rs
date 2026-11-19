@@ -375,6 +375,9 @@ fn run() -> Result<ExitCode> {
                 for w in &report.warnings {
                     println!("warn    {w}");
                 }
+                for i in &report.info {
+                    println!("info    {i}");
+                }
                 for e in &report.exemptions {
                     println!("exempt  {e}");
                 }
