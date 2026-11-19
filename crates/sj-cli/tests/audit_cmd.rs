@@ -166,3 +166,52 @@ fn audit_012_a_clean_change_prints_one_line() {
     assert_eq!(out, "audit: clean\n");
     assert_eq!(code, Some(0));
 }
+
+#[test]
+fn audit_003_a_newly_skipped_test_is_reported() {
+    let auth = "it(\"rejects expired token\", () => {\n  expect(check(old)).toBe(401)\n})\n";
+    let rust = "#[test]\nfn trace_004_matches_ids() {\n    assert!(true);\n}\n";
+    let f = Fixture::new(&[("src/auth.test.ts", auth), ("tests/trace.rs", rust)]);
+    f.write("src/auth.test.ts", &auth.replace("it(", "it.skip("));
+    f.write(
+        "tests/trace.rs",
+        &rust.replace("#[test]\n", "#[test]\n#[ignore]\n"),
+    );
+    f.commit("skip it");
+
+    let (code, out) = f.audit(&[]);
+    assert!(
+        out.contains("skipped-test src/auth.test.ts › rejects expired token"),
+        "{out}"
+    );
+    assert!(
+        out.contains("skipped-test tests/trace.rs › trace_004_matches_ids"),
+        "{out}"
+    );
+    assert_eq!(code, Some(1), "{out}");
+}
+
+#[test]
+fn audit_004_a_newly_focused_test_is_reported() {
+    let mut cart = String::new();
+    for name in ["cart", "tax", "shipping", "coupons", "refunds"] {
+        cart.push_str(&format!(
+            "describe(\"{name}\", () => {{\n  it(\"works\", () => {{\n    expect(1).toBe(1)\n  }})\n  it(\"still works\", () => {{\n    expect(2).toBe(2)\n  }})\n}})\n\n"
+        ));
+    }
+    let f = Fixture::new(&[("src/cart.test.ts", &cart)]);
+    f.write(
+        "src/cart.test.ts",
+        &cart.replacen("describe(\"cart\"", "describe.only(\"cart\"", 1),
+    );
+    f.commit("focus");
+
+    let (code, out) = f.audit(&[]);
+    let focused: Vec<&str> = out.lines().filter(|l| l.contains("focused-test")).collect();
+    assert_eq!(focused.len(), 1, "{out}");
+    assert!(
+        focused[0].ends_with("focused-test src/cart.test.ts › cart"),
+        "{out}"
+    );
+    assert_eq!(code, Some(1));
+}
