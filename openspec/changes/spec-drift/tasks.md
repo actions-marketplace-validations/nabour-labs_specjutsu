@@ -4,13 +4,13 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 1. The map
 
-- [ ] 1.1 `coverage` suite key with `{lcov}` and `{tests}` placeholders, checked by `sj doctor` (DRIFT-001).
-- [ ] 1.2 LCOV reader and `sj coverage map`: per-scenario runs, source filtering, shared lines, up-to-date detection (DRIFT-002..004). Verify: `crates/sj-cli/tests/coverage_map.rs`.
+- [x] 1.1 `coverage` suite key with `{lcov}` and `{tests}` placeholders, checked by `sj doctor` (DRIFT-001).
+- [x] 1.2 LCOV reader and `sj coverage map`: per-scenario runs, source filtering, shared lines, up-to-date detection (DRIFT-002..004). Verify: `crates/sj-cli/tests/coverage_map.rs`.
 
 ## 2. Drift checks
 
-- [ ] 2.1 `stale-test` and the no-map path (DRIFT-007, DRIFT-008).
-- [ ] 2.2 `code-drift` with the map, and the test-changed rule (DRIFT-005, DRIFT-006).
+- [x] 2.1 `stale-test` and the no-map path (DRIFT-007, DRIFT-008).
+- [x] 2.2 `code-drift` with the map, and the test-changed rule (DRIFT-005, DRIFT-006).
 - [ ] 2.3 Line translation through `git diff` for an older map (DRIFT-009).
 - [ ] 2.4 Output and JSON (DRIFT-012).
 

@@ -175,3 +175,41 @@ fn drift_006_updating_the_scenario_s_test_clears_the_drift() {
     assert!(!after.contains("AUTH-003"), "{after}");
     assert_eq!(after.lines().next(), Some("drift: none"), "{after}");
 }
+
+#[test]
+fn drift_009_lines_shift_with_insertions_before_them() {
+    // The map is built on main's first commit; main then inserts 5 lines at line 3, so
+    // AUTH-003's lines 10–30 are 15–35 on base.
+    let repo = Repo::with_lib("pub fn add(a: i32, b: i32) -> i32 { a + b }\n");
+    repo.write(".gitignore", "target/\nCargo.lock\n.specjutsu/\n");
+    repo.write("openspec/specs/auth/spec.md", &auth_spec(401));
+    repo.write("tests/auth.rs", AUTH_TESTS);
+    repo.write("src/auth.rs", &auth_rs(None));
+    repo.commit("auth");
+    let mapped = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
+    let mut lines: Vec<String> = auth_rs(None).lines().map(str::to_string).collect();
+    for k in 0..5 {
+        lines.insert(2, format!("// inserted {k}"));
+    }
+    let base_text = lines.join("\n") + "\n";
+    repo.write("src/auth.rs", &base_text);
+    repo.commit("insert a header");
+    repo.branch("feature");
+    write_map(&repo, &mapped, &[("AUTH-003", "src/auth.rs", 10, 30)]);
+
+    // Base line 33 is map line 28 (owned); without translation it would be outside 10–30.
+    let mut edited: Vec<String> = base_text.lines().map(str::to_string).collect();
+    edited[32] = "// changed".to_string();
+    repo.write("src/auth.rs", &(edited.join("\n") + "\n"));
+    repo.commit("fix");
+
+    let (_, out) = drift(&repo, &[]);
+    assert!(out.contains("code-drift AUTH-003 src/auth.rs:33"), "{out}");
+    assert!(
+        out.contains(&format!(
+            "coverage map from {}, 1 commit behind base",
+            &mapped[..7]
+        )),
+        "{out}"
+    );
+}

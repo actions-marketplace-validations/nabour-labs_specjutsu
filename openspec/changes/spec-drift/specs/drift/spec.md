@@ -55,8 +55,8 @@ When `.specjutsu/coverage-map.json` is missing, `sj drift` SHALL run the stale-t
 When the map's commit differs from the base, `sj drift` SHALL translate the map's line ranges to base through `git diff <map-commit> <base>`, drop the lines changed in between, and print `coverage map from <short-sha>, <n> commits behind base`. When the map's commit is not an ancestor of base or is unknown, it SHALL behave as if there were no map and say why.
 
 #### Scenario: DRIFT-009 Lines shift with insertions before them
-- **WHEN** the map was built on a commit where AUTH-003 owns `src/auth.rs` 10–30, base inserts 5 lines at line 3 of `src/auth.rs`, and the change edits base line 20
-- **THEN** `sj drift` reports `code-drift AUTH-003 src/auth.rs:20`
+- **WHEN** the map was built on a commit where AUTH-003 owns `src/auth.rs` 10–30, base inserts 5 lines at line 3 of `src/auth.rs` (so they are 15–35 on base), and the change edits base line 33
+- **THEN** `sj drift` reports `code-drift AUTH-003 src/auth.rs:33` and `coverage map from <short-sha>, 1 commit behind base`
 
 ### Requirement: The gate reports drift, failing only when configured
 `sj gate` SHALL include drift findings as warnings. With `[drift] fail = true`, each `code-drift` and `stale-test` SHALL fail the gate. In a change exempted as `refactor`, `code-drift` SHALL be printed as `info` and SHALL NOT fail the gate.
