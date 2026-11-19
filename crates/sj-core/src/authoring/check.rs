@@ -88,7 +88,7 @@ pub fn check(spec_root: &Path, change: &str) -> Result<CheckReport> {
     static CODE: OnceLock<Regex> = OnceLock::new();
     let clarify_re =
         CLARIFY.get_or_init(|| Regex::new(r"\[NEEDS CLARIFICATION:\s*(.*?)\s*\]").unwrap());
-    // Inline code spans quote markers rather than ask questions.
+    // A marker that starts inside an inline code span is quoted, not asked.
     let code_re = CODE.get_or_init(|| Regex::new(r"`[^`]*`").unwrap());
     let c = find_change(spec_root, change)?;
     let mut r = CheckReport::default();
@@ -136,8 +136,12 @@ pub fn check(spec_root: &Path, change: &str) -> Result<CheckReport> {
             if mask[i] {
                 continue;
             }
-            let prose = code_re.replace_all(line, "");
-            for m in clarify_re.captures_iter(&prose) {
+            let spans: Vec<_> = code_re.find_iter(line).map(|m| m.range()).collect();
+            for m in clarify_re.captures_iter(line) {
+                let at = m.get(0).unwrap().start();
+                if spans.iter().any(|s| s.contains(&at)) {
+                    continue;
+                }
                 r.clarify.push(Clarify {
                     question: m[1].to_string(),
                     file: rel.clone(),
