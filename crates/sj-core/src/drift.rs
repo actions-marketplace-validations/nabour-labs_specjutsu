@@ -431,6 +431,36 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
     };
     report.commit = Some(map.commit.clone());
     let git = Git::new(root);
+    // DRIFT-009: a map from an older commit is translated to the base.
+    let map = if map.commit == prep.mb {
+        map
+    } else {
+        let short = &map.commit[..map.commit.len().min(7)];
+        let ancestor = git
+            .run(&["merge-base", "--is-ancestor", &map.commit, &prep.mb])
+            .is_ok();
+        if !ancestor {
+            report.notes.push(format!(
+                "coverage map from {short} is not an ancestor of base: code drift not checked (run sj coverage map)"
+            ));
+            report.commit = None;
+            return Ok(report.finish());
+        }
+        let behind: usize = git
+            .run(&[
+                "rev-list",
+                "--count",
+                &format!("{}..{}", map.commit, prep.mb),
+            ])?
+            .trim()
+            .parse()
+            .unwrap_or(0);
+        report.notes.push(format!(
+            "coverage map from {short}, {behind} commit{} behind base",
+            if behind == 1 { "" } else { "s" }
+        ));
+        translate(&git, map, &prep.mb)?
+    };
 
     // DRIFT-005/006: base lines the change modifies or deletes, in files the map knows.
     let mapped_files: BTreeSet<&str> = map
@@ -476,4 +506,56 @@ pub fn run(opts: &Options) -> Result<DriftReport> {
         }
     }
     Ok(report.finish())
+}
+
+/// Where line `line` of the `from` version lands after `hunks` (from `from` to `to`), or
+/// `None` when a hunk modified or deleted it.
+pub fn shift(line: usize, hunks: &[crate::git::Hunk]) -> Option<usize> {
+    let mut offset: i64 = 0;
+    for h in hunks {
+        if h.old_len == 0 {
+            // A pure insertion after `old_start`.
+            if line <= h.old_start {
+                break;
+            }
+        } else {
+            if line < h.old_start {
+                break;
+            }
+            if line < h.old_start + h.old_len {
+                return None;
+            }
+        }
+        offset += h.new_len as i64 - h.old_len as i64;
+    }
+    usize::try_from(line as i64 + offset).ok()
+}
+
+/// The map with every range moved from its commit to `to`; lines changed in between are
+/// dropped (DRIFT-009).
+fn translate(git: &Git, mut map: CoverageMap, to: &str) -> Result<CoverageMap> {
+    let files: BTreeSet<String> = map
+        .scenarios
+        .values()
+        .flat_map(|f| f.keys().cloned())
+        .collect();
+    let mut hunks: BTreeMap<String, Vec<crate::git::Hunk>> = BTreeMap::new();
+    for f in files {
+        let mut h = git.hunks(&map.commit, Some(to), &f)?;
+        h.sort_by_key(|h| h.old_start);
+        hunks.insert(f, h);
+    }
+    for owned in map.scenarios.values_mut() {
+        for (file, rs) in owned.iter_mut() {
+            let h = &hunks[file];
+            let lines: BTreeSet<usize> = rs
+                .iter()
+                .flat_map(|[a, b]| *a..=*b)
+                .filter_map(|l| shift(l, h))
+                .collect();
+            *rs = ranges(&lines);
+        }
+    }
+    map.commit = to.to_string();
+    Ok(map)
 }
