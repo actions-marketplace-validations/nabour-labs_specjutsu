@@ -362,7 +362,23 @@ sj init --remove-agents claude   <span class="c-m"># remove everything it added<
           <tr><td><code>sj hook claude pre-edit</code></td><td>Before <code>Edit</code>, <code>Write</code>, <code>MultiEdit</code> and <code>NotebookEdit</code> on a source file, blocks the edit until each scenario of the active task has a red run in the ledger. Tests, specs and docs are always allowed. <code>advisory</code> mode only warns.</td></tr>
         </tbody>
       </table></div>
-      <div class="callout"><p><b>Using another agent?</b> The skills in <a href="https://github.com/nabour-labs/specjutsu/tree/main/skills"><code>skills/</code></a> are plain Markdown that call <code>sj</code>, so you can point Cursor, Codex or Copilot at them today. Adapters that install them for those agents come in v0.5. Whatever the agent does, <code>sj gate</code> in CI refuses unproven work.</p></div>
+      <h3>Codex, Cursor, Cline and AGENTS.md</h3>
+<pre class="code">sj init --agents codex,cursor    <span class="c-m"># several at once; AGENTS.md is written once</span>
+sj init --agents auto            <span class="c-m"># the agents the repo already has files for</span>
+sj doctor                        <span class="c-m"># hook, instructions or hook missing, per agent</span></pre>
+      <p>Codex, Cursor and Cline get a specjutsu block in <code>AGENTS.md</code> that names the <code>sj</code> commands of the loop. Amp, Roo Code and other agents that read AGENTS.md get it with <code>--agents agents-md</code>.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Agent</th><th>Pre-edit hook</th><th>Level</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Code</td><td><code>PreToolUse</code> in <code>.claude/settings.json</code></td><td><code>hook</code></td></tr>
+          <tr><td>Codex</td><td><code>[[hooks.PreToolUse]]</code> for <code>apply_patch</code> edits in <code>.codex/config.toml</code>. Every file in the patch is checked. Trust it once with <code>/hooks</code>.</td><td><code>hook</code></td></tr>
+          <tr><td>Cursor</td><td><code>preToolUse</code> for <code>Write</code> and <code>Delete</code> in <code>.cursor/hooks.json</code></td><td><code>hook</code></td></tr>
+          <tr><td>Cline</td><td>None: Cline's hooks are TypeScript plugins for its CLI only</td><td><code>instructions</code></td></tr>
+          <tr><td>Amp, Roo Code, others</td><td>None</td><td><code>instructions</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>Hook entries are added after yours and removed byte for byte. A hook that can't read its input allows the edit with a warning. For any other agent or editor with hooks, <code>sj hook check-edit &lt;path&gt;</code> exits 0 to allow and 2 to block, with the reason on stderr.</p>
+      <div class="callout"><p><b>Whatever the agent does</b>, <code>sj gate</code> in CI refuses unproven work. Hooks stop it earlier; the gate is the backstop.</p></div>
     </section>
 
     <section id="ci">
@@ -457,7 +473,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
         <h3>sj init</h3>
         <p>Write <code>specjutsu.toml</code> and create the spec folders.</p>
         <dl>
-          <dt>--agents claude</dt><dd>Install the Claude Code adapter. <code>--remove-agents claude</code> removes it.</dd>
+          <dt>--agents &lt;list&gt;</dt><dd>Install agent adapters: <code>claude</code>, <code>codex</code>, <code>cursor</code>, <code>cline</code>, <code>agents-md</code>, or <code>auto</code> for the agents the repo already has files for. <code>--remove-agents &lt;list&gt;</code> removes them.</dd>
           <dt>--force</dt><dd>Replace an existing <code>specjutsu.toml</code>.</dd>
         </dl>
       </div>

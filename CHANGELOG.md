@@ -7,6 +7,17 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Adapters for Codex, Cursor and Cline, and a shared `AGENTS.md` block.
+  `sj init --agents` takes a comma-separated list (`claude`, `codex`, `cursor`,
+  `cline`, `agents-md`) or `auto`, which installs for the agents the repository
+  already has files for. Codex and Cursor get a pre-edit hook
+  (`sj hook codex|cursor pre-edit`) with the same red-before-implementation rule
+  as Claude Code. Cline gets the `AGENTS.md` instructions only. Removal gives
+  every file back byte for byte.
+- `sj hook check-edit <path>` makes the pre-edit decision for any other agent or
+  editor: exit 0 allows, 2 blocks, with the reason on stderr.
+- `sj doctor` prints each installed agent's enforcement level: `hook`,
+  `instructions` or `hook missing`.
 - A GitHub Action, `uses: nabour-labs/specjutsu@v0`. It installs a pinned `sj`
   verified against `SHA256SUMS`, runs the gate on pull requests, keeps one PR
   comment up to date and writes the job summary. `fail-on: never` reports without
