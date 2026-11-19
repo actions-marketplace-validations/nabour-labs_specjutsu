@@ -271,6 +271,20 @@ fn audit_007_a_configured_assertion_helper_counts() {
 }
 
 #[test]
+fn audit_014_an_assert_cmd_chain_counts_as_an_assertion() {
+    let f = Fixture::new(&[("tests/cli.rs", "use assert_cmd::Command;\n")]);
+    f.write(
+        "tests/cli.rs",
+        "use assert_cmd::Command;\n\n#[test]\nfn runs() { Command::cargo_bin(\"x\").unwrap().assert().success(); }\n",
+    );
+    f.commit("assert_cmd test");
+
+    let (code, out) = f.audit(&[]);
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
 fn audit_008_editing_the_expected_value_next_to_a_source_change_warns() {
     let test =
         "it(\"adds tax\", () => {\n  const total = cart([100])\n  expect(total).toBe(108)\n})\n";

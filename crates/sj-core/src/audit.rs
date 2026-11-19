@@ -146,7 +146,9 @@ pub fn count_assertions(file: &str, text: &str, above: &[&str], helpers: &[Strin
     static JS: OnceLock<Regex> = OnceLock::new();
     static PY: OnceLock<Regex> = OnceLock::new();
     let re = if file.ends_with(".rs") {
-        RS.get_or_init(|| Regex::new(r"\b(?:debug_)?assert\w*!|\bpanic!").unwrap())
+        RS.get_or_init(|| {
+            Regex::new(r"\b(?:debug_)?assert\w*!|\bpanic!|\.assert\s*\(\s*\)").unwrap()
+        })
     } else if file.ends_with(".py") {
         PY.get_or_init(|| {
             Regex::new(r"(?m)^\s*assert\b|\bpytest\.raises\b|\bself\.assert\w+\s*\(").unwrap()
