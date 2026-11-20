@@ -441,3 +441,43 @@ fn spec_031_one_failing_change_archives_nothing() {
         .stdout(predicate::str::contains("archived").not());
     assert_eq!(snapshot(&dir.path().join("openspec")), before);
 }
+
+/// A change that MODIFIES `auth`'s `Login flow` with its own THEN line.
+fn modifies_login_flow(dir: &Path, change: &str, then_line: &str) {
+    put(
+        dir,
+        &format!("openspec/changes/{change}/specs/auth/spec.md"),
+        &format!(
+            "## MODIFIED Requirements\n\n### Requirement: Login flow\nThe system SHALL sign users in.\n\n#### Scenario: AUTH-001 Login works\n- **WHEN** asked\n- **THEN** {then_line}\n"
+        ),
+    );
+    put(
+        dir,
+        &format!("openspec/changes/{change}/tasks.md"),
+        "# Tasks\n\n- [x] 1.1 Login flow (AUTH-001)\n",
+    );
+}
+
+#[test]
+fn spec_032_two_changes_editing_one_requirement_are_refused() {
+    let dir = project();
+    put(
+        dir.path(),
+        "openspec/specs/auth/spec.md",
+        &auth_spec().replace("Requirement: Login\n", "Requirement: Login flow\n"),
+    );
+    modifies_login_flow(dir.path(), "add-login", "it sends a code");
+    modifies_login_flow(dir.path(), "add-sso", "it redirects to the provider");
+    let before = snapshot(&dir.path().join("openspec"));
+    sj(dir.path(), &["archive", "add-login", "add-sso"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("add-login"))
+        .stdout(predicate::str::contains("add-sso"))
+        .stdout(predicate::str::contains("auth: Login flow"))
+        .stdout(predicate::str::contains("archived").not());
+    assert_eq!(snapshot(&dir.path().join("openspec")), before);
+
+    // Each one alone still archives.
+    sj(dir.path(), &["archive", "add-login"]).assert().success();
+}
