@@ -660,6 +660,12 @@ valid. The hooks call `sj` from `PATH`:
   so it never blocks work. CI's gate is the backstop for edits it can't see,
   such as shell redirects.
 
+  Every pre-edit hook, and `sj hook check-edit`, judges a file by the git work
+  tree that holds it. An edit in a linked worktree, under `.claude/worktrees/`
+  or beside the main checkout, uses that worktree's `specjutsu.toml`, active
+  task and ledger, even though Claude Code points the hook at the main checkout.
+  Agents working side by side in their own worktrees don't block each other.
+
 ## Other agents
 
 ```bash

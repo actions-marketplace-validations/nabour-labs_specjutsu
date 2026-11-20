@@ -66,6 +66,12 @@ All notable changes are recorded here. The format follows
 - `sj gate` reports spec drift as warnings, as failures with `[drift] fail = true`,
   and as `info` lines in a `refactor` change.
 
+### Fixed
+- The pre-edit hooks and `sj hook check-edit` judge a file by the git work tree
+  that holds it. An edit in a linked worktree was judged by the main checkout's
+  active task (blocking on another change's scenarios), and one in a worktree
+  outside the main checkout was never checked.
+
 ## [0.3.1] - 2026-11-18
 
 ### Added
