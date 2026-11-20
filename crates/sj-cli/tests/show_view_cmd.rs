@@ -33,7 +33,8 @@ const CONFIG: &str = "schema = 1\n\n[[package]]\npath = \".\"\nsources = []\n\n\
 
 /// A capability spec with `n` scenarios `PREFIX-001..`, one requirement each.
 fn spec(cap: &str, prefix: &str, n: usize) -> String {
-    let mut s = format!("# {cap} Specification\n\n## Purpose\nThe {cap} capability.\n\n## Requirements\n");
+    let mut s =
+        format!("# {cap} Specification\n\n## Purpose\nThe {cap} capability.\n\n## Requirements\n");
     for i in 1..=n {
         s.push_str(&format!(
             "\n### Requirement: {cap} rule {i}\nThe system SHALL follow {cap} rule {i}.\n\n\
@@ -70,9 +71,21 @@ fn show_project() -> tempfile::TempDir {
     let r = dir.path();
     put(r, "specjutsu.toml", CONFIG);
     put(r, "openspec/specs/auth/spec.md", AUTH);
-    put(r, "openspec/specs/audit/spec.md", &spec("audit", "AUDIT", 1));
-    put(r, "openspec/changes/add-oauth-login/proposal.md", "## Why\n\nUsers want Google login.\n");
-    put(r, "openspec/changes/add-oauth-login/specs/auth/spec.md", DELTA);
+    put(
+        r,
+        "openspec/specs/audit/spec.md",
+        &spec("audit", "AUDIT", 1),
+    );
+    put(
+        r,
+        "openspec/changes/add-oauth-login/proposal.md",
+        "## Why\n\nUsers want Google login.\n",
+    );
+    put(
+        r,
+        "openspec/changes/add-oauth-login/specs/auth/spec.md",
+        DELTA,
+    );
     put(r, "openspec/changes/add-oauth-login/tasks.md", TASKS);
     dir
 }
@@ -115,7 +128,10 @@ fn spec_014_show_a_change() {
         .position(|l| l.contains("auth") && l.starts_with("---"))
         .unwrap_or_else(|| panic!("no auth delta header:\n{out}"));
     let rest: String = out.lines().skip(header + 1).collect::<Vec<_>>().join("\n");
-    assert!(rest.contains("#### Scenario: AUTH-009 Google login"), "{out}");
+    assert!(
+        rest.contains("#### Scenario: AUTH-009 Google login"),
+        "{out}"
+    );
     assert!(out.contains("3/7 tasks"), "{out}");
 }
 
@@ -143,9 +159,11 @@ fn spec_016_json_names_the_kind() {
     let v: serde_json::Value =
         serde_json::from_str(&stdout(dir.path(), &["spec", "show", "auth", "--json"])).unwrap();
     assert_eq!(v["kind"], "capability");
-    let v: serde_json::Value =
-        serde_json::from_str(&stdout(dir.path(), &["spec", "show", "add-oauth-login", "--json"]))
-            .unwrap();
+    let v: serde_json::Value = serde_json::from_str(&stdout(
+        dir.path(),
+        &["spec", "show", "add-oauth-login", "--json"],
+    ))
+    .unwrap();
     assert_eq!(v["kind"], "change");
 }
 
@@ -180,17 +198,28 @@ fn spec_018_a_scenario_in_an_open_change_is_found() {
 fn spec_019_show_an_archived_change_by_name() {
     let dir = show_project();
     let a = "openspec/changes/archive/2026-11-18-audit-checks";
-    put(dir.path(), &format!("{a}/proposal.md"), "## Why\n\nCatch tampered tests.\n");
+    put(
+        dir.path(),
+        &format!("{a}/proposal.md"),
+        "## Why\n\nCatch tampered tests.\n",
+    );
     put(
         dir.path(),
         &format!("{a}/specs/audit/spec.md"),
         "## ADDED Requirements\n\n### Requirement: Tamper\nThe system SHALL flag it.\n\n\
          #### Scenario: AUDIT-002 Tamper\n- **WHEN** a\n- **THEN** b\n",
     );
-    put(dir.path(), &format!("{a}/tasks.md"), "# Tasks\n\n- [x] 1.1 a (AUDIT-002)\n");
+    put(
+        dir.path(),
+        &format!("{a}/tasks.md"),
+        "# Tasks\n\n- [x] 1.1 a (AUDIT-002)\n",
+    );
     let by_name = stdout(dir.path(), &["spec", "show", "audit-checks"]);
     assert!(by_name.contains("Catch tampered tests."), "{by_name}");
-    assert!(by_name.contains("#### Scenario: AUDIT-002 Tamper"), "{by_name}");
+    assert!(
+        by_name.contains("#### Scenario: AUDIT-002 Tamper"),
+        "{by_name}"
+    );
     assert!(by_name.contains("archived 2026-11-18"), "{by_name}");
     let by_folder = stdout(dir.path(), &["spec", "show", "2026-11-18-audit-checks"]);
     assert_eq!(by_name, by_folder);
@@ -201,7 +230,9 @@ fn spec_019_show_an_archived_change_by_name() {
         "openspec/changes/archive/2026-11-19-audit-checks/proposal.md",
         "## Why\n\nAgain.\n",
     );
-    let out = sj(dir.path(), &["spec", "show", "audit-checks"]).output().unwrap();
+    let out = sj(dir.path(), &["spec", "show", "audit-checks"])
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(1));
     let all = format!(
         "{}{}",
@@ -219,18 +250,36 @@ fn view_project() -> tempfile::TempDir {
     let r = dir.path();
     put(r, "specjutsu.toml", CONFIG);
     put(r, "openspec/specs/auth/spec.md", &spec("auth", "AUTH", 6));
-    put(r, "openspec/specs/billing/spec.md", &spec("billing", "BILL", 4));
-    let mut delta = String::from("## ADDED Requirements\n\n### Requirement: OAuth\nThe system SHALL do OAuth.\n");
+    put(
+        r,
+        "openspec/specs/billing/spec.md",
+        &spec("billing", "BILL", 4),
+    );
+    let mut delta = String::from(
+        "## ADDED Requirements\n\n### Requirement: OAuth\nThe system SHALL do OAuth.\n",
+    );
     for i in 7..=9 {
         delta.push_str(&format!(
             "\n#### Scenario: AUTH-00{i} OAuth {i}\n- **WHEN** a\n- **THEN** b\n"
         ));
     }
-    put(r, "openspec/changes/add-oauth-login/proposal.md", "## Why\n\nOAuth.\n");
-    put(r, "openspec/changes/add-oauth-login/specs/auth/spec.md", &delta);
+    put(
+        r,
+        "openspec/changes/add-oauth-login/proposal.md",
+        "## Why\n\nOAuth.\n",
+    );
+    put(
+        r,
+        "openspec/changes/add-oauth-login/specs/auth/spec.md",
+        &delta,
+    );
     put(r, "openspec/changes/add-oauth-login/tasks.md", TASKS);
     for d in 1..=5 {
-        put(r, &format!("openspec/changes/archive/2026-01-0{d}-old-{d}/proposal.md"), "## Why\n");
+        put(
+            r,
+            &format!("openspec/changes/archive/2026-01-0{d}-old-{d}/proposal.md"),
+            "## Why\n",
+        );
     }
     put(
         r,
@@ -280,17 +329,26 @@ fn loop_009_long_lists_are_cut_to_fit() {
         );
     }
     let out = stdout(dir.path(), &["view"]);
-    let caps = out.lines().filter(|l| l.contains(" scenario")).filter(|l| l.contains("cap")).count();
+    let caps = out
+        .lines()
+        .filter(|l| l.contains(" scenario"))
+        .filter(|l| l.contains("cap"))
+        .count();
     assert_eq!(caps, 20, "{out}");
     assert!(out.contains("… +10 more"), "{out}");
-    assert!(out.lines().count() <= 40, "{} lines:\n{out}", out.lines().count());
+    assert!(
+        out.lines().count() <= 40,
+        "{} lines:\n{out}",
+        out.lines().count()
+    );
 }
 
 // spec: LOOP-010
 #[test]
 fn loop_010_json_dashboard() {
     let dir = view_project();
-    let v: serde_json::Value = serde_json::from_str(&stdout(dir.path(), &["view", "--json"])).unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(&stdout(dir.path(), &["view", "--json"])).unwrap();
     for key in ["capabilities", "changes", "totals"] {
         assert!(v.get(key).is_some(), "missing {key}: {v}");
     }

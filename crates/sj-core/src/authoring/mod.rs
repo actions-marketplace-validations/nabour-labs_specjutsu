@@ -3,6 +3,7 @@
 pub mod archive;
 pub mod blocks;
 pub mod check;
+pub mod show;
 pub mod validate;
 
 use std::path::{Path, PathBuf};
