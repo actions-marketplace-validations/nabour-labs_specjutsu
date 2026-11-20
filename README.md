@@ -57,6 +57,19 @@ cargo install specjutsu
 cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.4.0 specjutsu
 ```
 
+To update, install again with `--force`. To get a fix that is merged but not yet
+released, build from `main`. Then run `sj update` in each project:
+
+```bash
+cargo install specjutsu --force
+cargo install --git https://github.com/nabour-labs/specjutsu --branch main specjutsu --force
+cargo install --list | grep -A1 specjutsu   # the installed build and its source
+```
+
+`sj --version` shows only the version number, which a build from `main` shares
+with the last release. Open agent sessions use the new binary on their next hook
+call.
+
 ## Quickstart
 
 ```bash

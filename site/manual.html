@@ -116,6 +116,7 @@
     <ol>
       <li><a href="#status">What works today</a></li>
       <li><a href="#install">Install</a></li>
+      <li><a href="#reinstall">Update or reinstall</a></li>
       <li><a href="#setup">Set up a project</a></li>
       <li><a href="#concepts">Core concepts</a></li>
       <li><a href="#first-change">Your first change</a></li>
@@ -181,6 +182,21 @@ install sj-aarch64-apple-darwin/sj ~/.local/bin/
 cargo install specjutsu
 
 sj --version</pre>
+    </section>
+
+    <section id="reinstall">
+      <h2>Update or reinstall</h2>
+      <p>Install over the old binary: <code>--force</code> replaces the <code>sj</code> already in <code>~/.cargo/bin</code>. With a prebuilt archive, download the new release as above and run <code>install</code> again.</p>
+<pre class="code"><span class="c-m"># the latest release, from crates.io</span>
+cargo install specjutsu --force
+
+<span class="c-m"># a fix that is merged but not released yet, from main on GitHub</span>
+cargo install --git https://github.com/nabour-labs/specjutsu --branch main specjutsu --force
+
+<span class="c-m"># which build is installed, and where it came from</span>
+cargo install --list | grep -A1 specjutsu</pre>
+      <p><code>sj --version</code> only shows the version number, and a build from <code>main</code> reports the last release's number. The <code>cargo install --list</code> line names the source instead: a build from GitHub shows the repository URL and commit in brackets after the version, and one from crates.io shows only the version.</p>
+      <p>Agent hooks call <code>sj</code> from <code>PATH</code>, so sessions that are already open use the new binary on their next edit, with no restart. Then run <code>sj update</code> in each project, so the generated skills, hooks and agent instructions match the new version. Files you edited by hand are kept and reported.</p>
     </section>
 
     <section id="setup">
