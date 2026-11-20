@@ -481,3 +481,46 @@ fn spec_032_two_changes_editing_one_requirement_are_refused() {
     // Each one alone still archives.
     sj(dir.path(), &["archive", "add-login"]).assert().success();
 }
+
+#[test]
+fn spec_033_all_done_archives_only_finished_changes() {
+    let dir = project();
+    with_two_changes(dir.path(), "# Tasks\n\n- [x] 1.1 Rotate (AUTH-005)\n");
+    put(
+        dir.path(),
+        "openspec/changes/add-sso/specs/auth/spec.md",
+        "## ADDED Requirements\n\n### Requirement: Single sign-on\nThe system SHALL accept SSO.\n\n#### Scenario: AUTH-007 SSO\n- **WHEN** a provider signs a user in\n- **THEN** a session exists\n",
+    );
+    put(
+        dir.path(),
+        "openspec/changes/add-sso/tasks.md",
+        "# Tasks\n\n- [ ] 1.1 Provider (AUTH-007)\n- [ ] 1.2 Callback (AUTH-007)\n",
+    );
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let out = sj(dir.path(), &["archive", "--all-done"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let out = String::from_utf8(out).unwrap();
+    let archived: Vec<&str> = out.lines().filter(|l| l.starts_with("archived ")).collect();
+    assert_eq!(
+        archived,
+        vec![
+            format!("archived add-login → openspec/changes/archive/{today}-add-login"),
+            format!("archived add-refresh → openspec/changes/archive/{today}-add-refresh"),
+        ],
+        "{out}"
+    );
+    let changes = dir.path().join("openspec/changes");
+    assert!(changes.join("add-sso/tasks.md").is_file());
+    assert!(!changes.join("add-login").exists());
+    assert!(!changes.join("add-refresh").exists());
+
+    // Rerunning with nothing finished is a no-op.
+    sj(dir.path(), &["archive", "--all-done"])
+        .assert()
+        .success()
+        .stdout("nothing to archive\n");
+}
