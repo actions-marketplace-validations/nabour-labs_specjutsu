@@ -436,6 +436,57 @@ fn refusals(spec_root: &Path, change: &str, dir: &Path) -> Result<Vec<Problem>> 
     Ok(reasons)
 }
 
+/// The requirements a delta edits in place: MODIFIED, REMOVED and RENAMED (by its old name),
+/// each with its 1-based line.
+fn edited(delta: &str) -> Vec<(String, usize)> {
+    let d = blocks::parse_delta(&blocks::normalize(delta));
+    let mut out: Vec<(String, usize)> = d
+        .modified
+        .iter()
+        .map(|b| (b.name.clone(), b.header + 1))
+        .collect();
+    out.extend(d.removed.iter().map(|r| (r.name.clone(), r.line)));
+    out.extend(d.renamed.iter().map(|r| (r.from.clone(), r.line)));
+    out
+}
+
+/// One problem for each requirement that two changes in one run both edit.
+fn conflicts(found: &[(&str, super::Change)]) -> Result<Vec<Problem>> {
+    // (capability, folded name) to the first change that edits it.
+    let mut owner: BTreeMap<(String, String), String> = BTreeMap::new();
+    let mut out = Vec::new();
+    for (_, c) in found {
+        let delta_dir = c.dir.join("specs");
+        for file in spec_files(&delta_dir)? {
+            let capability = file
+                .parent()
+                .and_then(|p| p.strip_prefix(&delta_dir).ok())
+                .context("delta spec outside the change's specs folder")?
+                .to_string_lossy()
+                .replace('\\', "/");
+            for (name, line) in edited(&read(&file)?) {
+                let key = (capability.clone(), fold(&name));
+                match owner.get(&key) {
+                    Some(first) if first != &c.name => out.push(Problem {
+                        message: format!(
+                            "conflict: {first} and {} both edit {capability}: {name}; \
+                             archive one, then rebase the other's delta",
+                            c.name
+                        ),
+                        file: file.clone(),
+                        line,
+                    }),
+                    Some(_) => {}
+                    None => {
+                        owner.insert(key, c.name.clone());
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// Check every change in `changes` and merge all their deltas in memory, in the order given:
 /// a later change's merge builds on an earlier one's result. Nothing is written.
 pub fn plan(spec_root: &Path, changes: &[&str], opts: &Options) -> Result<Planned> {
@@ -450,14 +501,16 @@ pub fn plan(spec_root: &Path, changes: &[&str], opts: &Options) -> Result<Planne
         }
         found.push((*name, c));
     }
+    let mut reasons = Vec::new();
     if !opts.force {
-        let mut reasons = Vec::new();
         for (name, c) in &found {
             reasons.extend(refusals(spec_root, name, &c.dir)?);
         }
-        if !reasons.is_empty() {
-            return Ok(Planned::Refused(reasons));
-        }
+    }
+    // Conflicts are refused even with --force: merging both would drop one change's edit.
+    reasons.extend(conflicts(&found)?);
+    if !reasons.is_empty() {
+        return Ok(Planned::Refused(reasons));
     }
 
     // The merged text of every spec touched so far, so changes to one capability chain.
