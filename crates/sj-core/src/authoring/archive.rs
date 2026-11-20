@@ -487,6 +487,18 @@ fn conflicts(found: &[(&str, super::Change)]) -> Result<Vec<Problem>> {
     Ok(out)
 }
 
+/// Open changes, in name order, whose `tasks.md` has at least one task and every task checked.
+pub fn finished(spec_root: &Path) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for c in super::open_changes(spec_root)? {
+        let t = tasks(&c.dir.join("tasks.md"))?;
+        if !t.is_empty() && t.iter().all(|t| t.done) {
+            out.push(c.name);
+        }
+    }
+    Ok(out)
+}
+
 /// Check every change in `changes` and merge all their deltas in memory, in the order given:
 /// a later change's merge builds on an earlier one's result. Nothing is written.
 pub fn plan(spec_root: &Path, changes: &[&str], opts: &Options) -> Result<Planned> {

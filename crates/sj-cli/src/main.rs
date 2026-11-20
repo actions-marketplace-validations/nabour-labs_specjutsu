@@ -323,8 +323,11 @@ enum SpecCommand {
     /// Apply each change's deltas to specs/ and move it to changes/archive/. With several
     /// changes, all are checked and merged first; one failure archives none.
     Archive {
-        #[arg(required = true, num_args = 1..)]
+        #[arg(required_unless_present = "all_done", num_args = 1..)]
         changes: Vec<String>,
+        /// Archive every open change whose tasks are all checked, in name order.
+        #[arg(long, conflicts_with = "changes")]
+        all_done: bool,
         #[command(flatten)]
         args: SpecArgs,
         /// Archive despite validation errors and open tasks.
@@ -1245,6 +1248,7 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
         SpecCommand::Show { item, args, json } => show_cmd(&item, &args, json),
         SpecCommand::Archive {
             changes,
+            all_done,
             args,
             force,
         } => {
@@ -1253,6 +1257,15 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 force,
                 date: chrono::Local::now().format("%Y-%m-%d").to_string(),
             };
+            let changes = if all_done {
+                archive::finished(&spec_root)?
+            } else {
+                changes
+            };
+            if changes.is_empty() {
+                println!("nothing to archive");
+                return Ok(ExitCode::SUCCESS);
+            }
             let names: Vec<&str> = changes.iter().map(String::as_str).collect();
             match archive::plan(&spec_root, &names, &opts)? {
                 archive::Planned::Refused(reasons) => {
