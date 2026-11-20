@@ -7,6 +7,13 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- `sj spec show <item>` prints one scenario, change (open or archived) or
+  capability. A scenario comes with its requirement, steps, mapped tests and
+  latest ledger evidence. An unknown item suggests near names. `--json` prints
+  the same data with a `kind` field.
+- `sj view` prints a one-screen project dashboard: capabilities, open changes
+  with task and evidence counts, evidence totals, orphan tests and archived
+  changes. `--json` prints the same data. It never runs tests.
 - Adapters for Codex, Cursor and Cline, and a shared `AGENTS.md` block.
   `sj init --agents` takes a comma-separated list (`claude`, `codex`, `cursor`,
   `cline`, `agents-md`) or `auto`, which installs for the agents the repository
