@@ -5,6 +5,7 @@ pub mod next;
 pub mod status;
 pub mod task;
 pub mod verify;
+pub mod view;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -80,6 +81,12 @@ impl Ledger {
             .map(|s| (s.id.clone(), s))
             .collect();
         Ledger { records, status }
+    }
+
+    /// The latest result for `id` and whether red-before-green is proven, or `None` when no
+    /// run names it.
+    pub fn status(&self, id: &str) -> Option<&ScenarioStatus> {
+        self.status.get(id)
     }
 
     pub fn evidence(&self, id: &str) -> Evidence {

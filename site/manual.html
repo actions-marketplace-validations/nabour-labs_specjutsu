@@ -507,6 +507,11 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
         <p>One line per open change: tasks done, scenarios added or modified.</p>
       </div>
       <div class="cmd">
+        <h3>sj spec show &lt;item&gt;</h3>
+        <p>Print one scenario, change or capability. Looked up as a scenario ID, then an open change, then an archived change (folder name, or bare name when only one matches), then a capability. A scenario prints with its requirement, steps, mapped tests and latest ledger result; a capability prints its <code>spec.md</code> unchanged. An unknown item exits 1 and suggests near names.</p>
+        <dl><dt>--json</dt><dd>The same data, with <code>kind</code> set to <code>scenario</code>, <code>change</code> or <code>capability</code>.</dd></dl>
+      </div>
+      <div class="cmd">
         <h3>sj spec validate [change]</h3>
         <p>Scenario IDs and steps, requirement wording, delta structure, and that every task names its scenarios. Each problem has a file and line.</p>
         <dl><dt>--strict</dt><dd>Fail on warnings too.</dd></dl>
@@ -525,6 +530,11 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj status [change]</h3>
         <p>At most five lines per open change: tasks done, scenarios by evidence (proven, green-unproven, red, untested), and the next task.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj view</h3>
+        <p>A one-screen dashboard in at most 40 lines: capabilities with scenario counts, open changes with tasks and evidence, evidence totals, orphan tests and archived changes. Reads files and the ledger only; never runs tests.</p>
+        <dl><dt>--json</dt><dd><code>capabilities</code>, <code>changes</code>, <code>totals</code>, <code>orphans</code> and <code>archived</code>.</dd></dl>
       </div>
       <div class="cmd">
         <h3>sj next [change]</h3>

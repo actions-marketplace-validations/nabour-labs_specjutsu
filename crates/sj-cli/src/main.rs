@@ -199,6 +199,13 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// One-screen project dashboard: capabilities, open changes, evidence totals, orphans.
+    View {
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
     /// The next task's context: its scenarios, changed files and test commands.
     Next {
         /// Only this change (default: the first open change with an open task).
@@ -276,6 +283,15 @@ enum SpecCommand {
         change: String,
         #[command(flatten)]
         args: SpecArgs,
+    },
+    /// Print one capability spec, change (open or archived) or scenario with its evidence.
+    Show {
+        /// A scenario ID, change name, archived change or capability.
+        item: String,
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
     },
     /// Open changes with task progress and scenario counts.
     List {
@@ -493,6 +509,7 @@ fn run() -> Result<ExitCode> {
         } => import_speckit_cmd(&args, write, force, json),
         Command::Migrate { from, write, root } => migrate_cmd(&root, &from, write),
         Command::Status { change, args, json } => status_cmd(change, &args, json),
+        Command::View { args, json } => view_cmd(&args, json),
         Command::Task {
             command: TaskCommand::Done { change, task, args },
         } => task_done_cmd(&change, &task, &args),
@@ -1223,6 +1240,7 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 ExitCode::from(1)
             })
         }
+        SpecCommand::Show { item, args, json } => show_cmd(&item, &args, json),
         SpecCommand::Archive {
             change,
             args,
@@ -1653,4 +1671,49 @@ enum CoverageCommand {
         #[arg(long)]
         spec_root: Option<PathBuf>,
     },
+}
+
+fn show_cmd(item: &str, args: &SpecArgs, json: bool) -> Result<ExitCode> {
+    use sj_core::authoring::show::{self, Outcome};
+
+    let (root, spec_root) = spec_paths(args)?;
+    let config = sj_core::config::load(&root)?;
+    match show::show(&root, &spec_root, &config, item)? {
+        Outcome::Found(found) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&found)?);
+            } else {
+                print!("{}", show::render(&found));
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Outcome::Ambiguous(folders) => {
+            eprintln!("sj: `{item}` names several archived changes; use a folder name:");
+            for f in folders {
+                eprintln!("  {f}");
+            }
+            Ok(ExitCode::from(1))
+        }
+        Outcome::Unknown(near) => {
+            eprintln!("sj: no scenario, change or capability named `{item}`");
+            if !near.is_empty() {
+                eprintln!("did you mean: {}", near.join(", "));
+            }
+            Ok(ExitCode::from(1))
+        }
+    }
+}
+
+fn view_cmd(args: &SpecArgs, json: bool) -> Result<ExitCode> {
+    let (root, spec_root) = spec_paths(args)?;
+    let config = sj_core::config::load(&root)?;
+    let v = sj_core::agent_loop::view::view(&root, &spec_root, &config)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&v)?);
+    } else {
+        for line in sj_core::agent_loop::view::render(&v) {
+            println!("{line}");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }

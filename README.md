@@ -73,10 +73,12 @@ sj ids              # list scenarios without IDs and the IDs they would get
 sj ids --write      # assign them in place
 sj spec new add-oauth-login  # scaffold a change; prints the next free ID per prefix
 sj spec list        # open changes: tasks done, scenarios added or modified
+sj spec show AUTH-003   # one scenario, change or capability; a scenario with its tests and evidence
 sj spec validate    # spec format, delta structure, every task names its scenarios
 sj spec check add-oauth-login    # uncovered scenarios, unknown IDs, open questions
 sj spec archive add-oauth-login  # merge the deltas into specs/, move to changes/archive/
 sj status           # each open change: tasks, scenario evidence, the next task
+sj view             # one-screen dashboard: capabilities, open changes, evidence totals
 sj next             # the next task: its scenarios, changed files, test commands
 sj task done add-oauth-login 2.1  # check the box (strict mode needs red-before-green)
 sj verify           # before a PR: what the gate checks, without red-on-base
@@ -470,6 +472,15 @@ folders work unchanged.
   `sj instructions` alike.
 - **`sj spec list`** prints one line per open change:
   `add-oauth-login  3/7 tasks  4 scenarios`.
+- **`sj spec show <item>`** prints one item, looked up in this order: a
+  scenario ID, an open change, an archived change (by its folder name, or by
+  its bare name when only one archived change has it), a capability. A
+  scenario prints with its requirement, its steps, the tests mapped to it and
+  its latest ledger result, and is found in open changes too. A change prints
+  its proposal, each delta under a `--- <capability>` header and its task
+  count, or `archived <date>`. A capability prints its `spec.md` byte for
+  byte. An unknown item exits 1 and suggests up to three near names. `--json`
+  prints the same data with a `kind` field.
 - **`sj spec validate [<change>]`** reports each problem with its file and line:
   - A scenario without an ID, a duplicate ID, or a missing WHEN or THEN step.
   - A requirement with no scenario, or with no SHALL or MUST.
@@ -546,7 +557,7 @@ a passing one, on different code. Pass `--no-ledger` to skip recording.
 
 ## The agent loop
 
-Four commands answer the agent's questions (where am I, what next, am I done)
+These commands answer the agent's questions (where am I, what next, am I done)
 in a few lines, so it never reads whole spec folders or raw test logs. Each
 takes `--json`, except `sj task done`.
 
@@ -575,6 +586,12 @@ takes `--json`, except `sj task done`.
   other byte. In `strict` mode it refuses, exiting 1, unless every scenario the
   task names is proven: `unproven AUTH-005 (no red run recorded)`. In `guided`
   and `advisory` modes it checks the box and prints the same lines as warnings.
+- **`sj view`** prints a one-screen project dashboard: each capability with
+  its scenario count, each open change with its tasks and scenario evidence
+  (the counts `sj status` uses), evidence totals over every scenario, the
+  number of orphan tests and of archived changes. It fits in 40 lines, cutting
+  long lists with `… +N more`. It reads files and the ledger only, and never
+  runs tests.
 - **`sj verify [<change>]`** is the local check before a PR. It runs the
   change's scenario tests (recording them), and reports untested and failing
   scenarios, unproven ones, orphans, `sj spec check` problems, and the gate's
