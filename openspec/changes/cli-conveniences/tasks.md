@@ -6,7 +6,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 - [x] 1.1 Split `sj-core::spec::archive` into plan and apply, with no change to single-change behaviour; accept several names (SPEC-030, SPEC-031).
 - [x] 1.2 Conflict detection across changes in one run (SPEC-032).
-- [ ] 1.3 `--all-done` (SPEC-033).
+- [x] 1.3 `--all-done` (SPEC-033).
 
 ## 2. Update preview
 
