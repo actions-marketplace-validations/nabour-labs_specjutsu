@@ -9,3 +9,6 @@ sources = ["**/*.rs"]
 [[package.suite]]
 runner = "cargo"
 tests = ["**/*.rs"]
+
+[ids.prefixes]
+adapters = "ADAPT"
