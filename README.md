@@ -40,7 +40,7 @@ unchanged, and it replaces the OpenSpec, Spec Kit and Superpowers stack.
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha, v0.3.1. `sj trace`, `sj test` and `sj gate` work with
+**Status:** pre-alpha, v0.4.0. `sj trace`, `sj test` and `sj gate` work with
 Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
 Adapters install into Claude Code, Codex, Cursor, Cline and any agent that reads
 `AGENTS.md`. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
@@ -54,7 +54,7 @@ from [crates.io](https://crates.io/crates/specjutsu) or from the git tag:
 
 ```bash
 cargo install specjutsu
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.1 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.4.0 specjutsu
 ```
 
 To update, install again with `--force`. To get a fix that is merged but not yet
