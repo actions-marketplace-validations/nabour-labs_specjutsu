@@ -174,6 +174,81 @@ no scenario says why: (no-scenario: docs).
 -->
 ";
 
+const SPEC: &str = "## ADDED Requirements
+
+### Requirement: <name>
+The system SHALL <behaviour>.
+
+#### Scenario: <PREFIX-NNN> <short name>
+- **WHEN** <condition, with concrete values>
+- **THEN** <observable result>
+";
+
+/// The template names, in artifact order.
+pub const TEMPLATE_NAMES: [&str; 4] = ["proposal.md", "spec.md", "design.md", "tasks.md"];
+
+fn built_in(name: &str) -> Option<&'static str> {
+    match name {
+        "proposal.md" => Some(PROPOSAL),
+        "spec.md" => Some(SPEC),
+        "design.md" => Some(DESIGN),
+        "tasks.md" => Some(TASKS),
+        _ => None,
+    }
+}
+
+/// One template and where it resolves from (SPEC-034..036).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Template {
+    pub name: String,
+    /// `<spec_root>/templates/<name>` relative to the repository root, or `built-in:<name>`.
+    pub path: String,
+    /// `project` or `built-in`.
+    pub source: &'static str,
+}
+
+/// Resolve `name`: `<spec_root>/templates/<name>` when it exists, otherwise the built-in.
+pub fn template(root: &Path, spec_root: &Path, name: &str) -> Template {
+    let file = spec_root.join("templates").join(name);
+    if file.is_file() {
+        Template {
+            name: name.to_string(),
+            path: file
+                .strip_prefix(root)
+                .unwrap_or(&file)
+                .to_string_lossy()
+                .replace('\\', "/"),
+            source: "project",
+        }
+    } else {
+        Template {
+            name: name.to_string(),
+            path: format!("built-in:{name}"),
+            source: "built-in",
+        }
+    }
+}
+
+/// Every template, in artifact order.
+pub fn templates(root: &Path, spec_root: &Path) -> Vec<Template> {
+    TEMPLATE_NAMES
+        .iter()
+        .map(|n| template(root, spec_root, n))
+        .collect()
+}
+
+/// The text of template `name`, from the project override when there is one.
+pub fn template_text(spec_root: &Path, name: &str) -> Result<String> {
+    let file = spec_root.join("templates").join(name);
+    if file.is_file() {
+        return std::fs::read_to_string(&file)
+            .with_context(|| format!("cannot read {}", file.display()));
+    }
+    built_in(name)
+        .map(str::to_string)
+        .with_context(|| format!("no template `{name}`"))
+}
+
 /// Create `changes/<name>/` with the templates and an empty `specs/` folder.
 pub fn new_change(spec_root: &Path, name: &str) -> Result<PathBuf> {
     if !is_kebab(name) {
@@ -185,11 +260,8 @@ pub fn new_change(spec_root: &Path, name: &str) -> Result<PathBuf> {
     }
     std::fs::create_dir_all(dir.join("specs"))
         .with_context(|| format!("cannot create {}", dir.display()))?;
-    for (file, text) in [
-        ("proposal.md", PROPOSAL),
-        ("design.md", DESIGN),
-        ("tasks.md", TASKS),
-    ] {
+    for file in ["proposal.md", "design.md", "tasks.md"] {
+        let text = template_text(spec_root, file)?;
         std::fs::write(dir.join(file), text)
             .with_context(|| format!("cannot write {}", dir.join(file).display()))?;
     }

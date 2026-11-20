@@ -214,6 +214,23 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// What to write next for one artifact of a change: template, context, rules, next IDs.
+    Instructions {
+        change: String,
+        /// proposal, specs, design or tasks (default: the first one not yet written).
+        artifact: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List the templates and where each resolves from: the project or the built-in.
+    Templates {
+        #[command(flatten)]
+        args: SpecArgs,
+        #[arg(long)]
+        json: bool,
+    },
     /// Local check before a PR: the gate's checks without red-on-base.
     Verify {
         /// Only this change (default: every open change).
@@ -492,6 +509,13 @@ fn run() -> Result<ExitCode> {
             base,
             json,
         } => verify_cmd(change, &args, base, json),
+        Command::Instructions {
+            change,
+            artifact,
+            args,
+            json,
+        } => instructions_cmd(&change, artifact.as_deref(), &args, json),
+        Command::Templates { args, json } => templates_cmd(&args, json),
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
@@ -1344,6 +1368,54 @@ fn migrate_cmd(root: &Path, from: &[String], write: bool) -> Result<ExitCode> {
     } else {
         ExitCode::from(1)
     })
+}
+
+fn instructions_cmd(
+    change: &str,
+    artifact: Option<&str>,
+    args: &SpecArgs,
+    json: bool,
+) -> Result<ExitCode> {
+    use sj_core::agent_loop::instructions::{instructions, Outcome};
+    let (root, spec_root) = spec_paths(args)?;
+    let config = sj_core::config::load(&root)?;
+    match instructions(&root, &spec_root, &config, change, artifact)? {
+        Outcome::Artifact(i) => {
+            for w in &i.warnings {
+                eprintln!("warn    {w}");
+            }
+            if json {
+                println!("{}", serde_json::to_string_pretty(&i)?);
+            } else {
+                print!("{}", i.render());
+            }
+        }
+        Outcome::AllWritten { change } => {
+            let message = format!("all artifacts written; run sj next {change}");
+            if json {
+                let v =
+                    serde_json::json!({ "change": change, "artifact": null, "message": message });
+                println!("{}", serde_json::to_string_pretty(&v)?);
+            } else {
+                println!("{message}");
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn templates_cmd(args: &SpecArgs, json: bool) -> Result<ExitCode> {
+    let (root, spec_root) = spec_paths(args)?;
+    let all = sj_core::authoring::templates(&root, &spec_root);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&all)?);
+    } else {
+        let width = all.iter().map(|t| t.name.len()).max().unwrap_or(0);
+        for t in &all {
+            println!("{:<width$}  {}", t.name, t.path);
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {

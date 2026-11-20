@@ -1,5 +1,6 @@
 //! The agent's working loop: `sj status`, `sj next`, `sj task done` and `sj verify`.
 
+pub mod instructions;
 pub mod next;
 pub mod status;
 pub mod task;
