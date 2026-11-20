@@ -42,7 +42,8 @@ change, CI setup, agent setup and the command reference.
 
 **Status:** pre-alpha, v0.3.1. `sj trace`, `sj test` and `sj gate` work with
 Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
-Claude Code is the only agent adapter so far; the others follow in v0.5. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
+Adapters install into Claude Code, Codex, Cursor, Cline and any agent that reads
+`AGENTS.md`. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md).
 
 ## Install
@@ -80,6 +81,7 @@ sj next             # the next task: its scenarios, changed files, test commands
 sj task done add-oauth-login 2.1  # check the box (strict mode needs red-before-green)
 sj verify           # before a PR: what the gate checks, without red-on-base
 sj init --agents claude  # install the Claude Code adapter: CLAUDE.md block, skills, hooks
+sj init --agents auto    # install for every agent the repo already has files for
 sj update           # regenerate installed adapters; hand-edited files are kept
 sj import speckit   # preview converting Spec Kit's specs/NNN-*/ features; --write converts
 ```
@@ -640,6 +642,50 @@ valid. The hooks call `sj` from `PATH`:
   mode it only warns. If the hook itself fails, it warns and allows the edit,
   so it never blocks work. CI's gate is the backstop for edits it can't see,
   such as shell redirects.
+
+## Other agents
+
+```bash
+sj init --agents codex,cursor    # several at once; AGENTS.md is written once
+sj init --agents auto            # the agents whose files the repo already has
+sj init --remove-agents codex,cursor,cline
+sj doctor                        # one line per installed agent: hook, instructions or hook missing
+```
+
+`sj init --agents` takes `claude`, `codex`, `cursor`, `cline`, `agents-md` and
+`auto`. Codex, Cursor and Cline also get `agents-md`: a specjutsu block in
+`AGENTS.md`, with the same markers and rules as the CLAUDE.md block. It names the
+`sj` commands of the loop rather than skills, since not every agent that reads
+AGENTS.md can load skills. Amp, Roo Code and other AGENTS.md readers get it with
+`--agents agents-md`.
+
+| Agent | Instructions | Pre-edit hook | Level |
+| --- | --- | --- | --- |
+| Claude Code | `CLAUDE.md` block, nine skills | `PreToolUse` in `.claude/settings.json` | `hook` |
+| Codex | `AGENTS.md` block | `[[hooks.PreToolUse]]` for `apply_patch` edits, in `.codex/config.toml` | `hook` |
+| Cursor | `AGENTS.md` block | `preToolUse` for `Write` and `Delete`, in `.cursor/hooks.json` | `hook` |
+| Cline | `AGENTS.md` block | none: Cline's hooks are TypeScript plugins for its CLI only | `instructions` |
+| Amp, Roo Code, others | `AGENTS.md` block | none | `instructions` |
+
+Each hook makes the same decision as Claude's and answers in the agent's own
+format. Codex sends a whole patch, so `sj hook codex pre-edit` checks every file
+in it and blocks the patch if any one is a blocked source file, naming it. Cursor
+treats output that isn't JSON as a deny, so `sj hook cursor pre-edit` always
+prints `{"permission":"allow"}` or a deny. Input a hook can't read allows the edit
+with a warning. Codex runs project hooks only in a trusted project, after you
+trust the hook once with `/hooks`; until then the CI gate is the backstop.
+
+The hook entries are added after yours. `.cursor/hooks.json` is edited as text
+like Claude's settings, and Codex's hook goes in a `# specjutsu:begin` /
+`# specjutsu:end` block at the end of `.codex/config.toml`, so removing an
+adapter gives every file back byte for byte.
+
+For an agent or editor with a hook system specjutsu doesn't support yet, call the
+check directly. It exits 0 to allow and 2 to block, with the reason on stderr:
+
+```bash
+sj hook check-edit apps/api/src/auth.ts
+```
 
 ## Importing Spec Kit
 

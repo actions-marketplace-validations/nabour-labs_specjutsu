@@ -232,8 +232,19 @@ pub fn settings_install(text: Option<&str>) -> Result<String> {
             "{{\n  \"hooks\": {{\n    \"PreToolUse\": [\n      {PRE_EDIT}\n    ],\n    \"SessionStart\": [\n      {SESSION_START}\n    ]\n  }}\n}}\n"
         ));
     };
+    hooks_install(text, &ENTRIES, is_ours)
+}
+
+/// `text` with each `(event, entry)` added under `hooks.<event>`, after any existing entries,
+/// keeping every other byte. Events that already hold an entry `ours` recognises are left
+/// alone, so this is idempotent.
+pub(crate) fn hooks_install(
+    text: &str,
+    entries: &[(&str, &str)],
+    ours: fn(&Node) -> bool,
+) -> Result<String> {
     let mut t = text.to_string();
-    for (event, entry) in ENTRIES {
+    for &(event, entry) in entries {
         let root = root_object(&t)?;
         let s = Style {
             multiline: t[root.start..root.end].contains('\n'),
@@ -251,7 +262,7 @@ pub fn settings_install(text: Option<&str>) -> Result<String> {
             Some(h) => match h.value.get(event) {
                 None => insert_member(&t, &h.value, event, |ind| array_text(entry, ind, &s), &s),
                 Some(ev) if !ev.value.is_array() => bail!("`hooks.{event}` is not an array"),
-                Some(ev) if ev.value.elements().iter().any(is_ours) => t.clone(),
+                Some(ev) if ev.value.elements().iter().any(ours) => t.clone(),
                 Some(ev) => insert_element(&t, &ev.value, entry, &s),
             },
         };
@@ -263,19 +274,23 @@ pub fn settings_install(text: Option<&str>) -> Result<String> {
 /// The settings text with every specjutsu hook entry removed, and any event list or `hooks`
 /// object that becomes empty removed with it.
 pub fn settings_remove(text: &str) -> Result<String> {
+    hooks_remove(text, is_ours)
+}
+
+/// `text` with every hook entry `ours` recognises removed, and any event list or `hooks`
+/// object that becomes empty removed with it.
+pub(crate) fn hooks_remove(text: &str, ours: fn(&Node) -> bool) -> Result<String> {
     let mut t = text.to_string();
     loop {
         let root = root_object(&t)?;
         let Some(h) = root.get("hooks").filter(|h| h.value.is_object()) else {
             break;
         };
-        let found = h.value.members().iter().find_map(|ev| {
-            ev.value
-                .elements()
-                .iter()
-                .position(is_ours)
-                .map(|i| (ev, i))
-        });
+        let found = h
+            .value
+            .members()
+            .iter()
+            .find_map(|ev| ev.value.elements().iter().position(ours).map(|i| (ev, i)));
         let Some((ev, i)) = found else {
             break;
         };
@@ -292,6 +307,11 @@ pub fn settings_remove(text: &str) -> Result<String> {
 }
 
 fn has_our_hooks(text: &str) -> bool {
+    has_hooks(text, is_ours)
+}
+
+/// Whether `text` has a hook entry `ours` recognises.
+pub(crate) fn has_hooks(text: &str, ours: fn(&Node) -> bool) -> bool {
     let Ok(root) = jsonedit::parse(text) else {
         return false;
     };
@@ -299,7 +319,7 @@ fn has_our_hooks(text: &str) -> bool {
         h.value
             .members()
             .iter()
-            .any(|ev| ev.value.elements().iter().any(is_ours))
+            .any(|ev| ev.value.elements().iter().any(ours))
     })
 }
 
@@ -307,7 +327,12 @@ fn has_our_hooks(text: &str) -> bool {
 // CLAUDE.md block
 
 pub fn block() -> String {
-    format!("{BEGIN}\n{}{END}\n", lf(BLOCK_BODY))
+    block_with(BLOCK_BODY)
+}
+
+/// A marker block around `body`, as written into CLAUDE.md or AGENTS.md.
+pub fn block_with(body: &str) -> String {
+    format!("{BEGIN}\n{}{END}\n", lf(body))
 }
 
 /// Templates are compiled in from the checkout; a CRLF checkout must not change the output.
@@ -329,11 +354,16 @@ fn block_range(text: &str) -> Option<(usize, usize)> {
 
 /// CLAUDE.md with the block appended, or replaced in place.
 pub fn block_install(text: Option<&str>) -> String {
+    block_install_with(text, &block())
+}
+
+/// `text` with `block` appended, or replacing the marker block already there.
+pub fn block_install_with(text: Option<&str>, block: &str) -> String {
     match text {
-        None | Some("") => block(),
+        None | Some("") => block.to_string(),
         Some(t) => match block_range(t) {
-            Some((b, e)) => format!("{}{}{}", &t[..b], block(), &t[e..]),
-            None => format!("{t}\n{}", block()),
+            Some((b, e)) => format!("{}{}{}", &t[..b], block, &t[e..]),
+            None => format!("{t}\n{block}"),
         },
     }
 }
@@ -381,14 +411,14 @@ pub fn is_unmodified(installed: &str) -> bool {
 // ---------------------------------------------------------------------------------------------
 // Install, update, remove
 
-fn rel(p: &Path, root: &Path) -> String {
+pub(crate) fn rel(p: &Path, root: &Path) -> String {
     p.strip_prefix(root)
         .unwrap_or(p)
         .to_string_lossy()
         .replace('\\', "/")
 }
 
-fn read_opt(p: &Path) -> Result<Option<String>> {
+pub(crate) fn read_opt(p: &Path) -> Result<Option<String>> {
     match std::fs::read_to_string(p) {
         Ok(t) => Ok(Some(t)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -404,7 +434,13 @@ fn write(p: &Path, text: &str) -> Result<()> {
 }
 
 /// Write `new` to `p` when it differs, recording the change.
-fn put(p: &Path, root: &Path, old: Option<&str>, new: &str, out: &mut Vec<Change>) -> Result<()> {
+pub(crate) fn put(
+    p: &Path,
+    root: &Path,
+    old: Option<&str>,
+    new: &str,
+    out: &mut Vec<Change>,
+) -> Result<()> {
     if old == Some(new) {
         return Ok(());
     }
@@ -422,6 +458,12 @@ fn paths(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
         root.join(".claude").join("settings.json"),
         root.join(".claude").join("skills"),
     )
+}
+
+/// Whether `.claude/settings.json` has the specjutsu hooks.
+pub fn has_hook(root: &Path) -> bool {
+    let (_, settings, _) = paths(root);
+    std::fs::read_to_string(settings).is_ok_and(|t| has_our_hooks(&t))
 }
 
 /// Whether the adapter is installed: the CLAUDE.md block or a specjutsu hook exists.
@@ -498,7 +540,7 @@ pub fn install(root: &Path, force: bool) -> Result<Vec<Change>> {
     Ok(out)
 }
 
-fn remove_if_empty(dir: &Path) {
+pub(crate) fn remove_if_empty(dir: &Path) {
     if std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none()) {
         let _ = std::fs::remove_dir(dir);
     }
