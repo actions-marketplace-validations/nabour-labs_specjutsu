@@ -320,9 +320,11 @@ enum SpecCommand {
         #[arg(long)]
         json: bool,
     },
-    /// Apply the change's deltas to specs/ and move it to changes/archive/.
+    /// Apply each change's deltas to specs/ and move it to changes/archive/. With several
+    /// changes, all are checked and merged first; one failure archives none.
     Archive {
-        change: String,
+        #[arg(required = true, num_args = 1..)]
+        changes: Vec<String>,
         #[command(flatten)]
         args: SpecArgs,
         /// Archive despite validation errors and open tasks.
@@ -1242,7 +1244,7 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
         }
         SpecCommand::Show { item, args, json } => show_cmd(&item, &args, json),
         SpecCommand::Archive {
-            change,
+            changes,
             args,
             force,
         } => {
@@ -1251,32 +1253,40 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 force,
                 date: chrono::Local::now().format("%Y-%m-%d").to_string(),
             };
-            match archive::archive(&spec_root, &change, &opts)? {
-                archive::Outcome::Refused(reasons) => {
+            let names: Vec<&str> = changes.iter().map(String::as_str).collect();
+            match archive::plan(&spec_root, &names, &opts)? {
+                archive::Planned::Refused(reasons) => {
                     println!("archive: refused");
                     for p in &reasons {
                         println!("fail    {}", location(p, &root));
                     }
                     Ok(ExitCode::from(1))
                 }
-                archive::Outcome::Archived { specs, dest } => {
-                    for s in &specs {
-                        let file = rel(&s.file, &root);
-                        if s.created {
-                            println!("created {file} (+{})", s.added);
-                        } else {
-                            println!(
-                                "updated {file} (+{} ~{} -{} →{})",
-                                s.added, s.modified, s.removed, s.renamed
-                            );
-                        }
+                archive::Planned::Ready(plan) => {
+                    for a in archive::apply(plan)? {
+                        print_archived(&a, &root);
                     }
-                    println!("archived {change} → {}", rel(&dest, &root));
                     Ok(ExitCode::SUCCESS)
                 }
             }
         }
     }
+}
+
+/// The lines for one archived change: each spec it wrote, then where it moved.
+fn print_archived(a: &sj_core::authoring::archive::Archived, root: &Path) {
+    for s in &a.specs {
+        let file = rel(&s.file, root);
+        if s.created {
+            println!("created {file} (+{})", s.added);
+        } else {
+            println!(
+                "updated {file} (+{} ~{} -{} →{})",
+                s.added, s.modified, s.removed, s.renamed
+            );
+        }
+    }
+    println!("archived {} → {}", a.change, rel(&a.dest, root));
 }
 
 fn import_speckit_cmd(args: &SpecArgs, write: bool, force: bool, json: bool) -> Result<ExitCode> {
