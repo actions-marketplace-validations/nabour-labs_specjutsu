@@ -8,4 +8,4 @@ The task group lands as two commits: the failing tests first (`test(IDs): red`),
 
 ## 2. Docs
 
-- [ ] 2.1 README note on worktrees in the Claude Code adapter section; CHANGELOG entry (no-scenario: docs).
+- [x] 2.1 README note on worktrees in the Claude Code adapter section; CHANGELOG entry (no-scenario: docs).
