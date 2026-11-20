@@ -77,6 +77,13 @@ jobs:
       - run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md
         env:
           GH_TOKEN: ${{ github.token }}
+      # Point the floating major tag (v0 for v0.4.0) at this release, so
+      # `uses: nabour-labs/specjutsu@v0` always gets the latest one.
+      - name: Move the major tag
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$major" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$major"
 
   # Publish the crates once the GitHub Release exists. Needs the CARGO_REGISTRY_TOKEN secret.
   crates:
