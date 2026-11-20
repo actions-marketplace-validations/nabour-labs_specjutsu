@@ -358,3 +358,79 @@ fn spec_010_archive_creates_a_new_capability() {
         "# billing Specification\n\n## Purpose\nCharge customers monthly and send them an invoice.\n\n## Requirements\n"
     ), "{spec}");
 }
+
+/// `with_change` plus a second finished change, `add-login`, that adds to the same capability.
+fn with_two_changes(dir: &Path, refresh_tasks: &str) {
+    with_change(dir, "- **THEN** it is replaced\n");
+    put(dir, "openspec/changes/add-refresh/tasks.md", refresh_tasks);
+    put(
+        dir,
+        "openspec/changes/add-login/specs/auth/spec.md",
+        "## ADDED Requirements\n\n### Requirement: Session\nThe system SHALL keep a session.\n\n#### Scenario: AUTH-006 Session\n- **WHEN** a user logs in\n- **THEN** a session exists\n",
+    );
+    put(
+        dir,
+        "openspec/changes/add-login/tasks.md",
+        "# Tasks\n\n- [x] 1.1 Session (AUTH-006)\n",
+    );
+}
+
+/// Every file under `dir`, relative path to contents.
+fn snapshot(dir: &Path) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                let rel = p.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/");
+                out.insert(rel, std::fs::read_to_string(&p).unwrap());
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn spec_030_archive_several_finished_changes() {
+    let dir = project();
+    with_two_changes(dir.path(), "# Tasks\n\n- [x] 1.1 Rotate (AUTH-005)\n");
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    sj(dir.path(), &["archive", "add-login", "add-refresh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "archived add-login → openspec/changes/archive/{today}-add-login\n"
+        )))
+        .stdout(predicate::str::contains(format!(
+            "archived add-refresh → openspec/changes/archive/{today}-add-refresh\n"
+        )));
+    let root = dir.path().join("openspec");
+    for name in ["add-login", "add-refresh"] {
+        assert!(!root.join("changes").join(name).exists(), "{name} not moved");
+        assert!(root
+            .join(format!("changes/archive/{today}-{name}/tasks.md"))
+            .is_file());
+    }
+    // Both deltas land in the one spec: the second merge builds on the first.
+    let spec = std::fs::read_to_string(root.join("specs/auth/spec.md")).unwrap();
+    assert!(spec.contains("### Requirement: Session"), "{spec}");
+    assert!(spec.contains("### Requirement: Rotate"), "{spec}");
+    assert!(spec.contains("### Requirement: Revoke"), "{spec}");
+}
+
+#[test]
+fn spec_031_one_failing_change_archives_nothing() {
+    let dir = project();
+    with_two_changes(dir.path(), "# Tasks\n\n- [ ] 1.1 Rotate (AUTH-005)\n");
+    let before = snapshot(&dir.path().join("openspec"));
+    sj(dir.path(), &["archive", "add-login", "add-refresh"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("add-refresh"))
+        .stdout(predicate::str::contains("open task 1.1 Rotate (AUTH-005)"))
+        .stdout(predicate::str::contains("archived").not());
+    assert_eq!(snapshot(&dir.path().join("openspec")), before);
+}
