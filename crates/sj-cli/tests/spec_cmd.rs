@@ -385,7 +385,11 @@ fn snapshot(dir: &Path) -> std::collections::BTreeMap<String, String> {
             if p.is_dir() {
                 stack.push(p);
             } else {
-                let rel = p.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/");
+                let rel = p
+                    .strip_prefix(dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 out.insert(rel, std::fs::read_to_string(&p).unwrap());
             }
         }
@@ -409,7 +413,10 @@ fn spec_030_archive_several_finished_changes() {
         )));
     let root = dir.path().join("openspec");
     for name in ["add-login", "add-refresh"] {
-        assert!(!root.join("changes").join(name).exists(), "{name} not moved");
+        assert!(
+            !root.join("changes").join(name).exists(),
+            "{name} not moved"
+        );
         assert!(root
             .join(format!("changes/archive/{today}-{name}/tasks.md"))
             .is_file());
