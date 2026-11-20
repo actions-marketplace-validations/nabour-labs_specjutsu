@@ -28,13 +28,18 @@ pub fn is_installed(root: &Path) -> bool {
 }
 
 /// Write the block into `AGENTS.md`, or refresh it in place.
-pub fn install(root: &Path) -> Result<Vec<Change>> {
+pub fn plan(root: &Path) -> Result<Vec<crate::plan::Step>> {
     let p = path(root);
     let old = read_opt(&p)?;
     let new = block_install_with(old.as_deref(), &block());
-    let mut out = Vec::new();
-    put(&p, root, old.as_deref(), &new, &mut out)?;
-    Ok(out)
+    Ok(crate::plan::put(p, root, old.as_deref(), new)
+        .into_iter()
+        .collect())
+}
+
+/// Carry out [`plan`].
+pub fn install(root: &Path) -> Result<Vec<Change>> {
+    crate::plan::apply(plan(root)?)
 }
 
 /// Remove the block; an `AGENTS.md` left empty is deleted.

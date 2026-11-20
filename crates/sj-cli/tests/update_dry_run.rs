@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use assert_cmd::Command;
-use predicates::prelude::*;
 
 fn put(root: &Path, rel: &str, content: &str) {
     let p = root.join(rel);
@@ -58,7 +57,12 @@ fn snapshot(root: &Path) -> BTreeMap<String, String> {
 fn dry_run(root: &Path, extra: &[&str]) -> String {
     let mut args = vec!["update", "--dry-run"];
     args.extend_from_slice(extra);
-    let out = sj(root, &args).assert().success().get_output().stdout.clone();
+    let out = sj(root, &args)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
     String::from_utf8(out).unwrap()
 }
 

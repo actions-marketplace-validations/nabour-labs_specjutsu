@@ -140,6 +140,9 @@ enum Command {
         /// Replace generated files even when they were edited by hand.
         #[arg(long)]
         force: bool,
+        /// Print the files the update would write, keep or remove, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Detect an existing project's packages and runners and write specjutsu.toml.
     Adopt {
@@ -464,10 +467,24 @@ fn run() -> Result<ExitCode> {
             agents_cmd(&root, &agents, false, false)
         }
         Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
-        Command::Update { root, force } => {
+        Command::Update {
+            root,
+            force,
+            dry_run,
+        } => {
             let installed = installed_agents(&root);
             if installed.is_empty() {
                 println!("no adapters installed");
+                return Ok(ExitCode::SUCCESS);
+            }
+            if dry_run {
+                let steps = plan_agents(&root, &installed, force)?;
+                if steps.is_empty() {
+                    println!("adapters up to date");
+                }
+                for s in &steps {
+                    println!("{} {}", s.action(), s.path());
+                }
                 return Ok(ExitCode::SUCCESS);
             }
             agents_cmd(&root, &installed, force, true)
@@ -908,20 +925,31 @@ fn installed_agents(root: &Path) -> Vec<String> {
 
 /// Install or refresh each named adapter and print what changed. `agents` is resolved:
 /// no `auto`, and `agents-md` listed where it is implied.
-fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
-    use sj_adapters::{agents_md, claude, claude::Change, codex, cursor};
-    let mut changes = Vec::new();
+/// Every file installing or updating `agents` would write, keep or remove.
+fn plan_agents(
+    root: &Path,
+    agents: &[String],
+    force: bool,
+) -> Result<Vec<sj_adapters::plan::Step>> {
+    use sj_adapters::{agents_md, claude, codex, cursor};
+    let mut steps = Vec::new();
     for a in agents {
         match a.as_str() {
-            "claude" => changes.extend(claude::install(root, force)?),
-            "codex" => changes.extend(codex::install(root)?),
-            "cursor" => changes.extend(cursor::install(root)?),
+            "claude" => steps.extend(claude::plan(root, force)?),
+            "codex" => steps.extend(codex::plan(root)?),
+            "cursor" => steps.extend(cursor::plan(root)?),
             // Cline's hooks run only in its CLI, so it gets the shared instructions only.
             "cline" => {}
-            "agents-md" => changes.extend(agents_md::install(root)?),
+            "agents-md" => steps.extend(agents_md::plan(root)?),
             other => anyhow::bail!("unknown agent {other}"),
         }
     }
+    Ok(steps)
+}
+
+fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
+    use sj_adapters::claude::Change;
+    let changes = sj_adapters::plan::apply(plan_agents(root, agents, force)?)?;
     if changes.is_empty() {
         println!("adapters up to date");
     }

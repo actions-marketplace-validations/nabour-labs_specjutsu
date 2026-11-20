@@ -6,5 +6,6 @@ pub mod codex;
 pub mod cursor;
 pub mod enforcement;
 pub mod jsonedit;
+pub mod plan;
 pub mod skills;
 pub mod superpowers;

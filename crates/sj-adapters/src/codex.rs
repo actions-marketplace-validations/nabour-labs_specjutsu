@@ -90,7 +90,7 @@ pub fn is_installed(root: &Path) -> bool {
 
 /// Append the hook block, or refresh it in place. Nothing is written when the file isn't
 /// valid TOML or can't take the block (for example, `hooks.PreToolUse` is an inline array).
-pub fn install(root: &Path) -> Result<Vec<Change>> {
+pub fn plan(root: &Path) -> Result<Vec<crate::plan::Step>> {
     let p = path(root);
     let old = read_opt(&p)?;
     let new = match old.as_deref() {
@@ -110,9 +110,14 @@ pub fn install(root: &Path) -> Result<Vec<Change>> {
             p.display()
         )
     })?;
-    let mut out = Vec::new();
-    put(&p, root, old.as_deref(), &new, &mut out)?;
-    Ok(out)
+    Ok(crate::plan::put(p, root, old.as_deref(), new)
+        .into_iter()
+        .collect())
+}
+
+/// Carry out [`plan`].
+pub fn install(root: &Path) -> Result<Vec<Change>> {
+    crate::plan::apply(plan(root)?)
 }
 
 /// Remove the block and the line break install put before it. A file left empty is deleted,
