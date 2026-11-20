@@ -106,6 +106,15 @@ fn resolve(path: &Path) -> PathBuf {
     out
 }
 
+/// The nearest folder at or above `path`'s folder with a `.git` entry: a folder for a main
+/// checkout, a file for a linked worktree.
+fn work_tree_of(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .skip(1)
+        .find(|dir| dir.join(".git").exists())
+        .map(Path::to_path_buf)
+}
+
 /// Decide on a Claude Code `PreToolUse` payload (the JSON on the hook's stdin).
 pub fn pre_edit(root: &Path, payload: &str) -> Result<Decision> {
     let v: serde_json::Value =
@@ -122,19 +131,28 @@ pub fn pre_edit(root: &Path, payload: &str) -> Result<Decision> {
 
 /// The pre-edit decision for one target path, absolute or relative to `root`, with no
 /// agent-specific input or output. Every agent's hook protocol ends here.
+///
+/// The decision uses the git work tree that holds the target, so an edit in a linked
+/// worktree is judged by that worktree's config, active task and ledger, wherever it sits
+/// relative to `root`. A target in no work tree, or in the work tree that holds `root`, is
+/// judged by `root`.
 pub fn decide(root: &Path, target: &str) -> Result<Decision> {
-    let config = config::load(root)?;
-    let root_abs = resolve(&std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf()));
+    let given = resolve(&std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf()));
     let target = Path::new(target);
-    let target = if target.is_absolute() {
+    let target = resolve(&if target.is_absolute() {
         target.to_path_buf()
     } else {
-        root_abs.join(target)
+        given.join(target)
+    });
+    // A work tree at or above the given root is the given project itself (it may sit in a
+    // subfolder of its repository); any other one is a separate checkout, such as a worktree.
+    let root_abs = match work_tree_of(&target) {
+        Some(tree) if !given.starts_with(&tree) => tree,
+        _ => given,
     };
-    let Ok(rel) = resolve(&target)
-        .strip_prefix(&root_abs)
-        .map(Path::to_path_buf)
-    else {
+    let root = root_abs.as_path();
+    let config = config::load(root)?;
+    let Ok(rel) = target.strip_prefix(&root_abs).map(Path::to_path_buf) else {
         return Ok(Decision::Allow);
     };
     let rel = rel.to_string_lossy().replace('\\', "/");

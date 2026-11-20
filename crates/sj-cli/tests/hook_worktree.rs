@@ -15,7 +15,12 @@ fn put(root: &Path, rel: &str, content: &str) {
 
 fn git(dir: &Path, args: &[&str]) {
     let out = Std::new("git")
-        .args(["-c", "user.name=fixture", "-c", "user.email=fixture@example.com"])
+        .args([
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "user.email=fixture@example.com",
+        ])
         .args(["-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"])
         .args(args)
         .current_dir(dir)
@@ -76,7 +81,10 @@ fn main_checkout(tmp: &Path) -> std::path::PathBuf {
 
 /// A linked worktree at `path` whose active task names AUTH-006.
 fn worktree(main: &Path, path: &Path) {
-    git(main, &["worktree", "add", "-q", path.to_str().unwrap(), "-b", "fix"]);
+    git(
+        main,
+        &["worktree", "add", "-q", path.to_str().unwrap(), "-b", "fix"],
+    );
     change(path, "AUTH-006");
 }
 
