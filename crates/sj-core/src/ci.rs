@@ -28,6 +28,11 @@ pub fn hint(row: &Row) -> String {
         "unverifiable" => {
             "move the test where it can run on base, or pass --allow-unverifiable".to_string()
         }
+        "keep-red-on-base" => {
+            "the test fails on base, so this is new behaviour; drop [keep] from the scenario"
+                .to_string()
+        }
+        "keep-broken" => "the change broke kept behaviour; make the test pass at head".to_string(),
         _ => String::new(),
     }
 }
@@ -79,13 +84,21 @@ pub fn render_markdown(report: &GateReport, base: &str) -> String {
     // Items in order of importance; each is one line. Section headers are emitted lazily.
     enum Item {
         Row(String),
+        Kept(String),
         Other(String),
         Warn(String),
         Exempt(String),
     }
-    let mut rows: Vec<&Row> = report.rows.iter().collect();
+    // GATE-043: passing keep scenarios get their own section; failing ones stay in the table
+    // with their fix hint.
+    let (kept, mut rows): (Vec<&Row>, Vec<&Row>) =
+        report.rows.iter().partition(|r| r.keep && !r.failed);
     rows.sort_by_key(|r| !r.failed); // failures first, order otherwise kept
     let mut items: Vec<Item> = rows.iter().map(|r| Item::Row(table_row(r))).collect();
+    items.extend(kept.iter().map(|r| {
+        let tests: Vec<String> = r.tests.iter().map(|t| format!("`{}`", cell(t))).collect();
+        Item::Kept(format!("- {} {} ({})", r.id, r.evidence, tests.join(", ")))
+    }));
     items.extend(other_failures(report).into_iter().map(Item::Other));
     items.extend(report.warnings.iter().cloned().map(Item::Warn));
     items.extend(report.exemptions.iter().cloned().map(Item::Exempt));
@@ -100,6 +113,7 @@ pub fn render_markdown(report: &GateReport, base: &str) -> String {
                 "\n| Scenario | Evidence | Test | Fix |\n| --- | --- | --- | --- |\n",
                 l.clone(),
             ),
+            Item::Kept(l) => ("kept", "\n**Kept behaviour**\n\n", l.clone()),
             Item::Other(l) => (
                 "other",
                 "\n**Other problems**\n\n",

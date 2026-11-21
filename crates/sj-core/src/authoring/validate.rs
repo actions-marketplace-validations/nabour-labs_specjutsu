@@ -184,6 +184,9 @@ fn check_block(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool], b: &B
         if s.id.is_none() {
             r.err(format!("{} has no ID", s.name), file, s.line);
         }
+        if let Some(m) = s.marker.as_deref().filter(|m| *m != crate::spec::KEEP) {
+            r.err(format!("unknown scenario marker [{m}]"), file, s.line);
+        }
         if !s.has_when {
             r.err(format!("{label} has no WHEN step"), file, s.line);
         }

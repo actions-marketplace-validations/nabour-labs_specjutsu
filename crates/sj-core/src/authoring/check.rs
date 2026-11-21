@@ -34,20 +34,29 @@ pub struct CheckReport {
     pub uncovered: Vec<String>,
     pub unknown: Vec<Unknown>,
     pub clarify: Vec<Clarify>,
+    /// Problems with the change as a whole, e.g. a bug change with no reproduction (SPEC-042).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<String>,
+    /// Advice that never fails the check (SPEC-041).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl CheckReport {
     pub fn is_clean(&self) -> bool {
-        self.uncovered.is_empty() && self.unknown.is_empty() && self.clarify.is_empty()
+        self.uncovered.is_empty()
+            && self.unknown.is_empty()
+            && self.clarify.is_empty()
+            && self.errors.is_empty()
     }
 
     pub fn problems(&self) -> usize {
-        self.uncovered.len() + self.unknown.len() + self.clarify.len()
+        self.uncovered.len() + self.unknown.len() + self.clarify.len() + self.errors.len()
     }
 }
 
-/// Scenario IDs in a file's requirement blocks (`delta_only`: ADDED and MODIFIED blocks only).
-fn ids_in(text: &str, delta_only: bool) -> Vec<String> {
+/// Scenarios in a file's requirement blocks (`delta_only`: ADDED and MODIFIED blocks only).
+fn scenarios_of(text: &str, delta_only: bool) -> Vec<blocks::Scenario> {
     let lines: Vec<&str> = text.split('\n').collect();
     let mask = blocks::fence_mask(&lines);
     let ranges: Vec<std::ops::Range<usize>> = if delta_only {
@@ -63,6 +72,13 @@ fn ids_in(text: &str, delta_only: bool) -> Vec<String> {
     ranges
         .into_iter()
         .flat_map(|r| blocks::scenarios_in(&lines, &mask, r))
+        .collect()
+}
+
+/// Scenario IDs in a file's requirement blocks (`delta_only`: ADDED and MODIFIED blocks only).
+fn ids_in(text: &str, delta_only: bool) -> Vec<String> {
+    scenarios_of(text, delta_only)
+        .into_iter()
         .filter_map(|s| s.id)
         .collect()
 }
@@ -94,11 +110,33 @@ pub fn check(spec_root: &Path, change: &str) -> Result<CheckReport> {
     let mut r = CheckReport::default();
 
     let mut change_ids: Vec<String> = Vec::new();
+    let (mut keeps, mut normals) = (0usize, 0usize);
     for file in spec_files(&c.dir.join("specs"))? {
-        for id in ids_in(&read(&file)?, true) {
-            if !change_ids.contains(&id) {
-                change_ids.push(id);
+        for s in scenarios_of(&read(&file)?, true) {
+            if s.marker.as_deref() == Some(crate::spec::KEEP) {
+                keeps += 1;
+            } else {
+                normals += 1;
             }
+            if let Some(id) = s.id {
+                if !change_ids.contains(&id) {
+                    change_ids.push(id);
+                }
+            }
+        }
+    }
+    // SPEC-041/042: a bug change needs a reproduction, and should pin what must not change.
+    let proposal = c.dir.join("proposal.md");
+    if proposal.is_file() && super::is_bug_proposal(&read(&proposal)?) {
+        if normals == 0 {
+            r.errors
+                .push("bug change has no reproduction scenario".to_string());
+        }
+        if keeps == 0 {
+            r.warnings.push(
+                "bug change has no [keep] scenario; add one for behaviour that must not change"
+                    .to_string(),
+            );
         }
     }
     let mut known: BTreeSet<String> = change_ids.iter().cloned().collect();

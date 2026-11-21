@@ -58,6 +58,8 @@ pub enum Shown {
         change: Option<String>,
         file: String,
         line: usize,
+        /// A `[keep]` scenario: behaviour the change must not alter.
+        keep: bool,
         requirement: Option<String>,
         /// The requirement's first paragraph: its SHALL sentence.
         statement: Option<String>,
@@ -265,6 +267,7 @@ fn scenario(root: &Path, spec_root: &Path, config: &Config, id: &str) -> Result<
             change,
             file: rel(&file, root),
             line,
+            keep: loc.scenario.keep,
             requirement: loc.requirement.clone(),
             statement,
             steps,
@@ -370,6 +373,7 @@ pub fn render(s: &Shown) -> String {
             change,
             file,
             line,
+            keep,
             requirement,
             statement,
             steps,
@@ -377,7 +381,8 @@ pub fn render(s: &Shown) -> String {
             latest,
             evidence,
         } => {
-            let mut out = format!("{id} {name}\n");
+            let marker = if *keep { "[keep] " } else { "" };
+            let mut out = format!("{id} {marker}{name}\n");
             out.push_str(&format!("capability   {capability} ({file}:{line})\n"));
             if let Some(c) = change {
                 out.push_str(&format!("change       {c}\n"));
