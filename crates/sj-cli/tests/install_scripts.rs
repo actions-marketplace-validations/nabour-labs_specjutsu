@@ -204,8 +204,11 @@ fn dist_005_a_folder_missing_from_path_gets_a_hint() {
 
 fn pwsh(args: &[&str], envs: &[(&str, &Path)], extra: &[(&str, &str)]) -> Output {
     let mut cmd = Command::new("pwsh");
+    // cargo passes build.rs's SJ_VERSION (the `sj --version` string) to tests; clear it so
+    // the installer fetches `latest`, as install.sh's tests do.
     cmd.args(["-NoLogo", "-NoProfile", "-NonInteractive"])
-        .args(args);
+        .args(args)
+        .env_remove("SJ_VERSION");
     for (k, v) in envs {
         cmd.env(k, v);
     }
