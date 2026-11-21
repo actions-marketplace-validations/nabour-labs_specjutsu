@@ -25,6 +25,7 @@ jobs:
           - { target: aarch64-apple-darwin, os: macos-latest }
           - { target: x86_64-apple-darwin, os: macos-latest }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, exe: .exe }
+          - { target: aarch64-pc-windows-msvc, os: windows-11-arm, exe: .exe }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -100,3 +101,39 @@ jobs:
       - run: cargo publish --workspace --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # Push the Homebrew formula to nabour-labs/homebrew-tap once the GitHub Release exists, so
+  # `brew install nabour-labs/tap/specjutsu` gets this version. Needs the HOMEBREW_TAP_TOKEN
+  # secret: a fine-grained token with contents write access to nabour-labs/homebrew-tap.
+  homebrew:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the token
+        run: '[ -n "$HOMEBREW_TAP_TOKEN" ] || { echo "HOMEBREW_TAP_TOKEN is not set"; exit 1; }'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Write the formula
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern SHA256SUMS --dir dist
+          sh scripts/release/homebrew.sh "$GITHUB_REF_NAME" dist/SHA256SUMS > specjutsu.rb
+          cat specjutsu.rb
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@v4
+        with:
+          repository: nabour-labs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - name: Push to the tap
+        run: |
+          mkdir -p tap/Formula
+          mv specjutsu.rb tap/Formula/specjutsu.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/specjutsu.rb
+          git diff --cached --quiet && { echo "formula unchanged"; exit 0; }
+          git commit -m "specjutsu ${GITHUB_REF_NAME#v}"
+          git push

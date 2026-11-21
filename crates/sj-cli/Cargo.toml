@@ -11,6 +11,20 @@ readme = "../../README.md"
 keywords = ["spec", "tdd", "ai-agents", "spec-driven", "testing"]
 categories = ["command-line-utilities", "development-tools::testing"]
 
+# `cargo binstall specjutsu` downloads the release archive instead of compiling.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/sj-{ target }.tar.gz"
+bin-dir = "sj-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/sj-{ target }.zip"
+pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/sj-{ target }.zip"
+pkg-fmt = "zip"
+
 [[bin]]
 name = "sj"
 path = "src/main.rs"
