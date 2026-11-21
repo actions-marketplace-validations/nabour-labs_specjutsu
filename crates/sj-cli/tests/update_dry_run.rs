@@ -124,3 +124,28 @@ fn adapt_038_dry_run_lists_files_an_update_would_remove() {
         .success()
         .stdout("adapters up to date\n");
 }
+
+// spec: ADAPT-039
+#[test]
+fn adapt_039_dry_run_as_json() {
+    let dir = installed();
+    put(
+        dir.path(),
+        ".claude/skills/sj-apply/SKILL.md",
+        &sj_adapters::claude::generated("# Old apply skill\n"),
+    );
+    let edited = ".claude/skills/sj-debug/SKILL.md";
+    let text = read(dir.path(), edited) + "\nOur own note.\n";
+    put(dir.path(), edited, &text);
+
+    let out = dry_run(dir.path(), &["--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).expect("stdout is JSON");
+    assert_eq!(
+        v,
+        serde_json::json!({"files": [
+            {"path": ".claude/skills/sj-apply/SKILL.md", "action": "write"},
+            {"path": ".claude/skills/sj-debug/SKILL.md", "action": "keep"},
+        ]}),
+        "{out}"
+    );
+}
