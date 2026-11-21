@@ -15,7 +15,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 3. Completions
 
-- [ ] 3.1 [P] `sj completions <shell>` with `clap_complete` (CONF-023..025).
+- [x] 3.1 [P] `sj completions <shell>` with `clap_complete` (CONF-023..025).
 
 ## 4. Onboarding skill
 
