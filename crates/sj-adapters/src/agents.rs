@@ -6,10 +6,19 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::{agents_md, claude, codex, cursor, plan::Step};
+use crate::{agents_md, antigravity, claude, codex, cursor, gemini, plan::Step, shared_skills};
 
 /// Every name `--agents` accepts.
-pub const ALL: [&str; 6] = ["claude", "codex", "cursor", "cline", "agents-md", "auto"];
+pub const ALL: [&str; 8] = [
+    "claude",
+    "codex",
+    "cursor",
+    "cline",
+    "gemini",
+    "antigravity",
+    "agents-md",
+    "auto",
+];
 
 /// A usage error naming the first unknown agent; checked before anything is written.
 pub fn check(agents: &[String]) -> Result<()> {
@@ -37,6 +46,12 @@ pub fn detect(root: &Path) -> Vec<&'static str> {
     if has(".clinerules") {
         out.push("cline");
     }
+    if has(".gemini") || has("GEMINI.md") {
+        out.push("gemini");
+    }
+    if has(".agents/rules") || has(".agent/rules") {
+        out.push("antigravity");
+    }
     if has("AGENTS.md") {
         out.push("agents-md");
     }
@@ -56,7 +71,7 @@ pub fn resolve(root: &Path, agents: &[String]) -> (Vec<String>, bool) {
     }
     if wanted
         .iter()
-        .any(|a| matches!(*a, "codex" | "cursor" | "cline"))
+        .any(|a| matches!(*a, "codex" | "cursor" | "cline" | "gemini" | "antigravity"))
     {
         wanted.push("agents-md");
     }
@@ -80,6 +95,12 @@ pub fn installed(root: &Path) -> Vec<String> {
     if cursor::is_installed(root) {
         out.push("cursor".to_string());
     }
+    if gemini::is_installed(root) {
+        out.push("gemini".to_string());
+    }
+    if antigravity::is_installed(root) {
+        out.push("antigravity".to_string());
+    }
     if agents_md::is_installed(root) {
         out.push("agents-md".to_string());
     }
@@ -95,11 +116,19 @@ pub fn plan(root: &Path, agents: &[String], force: bool) -> Result<Vec<Step>> {
             "claude" => steps.extend(claude::plan(root, force)?),
             "codex" => steps.extend(codex::plan(root)?),
             "cursor" => steps.extend(cursor::plan(root)?),
+            "gemini" => steps.extend(gemini::plan(root)?),
+            "antigravity" => steps.extend(antigravity::plan(root)?),
             // Cline's hooks run only in its CLI, so it gets the shared instructions only.
             "cline" => {}
             "agents-md" => steps.extend(agents_md::plan(root)?),
             other => anyhow::bail!("unknown agent {other}"),
         }
+    }
+    if agents
+        .iter()
+        .any(|a| shared_skills::READERS.contains(&a.as_str()))
+    {
+        steps.extend(shared_skills::plan(root, force)?);
     }
     Ok(steps)
 }
