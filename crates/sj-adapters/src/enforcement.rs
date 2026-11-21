@@ -9,7 +9,7 @@
 
 use std::path::Path;
 
-use crate::{agents_md, claude, codex, cursor};
+use crate::{agents_md, antigravity, claude, codex, copilot, cursor, gemini, kiro, windsurf};
 
 /// `hook`: edits are checked before they happen. `instructions`: the agent is told the loop
 /// and the CI gate is the backstop. `hook missing`: the adapter is installed but its hook
@@ -36,6 +36,31 @@ pub fn levels(root: &Path) -> Vec<(&'static str, &'static str)> {
         "cursor",
         cursor::is_installed(root),
         shared && root.join(".cursor").exists(),
+    ));
+    out.extend(hooked(
+        "copilot",
+        copilot::is_installed(root),
+        shared && root.join(".github/hooks").exists(),
+    ));
+    out.extend(hooked(
+        "gemini",
+        gemini::is_installed(root),
+        shared && root.join(".gemini").exists(),
+    ));
+    out.extend(hooked(
+        "windsurf",
+        windsurf::is_installed(root),
+        shared && root.join(".windsurf").exists(),
+    ));
+    out.extend(hooked(
+        "kiro",
+        kiro::is_installed(root),
+        shared && root.join(".kiro/hooks").exists(),
+    ));
+    out.extend(hooked(
+        "antigravity",
+        antigravity::is_installed(root),
+        shared && antigravity::has_hooks_file(root),
     ));
     if shared && root.join(".clinerules").exists() {
         out.push(("cline", "instructions"));
