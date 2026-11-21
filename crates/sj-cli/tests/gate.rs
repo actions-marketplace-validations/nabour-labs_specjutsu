@@ -1,4 +1,4 @@
-//! GATE CLI scenarios (openspec/changes/gate-red-on-base).
+//! GATE CLI scenarios (specjutsu/changes/gate-red-on-base).
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

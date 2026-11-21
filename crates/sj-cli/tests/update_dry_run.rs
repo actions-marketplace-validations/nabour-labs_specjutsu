@@ -1,4 +1,4 @@
-//! `sj update --dry-run` (openspec/changes/cli-conveniences): the update's own plan, printed.
+//! `sj update --dry-run` (specjutsu/changes/cli-conveniences): the update's own plan, printed.
 
 use std::collections::BTreeMap;
 use std::path::Path;

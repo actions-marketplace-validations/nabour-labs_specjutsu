@@ -1,4 +1,4 @@
-//! CONF-008..010 CLI scenarios from openspec/changes/project-config: `sj adopt`.
+//! CONF-008..010 CLI scenarios from specjutsu/changes/project-config: `sj adopt`.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

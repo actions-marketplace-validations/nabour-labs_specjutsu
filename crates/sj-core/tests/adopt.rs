@@ -1,4 +1,4 @@
-//! CONF-008..010 from openspec/changes/project-config: detecting packages and runners.
+//! CONF-008..010 from specjutsu/changes/project-config: detecting packages and runners.
 
 mod support;
 

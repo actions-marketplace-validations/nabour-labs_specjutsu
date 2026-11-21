@@ -1,4 +1,4 @@
-//! `sj migrate` scenarios (openspec/changes/tool-migration).
+//! `sj migrate` scenarios (specjutsu/changes/tool-migration).
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

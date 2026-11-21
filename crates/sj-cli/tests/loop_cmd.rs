@@ -1,4 +1,4 @@
-//! `sj status`, `sj task done`, `sj next` and `sj verify` CLI scenarios (openspec/changes/agent-loop).
+//! `sj status`, `sj task done`, `sj next` and `sj verify` CLI scenarios (specjutsu/changes/agent-loop).
 
 use std::path::Path;
 

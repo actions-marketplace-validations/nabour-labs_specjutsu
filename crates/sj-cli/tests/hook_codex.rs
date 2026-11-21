@@ -1,5 +1,5 @@
 //! `sj hook codex pre-edit`: Codex's `PreToolUse` protocol for `apply_patch`, and fail-open
-//! input handling for Codex and Cursor (openspec/changes/more-adapters).
+//! input handling for Codex and Cursor (specjutsu/changes/more-adapters).
 
 use std::path::Path;
 

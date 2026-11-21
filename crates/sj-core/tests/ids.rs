@@ -1,4 +1,4 @@
-//! IDS scenarios from openspec/changes/scenario-ids: planning and writing scenario IDs.
+//! IDS scenarios from specjutsu/changes/scenario-ids: planning and writing scenario IDs.
 
 use std::collections::BTreeMap;
 use std::path::Path;

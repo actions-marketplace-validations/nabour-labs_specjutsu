@@ -1,4 +1,4 @@
-//! DRIFT scenarios from openspec/changes/spec-drift: the coverage map and `sj drift`.
+//! DRIFT scenarios from specjutsu/changes/spec-drift: the coverage map and `sj drift`.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

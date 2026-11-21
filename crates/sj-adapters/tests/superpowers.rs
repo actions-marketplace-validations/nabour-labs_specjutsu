@@ -1,5 +1,5 @@
 //! Superpowers removal from `.claude/settings.json`, and the adapter's dry run
-//! (openspec/changes/tool-migration).
+//! (specjutsu/changes/tool-migration).
 
 use sj_adapters::claude::{self, Change};
 use sj_adapters::superpowers::settings_remove;

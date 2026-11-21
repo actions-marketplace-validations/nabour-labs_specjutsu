@@ -1,4 +1,4 @@
-//! RUN-011 and RUN-013 from openspec/changes/polyglot-runners: joining JUnit cases to traced tests.
+//! RUN-011 and RUN-013 from specjutsu/changes/polyglot-runners: joining JUnit cases to traced tests.
 
 use std::path::PathBuf;
 

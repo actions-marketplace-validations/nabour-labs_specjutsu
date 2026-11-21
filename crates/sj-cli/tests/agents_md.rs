@@ -1,5 +1,5 @@
 //! `sj init --agents <list>` parsing and the `agents-md` adapter
-//! (openspec/changes/more-adapters).
+//! (specjutsu/changes/more-adapters).
 
 use std::collections::BTreeMap;
 use std::path::Path;

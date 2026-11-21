@@ -1,4 +1,4 @@
-//! The static skill check (openspec/changes/workflow-skills).
+//! The static skill check (specjutsu/changes/workflow-skills).
 
 use std::path::Path;
 

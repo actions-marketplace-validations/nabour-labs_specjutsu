@@ -1,4 +1,4 @@
-//! CI-007..013 from openspec/changes/gate-action: the action's scripts, run with a stub `gh`.
+//! CI-007..013 from specjutsu/changes/gate-action: the action's scripts, run with a stub `gh`.
 //! The scripts are bash; these tests run on Linux and macOS only.
 #![cfg(unix)]
 

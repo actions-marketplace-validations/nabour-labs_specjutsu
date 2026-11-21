@@ -1,4 +1,4 @@
-//! SPEC-004..007 from openspec/changes/spec-authoring: `sj spec validate` and `sj spec check`.
+//! SPEC-004..007 from specjutsu/changes/spec-authoring: `sj spec validate` and `sj spec check`.
 
 use std::path::Path;
 

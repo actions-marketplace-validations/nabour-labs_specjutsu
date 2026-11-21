@@ -1,4 +1,4 @@
-//! RUN-014 and RUN-015 from openspec/changes/polyglot-runners: the command each suite runs.
+//! RUN-014 and RUN-015 from specjutsu/changes/polyglot-runners: the command each suite runs.
 
 use std::path::{Path, PathBuf};
 

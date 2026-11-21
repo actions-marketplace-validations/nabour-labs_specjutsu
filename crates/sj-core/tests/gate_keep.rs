@@ -1,4 +1,4 @@
-//! GATE-039..043 (openspec/changes/bugfix-changes): `[keep]` scenarios must pass on base and at head.
+//! GATE-039..043 (specjutsu/changes/bugfix-changes): `[keep]` scenarios must pass on base and at head.
 
 mod support;
 

@@ -1,4 +1,4 @@
-//! AUDIT-013 from openspec/changes/audit-checks: `sj gate` includes the audit's test checks.
+//! AUDIT-013 from specjutsu/changes/audit-checks: `sj gate` includes the audit's test checks.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

@@ -1,5 +1,5 @@
 schema = 1
-spec_root = "openspec"
+spec_root = "specjutsu"
 mode = "guided"
 
 [[package]]

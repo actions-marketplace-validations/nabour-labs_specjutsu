@@ -1,5 +1,5 @@
 //! Installing several agents at once, `auto` detection, and removal
-//! (openspec/changes/more-adapters).
+//! (specjutsu/changes/more-adapters).
 
 use std::collections::BTreeMap;
 use std::path::Path;

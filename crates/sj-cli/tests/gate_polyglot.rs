@@ -1,4 +1,4 @@
-//! GATE-026, GATE-030..035 and GATE-038 CLI scenarios from openspec/changes/polyglot-gate: the
+//! GATE-026, GATE-030..035 and GATE-038 CLI scenarios from specjutsu/changes/polyglot-gate: the
 //! gate across suites.
 //!
 //! A fake `pnpm` on PATH stands in for vitest and Playwright (Unix only). Its vitest run fails

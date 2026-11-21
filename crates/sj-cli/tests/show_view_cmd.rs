@@ -1,4 +1,4 @@
-//! `sj spec show` and `sj view` scenarios (openspec/changes/spec-show-view): SPEC-013..019 and
+//! `sj spec show` and `sj view` scenarios (specjutsu/changes/spec-show-view): SPEC-013..019 and
 //! LOOP-008..011.
 
 use std::path::Path;

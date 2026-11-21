@@ -1,4 +1,4 @@
-//! TRACE scenarios (openspec/changes/trace-engine).
+//! TRACE scenarios (specjutsu/changes/trace-engine).
 
 use std::path::{Path, PathBuf};
 

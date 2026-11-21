@@ -1,4 +1,4 @@
-//! `sj import speckit` conversion (openspec/changes/speckit-import).
+//! `sj import speckit` conversion (specjutsu/changes/speckit-import).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

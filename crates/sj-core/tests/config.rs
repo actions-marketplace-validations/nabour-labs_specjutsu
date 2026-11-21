@@ -1,4 +1,4 @@
-//! CONF scenarios from openspec/changes/project-config: the project file model and loader.
+//! CONF scenarios from specjutsu/changes/project-config: the project file model and loader.
 
 use sj_core::config::{self, Config, Mode, Runner};
 

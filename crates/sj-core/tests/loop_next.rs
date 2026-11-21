@@ -1,4 +1,4 @@
-//! `sj next --parallel` batching (openspec/changes/agent-loop).
+//! `sj next --parallel` batching (specjutsu/changes/agent-loop).
 
 use std::path::Path;
 

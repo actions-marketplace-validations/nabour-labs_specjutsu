@@ -1,4 +1,4 @@
-//! GATE scenarios (openspec/changes/gate-red-on-base).
+//! GATE scenarios (specjutsu/changes/gate-red-on-base).
 
 mod support;
 

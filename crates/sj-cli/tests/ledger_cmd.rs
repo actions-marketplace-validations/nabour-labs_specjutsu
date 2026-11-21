@@ -1,4 +1,4 @@
-//! `sj ledger` CLI scenarios (openspec/changes/test-ledger).
+//! `sj ledger` CLI scenarios (specjutsu/changes/test-ledger).
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

@@ -1,4 +1,4 @@
-//! CONF-011 from openspec/changes/project-config: `sj doctor`.
+//! CONF-011 from specjutsu/changes/project-config: `sj doctor`.
 
 use std::path::Path;
 

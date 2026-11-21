@@ -1,4 +1,4 @@
-//! AUDIT scenarios from openspec/changes/audit-checks: `sj audit` on repositories with and
+//! AUDIT scenarios from specjutsu/changes/audit-checks: `sj audit` on repositories with and
 //! without a specjutsu setup.
 
 use std::path::Path;

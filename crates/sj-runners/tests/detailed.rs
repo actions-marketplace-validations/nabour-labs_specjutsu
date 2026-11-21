@@ -1,4 +1,4 @@
-//! RUN scenarios covered by the cargo runner (openspec/changes/test-ledger).
+//! RUN scenarios covered by the cargo runner (specjutsu/changes/test-ledger).
 
 use sj_runners::cargo::{cargo_test_detailed, parse_build_errors, parse_failures};
 
