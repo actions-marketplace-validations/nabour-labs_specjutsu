@@ -399,7 +399,7 @@ sj doctor                        <span class="c-m"># hook, instructions or hook 
 
     <section id="ci">
       <h2>Gate every pull request</h2>
-      <p>Add the specjutsu action. It installs a pinned <code>sj</code> (verified against the release's checksums), runs the gate against the PR's base, writes the job summary and keeps one PR comment up to date. It needs the full history (<code>fetch-depth: 0</code>) to check out the base commit, and the toolchains your suites use (Rust, Node, uv) to run tests on both sides.</p>
+      <p>Add the specjutsu action, published on the GitHub Marketplace as <a href="https://github.com/marketplace/actions/specjutsu-gate">specjutsu gate</a>. It installs a pinned <code>sj</code> (verified against the release's checksums), runs the gate against the PR's base, writes the job summary and keeps one PR comment up to date. It needs the full history (<code>fetch-depth: 0</code>) to check out the base commit, and the toolchains your suites use (Rust, Node, uv) to run tests on both sides.</p>
 <pre class="code"><span class="c-m"># .github/workflows/specjutsu.yml</span>
 <span class="c-k">on:</span> pull_request
 <span class="c-k">jobs:</span>
