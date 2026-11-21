@@ -1,4 +1,4 @@
-//! SPEC-008..011 from openspec/changes/spec-authoring: `sj spec archive`.
+//! SPEC-008..011 from specjutsu/changes/spec-authoring: `sj spec archive`.
 //!
 //! The golden files under `fixtures/authoring/<case>/expected/` were written by
 //! `openspec archive` 1.14.0 from `before/` (see `fixtures/authoring/regen.sh`).

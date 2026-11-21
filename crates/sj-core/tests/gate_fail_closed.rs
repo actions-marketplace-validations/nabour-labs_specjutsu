@@ -1,4 +1,4 @@
-//! GATE scenarios from openspec/changes/gate-fail-closed.
+//! GATE scenarios from specjutsu/changes/gate-fail-closed.
 
 mod support;
 

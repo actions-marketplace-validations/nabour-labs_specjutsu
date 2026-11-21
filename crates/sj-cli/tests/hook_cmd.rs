@@ -1,5 +1,5 @@
 //! `sj hook claude session-start` and `sj hook claude pre-edit`
-//! (openspec/changes/claude-adapter).
+//! (specjutsu/changes/claude-adapter).
 
 use std::path::Path;
 

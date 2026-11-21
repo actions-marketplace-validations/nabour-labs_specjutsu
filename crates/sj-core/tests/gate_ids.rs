@@ -1,4 +1,4 @@
-//! GATE scenarios from openspec/changes/scenario-ids: assigning an ID is not a change.
+//! GATE scenarios from specjutsu/changes/scenario-ids: assigning an ID is not a change.
 
 mod support;
 

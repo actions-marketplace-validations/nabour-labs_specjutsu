@@ -1,5 +1,5 @@
 //! `sj hook gemini pre-edit` and the `.gemini/settings.json` entries
-//! (openspec/changes/more-adapters-2).
+//! (specjutsu/changes/more-adapters-2).
 
 use std::path::Path;
 

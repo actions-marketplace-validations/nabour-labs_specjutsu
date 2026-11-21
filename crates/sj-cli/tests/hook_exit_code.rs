@@ -1,5 +1,5 @@
 //! `sj hook windsurf pre-edit` and `sj hook kiro pre-edit`: the exit-code protocol
-//! (openspec/changes/more-adapters-3).
+//! (specjutsu/changes/more-adapters-3).
 
 use std::path::Path;
 

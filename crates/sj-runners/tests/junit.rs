@@ -1,4 +1,4 @@
-//! RUN-011 and RUN-013 from openspec/changes/polyglot-runners: reading JUnit reports.
+//! RUN-011 and RUN-013 from specjutsu/changes/polyglot-runners: reading JUnit reports.
 //! The samples in tests/data/ are real reports from vitest 5, pytest and Playwright.
 
 use sj_runners::junit::{parse, Case, CaseOutcome};

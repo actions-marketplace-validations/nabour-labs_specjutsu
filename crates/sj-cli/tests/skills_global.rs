@@ -1,5 +1,5 @@
 //! `--global`: the `sj-*` skills in the user's home folders, and where `sj doctor` finds them
-//! (openspec/changes/more-adapters-2).
+//! (specjutsu/changes/more-adapters-2).
 
 use std::collections::BTreeMap;
 use std::path::Path;

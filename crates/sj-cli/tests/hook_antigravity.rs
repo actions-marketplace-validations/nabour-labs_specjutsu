@@ -1,5 +1,5 @@
 //! `sj hook antigravity pre-edit` and the `.agents/hooks.json` entry
-//! (openspec/changes/more-adapters-2).
+//! (specjutsu/changes/more-adapters-2).
 
 use std::path::Path;
 

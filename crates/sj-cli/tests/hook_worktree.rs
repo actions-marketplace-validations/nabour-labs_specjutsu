@@ -1,4 +1,4 @@
-//! The pre-edit decision in git worktrees (openspec/changes/hook-worktree-root): the hook
+//! The pre-edit decision in git worktrees (specjutsu/changes/hook-worktree-root): the hook
 //! judges a file by the work tree that holds it, not by the root it was given.
 
 use std::path::Path;

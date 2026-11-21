@@ -1,4 +1,4 @@
-//! `sj ids` CLI scenarios (openspec/changes/scenario-ids).
+//! `sj ids` CLI scenarios (specjutsu/changes/scenario-ids).
 
 use std::path::Path;
 

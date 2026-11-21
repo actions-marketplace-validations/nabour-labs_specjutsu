@@ -1,4 +1,4 @@
-//! TRACE-015 and TRACE-016 from openspec/changes/polyglot-trace: `sj trace` on a polyglot repo.
+//! TRACE-015 and TRACE-016 from specjutsu/changes/polyglot-trace: `sj trace` on a polyglot repo.
 
 use std::path::Path;
 

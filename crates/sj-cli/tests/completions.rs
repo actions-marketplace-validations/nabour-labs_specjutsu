@@ -1,4 +1,4 @@
-//! `sj completions <shell>` (openspec/changes/cli-conveniences): scripts generated from the CLI.
+//! `sj completions <shell>` (specjutsu/changes/cli-conveniences): scripts generated from the CLI.
 
 use assert_cmd::Command;
 

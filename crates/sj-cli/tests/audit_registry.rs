@@ -1,4 +1,4 @@
-//! AUDIT-009 and AUDIT-010 from openspec/changes/audit-checks: `sj audit --registry` against
+//! AUDIT-009 and AUDIT-010 from specjutsu/changes/audit-checks: `sj audit --registry` against
 //! a local fixture registry.
 
 use std::collections::HashMap;

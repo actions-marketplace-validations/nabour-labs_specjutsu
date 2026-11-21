@@ -1,4 +1,4 @@
-//! `sj import speckit` CLI scenarios (openspec/changes/speckit-import).
+//! `sj import speckit` CLI scenarios (specjutsu/changes/speckit-import).
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

@@ -1,4 +1,4 @@
-//! `sj hook cursor pre-edit`: Cursor's `preToolUse` protocol (openspec/changes/more-adapters).
+//! `sj hook cursor pre-edit`: Cursor's `preToolUse` protocol (specjutsu/changes/more-adapters).
 
 use std::path::Path;
 

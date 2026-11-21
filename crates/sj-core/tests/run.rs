@@ -1,4 +1,4 @@
-//! RUN scenarios covered by sj-core (openspec/changes/test-ledger).
+//! RUN scenarios covered by sj-core (specjutsu/changes/test-ledger).
 
 mod support;
 

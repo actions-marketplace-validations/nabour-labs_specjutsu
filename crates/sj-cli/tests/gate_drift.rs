@@ -1,4 +1,4 @@
-//! DRIFT-010 and DRIFT-011 from openspec/changes/spec-drift: drift in `sj gate`.
+//! DRIFT-010 and DRIFT-011 from specjutsu/changes/spec-drift: drift in `sj gate`.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

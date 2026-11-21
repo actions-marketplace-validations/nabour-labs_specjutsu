@@ -1,4 +1,4 @@
-//! CONF CLI scenarios from openspec/changes/project-config: every command reads specjutsu.toml.
+//! CONF CLI scenarios from specjutsu/changes/project-config: every command reads specjutsu.toml.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

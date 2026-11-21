@@ -1,4 +1,4 @@
-//! `sj spec` CLI scenarios (openspec/changes/spec-authoring).
+//! `sj spec` CLI scenarios (specjutsu/changes/spec-authoring).
 
 use std::path::Path;
 

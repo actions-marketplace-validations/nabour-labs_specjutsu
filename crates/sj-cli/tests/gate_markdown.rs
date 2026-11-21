@@ -1,4 +1,4 @@
-//! CI scenarios: the gate rendered as a PR comment (openspec/changes/gate-action).
+//! CI scenarios: the gate rendered as a PR comment (specjutsu/changes/gate-action).
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

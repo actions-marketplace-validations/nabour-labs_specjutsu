@@ -1,5 +1,5 @@
 //! `sj doctor` reports each installed agent's enforcement level
-//! (openspec/changes/more-adapters).
+//! (specjutsu/changes/more-adapters).
 
 use std::path::Path;
 

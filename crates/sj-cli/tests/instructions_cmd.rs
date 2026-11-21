@@ -1,5 +1,5 @@
 //! `sj instructions`, `sj templates`, the `language` key and project context
-//! (openspec/changes/agent-instructions).
+//! (specjutsu/changes/agent-instructions).
 
 use std::path::Path;
 

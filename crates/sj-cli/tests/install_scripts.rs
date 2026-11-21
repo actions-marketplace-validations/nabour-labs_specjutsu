@@ -1,4 +1,4 @@
-//! DIST-001..009 from openspec/changes/install-channels: the public install scripts and the
+//! DIST-001..009 from specjutsu/changes/install-channels: the public install scripts and the
 //! Homebrew formula script, run against a release served from a local folder.
 //! install.sh and homebrew.sh are POSIX shell and run on Linux and macOS only. install.ps1 runs
 //! wherever `pwsh` is installed, which includes every GitHub-hosted runner.

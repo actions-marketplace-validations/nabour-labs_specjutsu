@@ -1,4 +1,4 @@
-//! TRACE-009..012 from openspec/changes/polyglot-trace: vitest, Jest and Playwright tests.
+//! TRACE-009..012 from specjutsu/changes/polyglot-trace: vitest, Jest and Playwright tests.
 
 use std::path::Path;
 

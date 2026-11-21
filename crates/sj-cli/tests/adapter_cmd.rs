@@ -1,5 +1,5 @@
 //! `sj init --agents claude`, `sj update` and `sj init --remove-agents claude`
-//! (openspec/changes/claude-adapter).
+//! (specjutsu/changes/claude-adapter).
 
 use std::path::Path;
 
