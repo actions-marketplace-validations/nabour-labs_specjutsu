@@ -1,4 +1,4 @@
-# Golden files compare bytes with what `openspec archive` wrote; keep them LF on every OS.
+# Golden files compare bytes with what the archive merge writes; keep them LF on every OS.
 crates/sj-core/tests/fixtures/authoring/** text eol=lf
 # Templates the adapters compile in with include_str!; generated files must be the same on every OS.
 skills/** text eol=lf

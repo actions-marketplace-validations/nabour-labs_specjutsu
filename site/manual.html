@@ -234,7 +234,7 @@ sj doctor</pre>
       <p><code>sj adopt</code> reads Cargo, pnpm, npm and yarn workspaces and <code>pyproject.toml</code>, and detects <code>cargo</code>, <code>vitest</code>, <code>jest</code>, <code>pytest</code> and <code>playwright</code> without running anything. <code>sj doctor</code> lists config errors, packages without a runner, runners that aren't installed and missing spec folders.</p>
 <pre class="code"><span class="c-m"># specjutsu.toml, as sj adopt writes it for a pnpm app with a uv worker</span>
 schema = 1
-spec_root = "openspec"
+spec_root = "specjutsu"
 mode = "guided"
 
 [[package]]
@@ -259,9 +259,9 @@ tests = ["python/worker/**/test_*.py", "python/worker/**/*_test.py"]</pre>
     <section id="concepts">
       <h2>Core concepts</h2>
 
-      <h3>Specs use the OpenSpec layout</h3>
-      <p>Current truth lives in <code>openspec/specs/</code>; in-flight changes live in <code>openspec/changes/&lt;change&gt;/</code>; the archive is read for IDs and never written. Set <code>spec_root</code> in <code>specjutsu.toml</code> (or pass <code>--spec-root</code>) if your folder has another name.</p>
-<pre class="code">openspec/
+      <h3>Where specs live</h3>
+      <p>Current truth lives in <code>specjutsu/specs/</code>; in-flight changes live in <code>specjutsu/changes/&lt;change&gt;/</code>; the archive is read for IDs and never written. Set <code>spec_root</code> in <code>specjutsu.toml</code> (or pass <code>--spec-root</code>) if your folder has another name. A project with only an <code>openspec/</code> folder keeps using it.</p>
+<pre class="code">specjutsu/
   principles.md                      <span class="c-m"># project rules the agent reads</span>
   specs/auth/spec.md                 <span class="c-m"># current truth</span>
   changes/add-token-expiry/
@@ -334,7 +334,7 @@ The system SHALL reject tokens older than 24 hours.
         <li>
           <h3>Create the change</h3>
 <pre class="code"><span class="c-m">$</span> sj spec new add-token-expiry
-created openspec/changes/add-token-expiry
+created specjutsu/changes/add-token-expiry
 next AUTH-003</pre>
           <p>Write <code>proposal.md</code>, the delta spec under <code>specs/</code>, <code>design.md</code> and <code>tasks.md</code>. Each task names the scenarios it covers: <code>- [ ] 1.1 Reject expired tokens (AUTH-003)</code>.</p>
         </li>

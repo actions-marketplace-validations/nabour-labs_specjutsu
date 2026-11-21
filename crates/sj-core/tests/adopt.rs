@@ -164,6 +164,13 @@ fn conf_009_adopt_keeps_the_openspec_folder() {
 }
 
 #[test]
+fn conf_033_adopt_without_an_openspec_folder_uses_specjutsu() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "Cargo.toml", "[workspace]\n");
+    assert_eq!(detect(dir.path()).unwrap().config.spec_root, "specjutsu");
+}
+
+#[test]
 fn conf_010_a_package_with_no_detectable_runner_is_reported() {
     let dir = tempfile::tempdir().unwrap();
     support::monorepo(dir.path());

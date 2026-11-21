@@ -475,7 +475,7 @@ pub fn run(opts: &Options) -> Result<AuditReport> {
     })?;
     let classifier = match &config {
         Some(c) => crate::gate::Classifier::new(c, &c.spec_root)?,
-        None => crate::gate::Classifier::builtin(crate::config::DEFAULT_SPEC_ROOT),
+        None => crate::gate::Classifier::builtin(&crate::config::default_spec_root(root)),
     };
     let test_files: BTreeSet<&str> = base.iter().chain(&head).map(|t| t.file.as_str()).collect();
     let source_changed = changed
