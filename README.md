@@ -36,11 +36,30 @@ the agent's working loop (`sj status`, `next`, `verify`), the proof layer
 `sj migrate`. Its spec format is OpenSpec's, so existing `openspec/` folders work
 unchanged, and it replaces the OpenSpec, Spec Kit and Superpowers stack.
 
+**Best in class for spec-driven development.** specjutsu aims to be the best tool for
+spec-driven development (SDD), and it is the only one that proves the work. OpenSpec, Spec
+Kit, Kiro, Superpowers and BMAD stop at writing the spec, or ask a model whether the code
+matches it. specjutsu checks it deterministically:
+
+| | OpenSpec | Spec Kit | Kiro | Superpowers | **specjutsu** |
+| --- | --- | --- | --- | --- | --- |
+| Scenario → test trace checked | No | No | Partly (property tests, in the IDE) | No | **Yes, `sj trace`** |
+| Test must fail before the code | No | No | No | By prompt | **Enforced, then proven in CI** |
+| PR blocked until proof holds | No | No | No | No | **Yes, GitHub Action** |
+| Test-tampering checks | No | No | No | No | **Yes, `sj audit`** |
+| How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
+
+specjutsu is not ahead everywhere yet: OpenSpec parity (more agents, custom workflow
+schemas, multi-repo spec stores) is planned for v0.6 and v0.7, and bugfix specs,
+specs inferred from existing tests and property scenarios go further. See
+[How specjutsu compares](docs/competitive-analysis.md) for the full comparison, its
+sources, and the change that closes each gap.
+
 **Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/) ·
 **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
 change, CI setup, agent setup and the command reference.
 
-**Status:** pre-alpha, v0.3.1. `sj trace`, `sj test` and `sj gate` work with
+**Status:** pre-alpha, v0.4.0. `sj trace`, `sj test` and `sj gate` work with
 Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
 Adapters install into Claude Code, Codex, Cursor, Cline and any agent that reads
 `AGENTS.md`. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
@@ -54,8 +73,21 @@ from [crates.io](https://crates.io/crates/specjutsu) or from the git tag:
 
 ```bash
 cargo install specjutsu
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.3.1 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.4.0 specjutsu
 ```
+
+To update, install again with `--force`. To get a fix that is merged but not yet
+released, build from `main`. Then run `sj update` in each project:
+
+```bash
+cargo install specjutsu --force
+cargo install --git https://github.com/nabour-labs/specjutsu --branch main specjutsu --force
+cargo install --list | grep -A1 specjutsu   # the installed build and its source
+```
+
+`sj --version` shows only the version number, which a build from `main` shares
+with the last release. Open agent sessions use the new binary on their next hook
+call.
 
 ### Shell completions
 
@@ -699,6 +731,12 @@ valid. The hooks call `sj` from `PATH`:
   mode it only warns. If the hook itself fails, it warns and allows the edit,
   so it never blocks work. CI's gate is the backstop for edits it can't see,
   such as shell redirects.
+
+  Every pre-edit hook, and `sj hook check-edit`, judges a file by the git work
+  tree that holds it. An edit in a linked worktree, under `.claude/worktrees/`
+  or beside the main checkout, uses that worktree's `specjutsu.toml`, active
+  task and ledger, even though Claude Code points the hook at the main checkout.
+  Agents working side by side in their own worktrees don't block each other.
 
 `sj update --dry-run` prints the plan without changing anything: one line per
 file, `write <path>`, `keep <path>` (a hand-edited file `--force` would replace)

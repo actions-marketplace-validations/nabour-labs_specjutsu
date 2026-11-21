@@ -7,6 +7,25 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- `sj spec archive` takes several change names, or `--all-done` for every
+  change whose tasks are all done. They archive as one operation: if any one is
+  refused, nothing is written. Two changes that edit the same requirement are
+  refused, even with `--force`.
+- `sj update --dry-run` prints what an update would write, keep or remove, and
+  changes nothing. `--json` prints the same plan as JSON.
+- `sj completions <shell>` prints a completion script for bash, zsh, fish,
+  PowerShell or elvish.
+- The `sj-onboard` skill walks a new user through one toy change end to end in a
+  scratch change, `sj-onboard-demo`, then removes it. `skills/COVERAGE.md` maps
+  OpenSpec's `onboard` to it.
+
+### Changed
+- `sj update` removes generated `sj-*` skills this version no longer ships,
+  unless you edited them.
+
+## [0.4.0] - 2026-11-20
+
+### Added
 - `sj spec show <item>` prints one scenario, change (open or archived) or
   capability. A scenario comes with its requirement, steps, mapped tests and
   latest ledger evidence. An unknown item suggests near names. `--json` prints
@@ -59,25 +78,18 @@ All notable changes are recorded here. The format follows
 - `sj drift --base <ref>` reports `code-drift` (code a scenario's tests run changed
   while its spec and tests did not) and `stale-test` (a scenario's spec changed
   while its tests did not). A map from an older commit is translated to the base.
-- `sj spec archive` takes several change names, or `--all-done` for every
-  change whose tasks are all done. They archive as one operation: if any one is
-  refused, nothing is written. Two changes that edit the same requirement are
-  refused, even with `--force`.
-- `sj update --dry-run` prints what an update would write, keep or remove, and
-  changes nothing. `--json` prints the same plan as JSON.
-- `sj completions <shell>` prints a completion script for bash, zsh, fish,
-  PowerShell or elvish.
-- The `sj-onboard` skill walks a new user through one toy change end to end in a
-  scratch change, `sj-onboard-demo`, then removes it. `skills/COVERAGE.md` maps
-  OpenSpec's `onboard` to it.
 
 ### Changed
-- `sj update` removes generated `sj-*` skills this version no longer ships,
-  unless you edited them.
 - `sj gate` also runs the audit's test checks and fails on their failures, for
   example a test that gained `#[ignore]` or a new test that asserts nothing.
 - `sj gate` reports spec drift as warnings, as failures with `[drift] fail = true`,
   and as `info` lines in a `refactor` change.
+
+### Fixed
+- The pre-edit hooks and `sj hook check-edit` judge a file by the git work tree
+  that holds it. An edit in a linked worktree was judged by the main checkout's
+  active task (blocking on another change's scenarios), and one in a worktree
+  outside the main checkout was never checked.
 
 ## [0.3.1] - 2026-11-18
 
@@ -225,7 +237,8 @@ All notable changes are recorded here. The format follows
 - `sj gate --since <commit>`: check every `feat(ID)` commit has an earlier `test(ID): red`.
 - `cargo test` runner with libtest result parsing.
 
-[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nabour-labs/specjutsu/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nabour-labs/specjutsu/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nabour-labs/specjutsu/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nabour-labs/specjutsu/releases/tag/v0.2.0
