@@ -15,6 +15,10 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- `sj gate` reads base spec files in the same order as head, so an open change's
+  copy of a scenario wins on both sides. A change merged without being archived
+  no longer makes every later pull request fail `green-on-base` on its
+  modified scenarios.
 - `sj gate` reads base scenarios from the base commit's own spec root. Moving the
   spec folder no longer reports every scenario as added and green on base.
 
@@ -23,6 +27,16 @@ All notable changes are recorded here. The format follows
   for `write_file` and `replace` in `.gemini/settings.json`, and `AGENTS.md`
   added to `context.fileName` (a missing setting becomes
   `["GEMINI.md", "AGENTS.md"]`). `auto` picks it for `.gemini/` or `GEMINI.md`.
+- Copilot adapter, `sj init --agents copilot`: a `PreToolUse` pre-edit hook in
+  `.github/hooks/specjutsu.json` for the Copilot CLI and cloud agent. It always
+  exits 0, printing a deny to block and nothing to allow, and checks each file
+  of an `apply_patch` patch. `auto` picks it for `.github/copilot-instructions.md`
+  or `.github/hooks/`.
+- Windsurf and Kiro adapters, `sj init --agents windsurf,kiro`: a
+  `pre_write_code` hook in `.windsurf/hooks.json` and a `PreToolUse` hook for
+  Kiro's `write` category in `.kiro/hooks/specjutsu.json`. Both answer by exit
+  code, 2 to block with the reason on stderr; unreadable input allows with a
+  warning. `auto` picks them for `.windsurf/` and `.kiro/`.
 - Antigravity adapter, `sj init --agents antigravity`: a `PreToolUse` pre-edit
   hook in `.agents/hooks.json` and the `AGENTS.md` block. `auto` picks it for
   `.agents/rules/` or `.agent/rules/`.

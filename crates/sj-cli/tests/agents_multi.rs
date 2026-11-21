@@ -262,7 +262,10 @@ fn adapt_023_auto_detects_the_new_agents() {
 
 #[test]
 fn adapt_023_auto_detects_copilot() {
-    for marker in [".github/copilot-instructions.md", ".github/hooks/audit.json"] {
+    for marker in [
+        ".github/copilot-instructions.md",
+        ".github/hooks/audit.json",
+    ] {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         put(root, "specjutsu.toml", CONFIG);

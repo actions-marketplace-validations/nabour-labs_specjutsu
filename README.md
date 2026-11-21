@@ -58,7 +58,7 @@ tests, lost assertions, and dependencies that don't exist. See
 Under the Action is `sj`, a CLI that covers the whole loop: authoring (`sj spec`),
 the agent's working loop (`sj status`, `next`, `verify`), the proof layer
 (`sj trace`, `sj test`, `sj gate`), adapters for Claude Code, Codex, Cursor, Cline,
-Gemini CLI, Antigravity and `AGENTS.md` with ten skills, and `sj migrate`. Specs live in `specjutsu/`;
+Copilot, Gemini CLI, Windsurf, Kiro, Antigravity and `AGENTS.md` with ten skills, and `sj migrate`. Specs live in `specjutsu/`;
 projects coming from OpenSpec keep their `openspec/` folder unchanged, and it replaces
 the OpenSpec, Spec Kit and Superpowers stack with one binary.
 
@@ -89,8 +89,8 @@ comparison, its sources, and the change that closes each gap.
 **Pre-alpha, v0.4.0. Beta is next**: it opens once specjutsu has fully replaced
 OpenSpec and Superpowers in our own production monorepo. `sj trace`, `sj test` and
 `sj gate` work with Rust, vitest, Jest, Playwright and pytest, and any runner that
-writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline, Gemini CLI,
-Antigravity and any agent that reads `AGENTS.md`. See the [user manual](https://nabour-labs.github.io/specjutsu/manual.html)
+writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline, Copilot,
+Gemini CLI, Windsurf, Kiro, Antigravity and any agent that reads `AGENTS.md`. See the [user manual](https://nabour-labs.github.io/specjutsu/manual.html)
 for install, your first change, CI setup, agent setup and the command reference, and
 the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
 and [analysis](docs/analysis.md) for the thinking behind it.
@@ -819,11 +819,12 @@ sj init --agents claude,codex --global   # the skills only, in your home folder,
 sj doctor                        # one line per installed agent: hook, instructions or hook missing
 ```
 
-`sj init --agents` takes `claude`, `codex`, `cursor`, `cline`, `gemini`,
-`antigravity`, `agents-md` and `auto`. `auto` picks Gemini CLI when the repo has
-`.gemini/` or `GEMINI.md`, and Antigravity when it has `.agents/rules/` or
-`.agent/rules/`. Codex, Cursor, Cline, Gemini CLI and Antigravity also get
-`agents-md`: a specjutsu block in `AGENTS.md`, with the same markers and rules as the CLAUDE.md block. It names the
+`sj init --agents` takes `claude`, `codex`, `cursor`, `cline`, `copilot`,
+`gemini`, `windsurf`, `kiro`, `antigravity`, `agents-md` and `auto`. `auto` picks
+Copilot when the repo has `.github/copilot-instructions.md` or `.github/hooks/`,
+Gemini CLI for `.gemini/` or `GEMINI.md`, Windsurf for `.windsurf/`, Kiro for
+`.kiro/`, and Antigravity for `.agents/rules/` or `.agent/rules/`. Every agent
+but Claude Code also gets `agents-md`: a specjutsu block in `AGENTS.md`, with the same markers and rules as the CLAUDE.md block. It names the
 `sj` commands of the loop rather than skills, since not every agent that reads
 AGENTS.md can load skills. Amp, Roo Code and other AGENTS.md readers get it with
 `--agents agents-md`.
@@ -834,7 +835,10 @@ AGENTS.md can load skills. Amp, Roo Code and other AGENTS.md readers get it with
 | Codex | `AGENTS.md` block; skills in `.agents/skills/` | `[[hooks.PreToolUse]]` for `apply_patch` edits, in `.codex/config.toml` | `hook` |
 | Cursor | `AGENTS.md` block | `preToolUse` for `Write` and `Delete`, in `.cursor/hooks.json` | `hook` |
 | Cline | `AGENTS.md` block | none: Cline's hooks are TypeScript plugins for its CLI only | `instructions` |
+| Copilot (CLI and cloud agent) | `AGENTS.md` block | `PreToolUse` for `Write`, `Edit`, `create` and `edit`, in `.github/hooks/specjutsu.json` | `hook` |
 | Gemini CLI | `AGENTS.md` block, added to `context.fileName`; skills in `.agents/skills/` | `BeforeTool` for `write_file` and `replace`, in `.gemini/settings.json` | `hook` |
+| Windsurf | `AGENTS.md` block | `pre_write_code`, in `.windsurf/hooks.json` | `hook` |
+| Kiro | `AGENTS.md` block | `PreToolUse` for the `write` category, in `.kiro/hooks/specjutsu.json` | `hook` |
 | Antigravity | `AGENTS.md` block; skills in `.agents/skills/` | `PreToolUse` for `write_to_file`, `replace_file_content` and `multi_replace_file_content`, in `.agents/hooks.json` | `hook` |
 | Amp, Roo Code, others | `AGENTS.md` block | none | `instructions` |
 
@@ -844,11 +848,20 @@ in it and blocks the patch if any one is a blocked source file, naming it. Curso
 treats output that isn't JSON as a deny, so `sj hook cursor pre-edit` always
 prints `{"permission":"allow"}` or a deny. Gemini CLI and Antigravity read one
 JSON decision, `{"decision":"allow"}` or `{"decision":"deny","reason":…}`, so their
-hooks always print one. Input a hook can't read allows the edit with a warning.
+hooks always print one. Copilot denies a call on any non-zero exit, so
+`sj hook copilot pre-edit` always exits 0: it prints
+`{"permissionDecision":"deny",…}` to block and nothing to allow, and checks every
+file of an `apply_patch` patch like Codex. Windsurf and Kiro answer by exit code,
+like `sj hook check-edit`: 0 to allow, 2 to block with the reason on stderr.
+Input a hook can't read allows the edit with a warning.
 Codex runs project hooks only in a trusted project, after you trust the hook once with `/hooks`; until then the CI gate is the backstop.
 
 The hook entries are added after yours. `.cursor/hooks.json` is edited as text
-like Claude's settings, as are `.gemini/settings.json` and `.agents/hooks.json`.
+like Claude's settings, as are `.gemini/settings.json`, `.windsurf/hooks.json`
+and `.agents/hooks.json`. Copilot and Kiro get a file of their own,
+`.github/hooks/specjutsu.json` and `.kiro/hooks/specjutsu.json`, deleted on removal.
+The Copilot cloud agent reads hooks only from the default branch, which
+`sj init --agents copilot` reminds you of.
 Codex's hook goes in a `# specjutsu:begin` / `# specjutsu:end` block at the end of `.codex/config.toml`, so removing an
 adapter gives every file back byte for byte.
 
@@ -954,7 +967,8 @@ Every run then:
 - writes `specjutsu.toml` with `sj adopt` if it's missing
 - installs the Claude Code adapter, plus every adapter `sj init --agents auto`
   would install for the agent files the project has (`AGENTS.md`, `.codex/`,
-  `.cursor/`, `.clinerules/`, `.gemini/`, `GEMINI.md`, `.agents/rules/`)
+  `.cursor/`, `.clinerules/`, `.github/hooks/`, `.gemini/`, `GEMINI.md`,
+  `.windsurf/`, `.kiro/`, `.agents/rules/`)
 - prints `sj doctor` and `sj spec validate`
 
 It exits 0 when both are clean, and 1 with the problems listed otherwise. It
@@ -971,7 +985,7 @@ uncommitted. Review them with `git diff`, and undo them with
 | v0.3 | vitest, Jest, Playwright, pytest and JUnit suites; `specjutsu.toml`; `sj ids`, `sj spec`, `status`, `next`, `verify`; Claude Code adapter and skills; Spec Kit import; `sj migrate` |
 | v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
 | v0.5 (beta) | Bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; public token benchmark against the tools specjutsu replaces; beta launch |
-| v0.6 | OpenSpec parity: Gemini CLI and Antigravity adapters, shared `.agents/skills/` and `--global` skills; Copilot, Windsurf and Kiro adapters |
+| v0.6 | OpenSpec parity: Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills |
 | v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing

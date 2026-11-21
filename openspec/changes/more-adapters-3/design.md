@@ -1,6 +1,6 @@
 ## Context
 
-The research for these agents is in `more-adapters-2`'s design.md: the table of each agent's instructions file, pre-tool hook and hook answer as of Nov 2026, and the sources. This change carries the Copilot, Windsurf and Kiro rows of that table.
+The research for these agents is in `more-adapters-2`'s design.md (`changes/archive/2026-11-21-more-adapters-2/`): the table of each agent's instructions file, pre-tool hook and hook answer as of Nov 2026, and the sources. This change carries the Copilot, Windsurf and Kiro rows of that table.
 
 ## Goals / Non-Goals
 

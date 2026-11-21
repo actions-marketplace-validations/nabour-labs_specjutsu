@@ -87,10 +87,9 @@ fn adapt_028_windsurf_hook_blocks_with_exit_code_2() {
         .args(["init", "--agents", "windsurf"])
         .assert()
         .success();
-    let v: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(root.join(".windsurf/hooks.json")).unwrap(),
-    )
-    .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join(".windsurf/hooks.json")).unwrap())
+            .unwrap();
     assert_eq!(
         v["hooks"]["pre_write_code"][0]["command"],
         "sj hook windsurf pre-edit"
@@ -142,7 +141,10 @@ fn adapt_031_an_unreadable_exit_code_hook_input_never_blocks() {
             let (code, out, err) = run(root, agent, bad);
             assert_eq!(code, Some(0), "{agent} {bad}");
             assert_eq!(out, "", "{agent} {bad}");
-            assert!(err.contains("specjutsu: hook error"), "{agent} {bad}: {err}");
+            assert!(
+                err.contains("specjutsu: hook error"),
+                "{agent} {bad}: {err}"
+            );
             assert!(err.contains(problem), "{agent} {bad}: {err}");
         }
     }

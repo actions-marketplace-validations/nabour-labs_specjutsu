@@ -73,7 +73,8 @@ fn adapt_026_copilot_hook_denies_a_source_edit_before_red() {
     let dir = project();
     let root = dir.path();
     let reason = "write a failing test for AUTH-005 first (sj test AUTH-005)";
-    let deny = serde_json::json!({"permissionDecision": "deny", "permissionDecisionReason": reason});
+    let deny =
+        serde_json::json!({"permissionDecision": "deny", "permissionDecisionReason": reason});
 
     for (tool, key) in [("Write", "file_path"), ("edit", "path")] {
         let (out, _) = answer(root, &input(tool, key, "apps/api/src/auth.ts"));
@@ -81,7 +82,10 @@ fn adapt_026_copilot_hook_denies_a_source_edit_before_red() {
             serde_json::from_str(&out).unwrap_or_else(|e| panic!("not JSON ({e}): {out:?}"));
         assert_eq!(v, deny, "{tool}");
     }
-    let (out, _) = answer(root, &input("Write", "file_path", "apps/api/src/auth.test.ts"));
+    let (out, _) = answer(
+        root,
+        &input("Write", "file_path", "apps/api/src/auth.test.ts"),
+    );
     assert_eq!(out, "");
 
     // An apply_patch patch is checked file by file.
