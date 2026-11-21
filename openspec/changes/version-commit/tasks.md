@@ -4,8 +4,8 @@ The task group lands as two commits: the failing test first (`test(IDs): red`), 
 
 ## 1. Version
 
-- [ ] 1.1 Build script embeds the short commit, and `sj --version` prints it (CONF-030).
+- [x] 1.1 Build script embeds the short commit, and `sj --version` prints it (CONF-030).
 
 ## 2. Docs
 
-- [ ] 2.1 README and manual reinstall notes say `sj --version` names the commit; CHANGELOG entry (no-scenario: docs).
+- [x] 2.1 README and manual reinstall notes say `sj --version` names the commit; CHANGELOG entry (no-scenario: docs).
