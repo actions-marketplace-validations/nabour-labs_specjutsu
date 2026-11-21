@@ -32,8 +32,9 @@ fn project(scenarios: &[&str], bug: bool) -> tempfile::TempDir {
          ### Requirement: Charge\nThe system SHALL charge cards.\n\n\
          #### Scenario: PAY-001 Charge a card\n- **WHEN** a card is charged\n- **THEN** it succeeds\n",
     );
-    let mut delta =
-        String::from("## ADDED Requirements\n\n### Requirement: Refunds\nThe system SHALL refund charges.\n\n");
+    let mut delta = String::from(
+        "## ADDED Requirements\n\n### Requirement: Refunds\nThe system SHALL refund charges.\n\n",
+    );
     let mut ids = Vec::new();
     for title in scenarios {
         delta.push_str(&format!(
@@ -62,7 +63,11 @@ fn spec_038_a_keep_marker_is_parsed() {
     let out = sj(dir.path(), &["spec", "show", "PAY-012", "--json"])
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["keep"], true, "{v}");
     assert_eq!(v["name"], "Refunds under $100 auto-approve", "{v}");
@@ -124,7 +129,10 @@ fn spec_041_a_bugfix_with_no_keep_scenario_is_warned_about() {
 #[test]
 fn spec_041_a_bugfix_with_both_checks_clean() {
     let dir = project(
-        &["PAY-012 Refunds round half up", "PAY-013 [keep] Full refunds"],
+        &[
+            "PAY-012 Refunds round half up",
+            "PAY-013 [keep] Full refunds",
+        ],
         true,
     );
     sj(dir.path(), &["spec", "check", "fix-refunds"])

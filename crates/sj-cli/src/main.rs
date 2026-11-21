@@ -281,6 +281,9 @@ enum SpecCommand {
     New {
         /// Kebab-case change name.
         change: String,
+        /// Scaffold a bug fix: current, expected and unchanged behaviour, and `Kind: bug`.
+        #[arg(long)]
+        bug: bool,
         #[command(flatten)]
         args: SpecArgs,
     },
@@ -1139,9 +1142,9 @@ fn location(p: &sj_core::authoring::validate::Problem, root: &Path) -> String {
 fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
     use sj_core::authoring::{self, archive, check, validate};
     match command {
-        SpecCommand::New { change, args } => {
+        SpecCommand::New { change, bug, args } => {
             let (root, spec_root) = spec_paths(&args)?;
-            let dir = authoring::new_change(&spec_root, &change)?;
+            let dir = authoring::new_change(&spec_root, &change, bug)?;
             println!("created {}", rel(&dir, &root));
             for (prefix, n) in sj_core::ids::highest_numbers(&spec_root)? {
                 println!("next {prefix}-{:03}", n + 1);
@@ -1232,6 +1235,12 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                         rel(&c.file, Path::new("")),
                         c.line
                     );
+                }
+                for e in &r.errors {
+                    println!("fail    {e}");
+                }
+                for w in &r.warnings {
+                    println!("warn    {w}");
                 }
             }
             Ok(if r.is_clean() {

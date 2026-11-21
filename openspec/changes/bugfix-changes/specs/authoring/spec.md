@@ -28,8 +28,8 @@ SHALL report an error when it has no normal (non-keep) scenario to reproduce the
 
 #### Scenario: SPEC-041 A bugfix with no keep scenario is warned about
 - **WHEN** a bug change has one normal scenario and no keep scenario
-- **THEN** `sj spec check` prints `warn: bug change has no [keep] scenario; add one for behaviour that must not change` and exits 0
+- **THEN** `sj spec check` prints `warn    bug change has no [keep] scenario; add one for behaviour that must not change` and exits 0
 
 #### Scenario: SPEC-042 A bugfix with only keep scenarios is an error
 - **WHEN** a bug change has keep scenarios only
-- **THEN** `sj spec check` exits 1 with `bug change has no reproduction scenario`
+- **THEN** `sj spec check` exits 1 with `fail    bug change has no reproduction scenario`

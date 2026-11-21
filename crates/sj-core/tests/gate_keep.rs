@@ -122,7 +122,11 @@ fn gate_042_keep_scenario_without_a_test_fails() {
     i.trace.mapped.clear();
     let r = evaluate(&i);
     assert!(!r.pass);
-    assert!(r.failures.iter().any(|f| f == "untested PAY-012"), "{:?}", r.failures);
+    assert!(
+        r.failures.iter().any(|f| f == "untested PAY-012"),
+        "{:?}",
+        r.failures
+    );
 }
 
 #[test]
@@ -154,7 +158,9 @@ fn gate_043_keep_evidence_in_json_and_markdown() {
         .any(|p| p["id"] == "PAY-013" && p["red"] == "red:assert"));
 
     let md = render_markdown(&r, "origin/main");
-    let kept = md.find("**Kept behaviour**").unwrap_or_else(|| panic!("{md}"));
+    let kept = md
+        .find("**Kept behaviour**")
+        .unwrap_or_else(|| panic!("{md}"));
     let table = md.find("| Scenario |").unwrap_or_else(|| panic!("{md}"));
     let kept_section = &md[kept..];
     assert!(kept_section.contains("PAY-012"), "{md}");

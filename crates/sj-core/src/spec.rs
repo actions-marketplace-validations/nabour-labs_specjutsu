@@ -29,10 +29,7 @@ pub fn split_marker(name: &str) -> (Option<&str>, &str) {
     static MARKER: OnceLock<Regex> = OnceLock::new();
     let re = MARKER.get_or_init(|| Regex::new(r"^\[([A-Za-z][A-Za-z-]*)\]\s+(.*)$").unwrap());
     match re.captures(name) {
-        Some(c) => (
-            Some(c.get(1).unwrap().as_str()),
-            c.get(2).unwrap().as_str(),
-        ),
+        Some(c) => (Some(c.get(1).unwrap().as_str()), c.get(2).unwrap().as_str()),
         None => (None, name),
     }
 }

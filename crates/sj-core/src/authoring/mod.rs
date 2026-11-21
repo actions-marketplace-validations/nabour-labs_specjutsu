@@ -147,6 +147,42 @@ const PROPOSAL: &str = "## Why
 <!-- Code, APIs, dependencies and systems affected. -->
 ";
 
+/// The proposal for `sj spec new --bug` (SPEC-040). A change is a bug change when its
+/// proposal has a `Kind: bug` line.
+const BUG_PROPOSAL: &str = "## Why
+
+<!-- The bug, who hits it and how. One paragraph. -->
+
+Kind: bug
+
+## Current Behaviour
+
+<!-- What happens now, with concrete inputs. Each case becomes a scenario that reproduces
+the bug: its test fails on base. -->
+
+## Expected Behaviour
+
+<!-- What should happen instead, for the same inputs. -->
+
+## Unchanged Behaviour
+
+<!-- What must keep working next to the fix. Each case becomes a `[keep]` scenario: its
+test must pass on base and at head. -->
+
+## Impact
+
+<!-- Code, APIs, dependencies and systems affected. -->
+";
+
+/// Whether a proposal marks its change as a bug fix: a line `Kind: bug`.
+pub fn is_bug_proposal(text: &str) -> bool {
+    text.lines().any(|l| {
+        l.trim()
+            .strip_prefix("Kind:")
+            .is_some_and(|k| k.trim().eq_ignore_ascii_case("bug"))
+    })
+}
+
 const DESIGN: &str = "## Context
 
 <!-- Background and the current state. -->
@@ -250,8 +286,9 @@ pub fn template_text(spec_root: &Path, name: &str) -> Result<String> {
         .with_context(|| format!("no template `{name}`"))
 }
 
-/// Create `changes/<name>/` with the templates and an empty `specs/` folder.
-pub fn new_change(spec_root: &Path, name: &str) -> Result<PathBuf> {
+/// Create `changes/<name>/` with the templates and an empty `specs/` folder. With `bug`, the
+/// proposal is the bug-fix scaffold instead of the proposal template.
+pub fn new_change(spec_root: &Path, name: &str, bug: bool) -> Result<PathBuf> {
     if !is_kebab(name) {
         bail!("change name `{name}` must be kebab-case (lowercase letters, digits and hyphens)");
     }
@@ -262,7 +299,11 @@ pub fn new_change(spec_root: &Path, name: &str) -> Result<PathBuf> {
     std::fs::create_dir_all(dir.join("specs"))
         .with_context(|| format!("cannot create {}", dir.display()))?;
     for file in ["proposal.md", "design.md", "tasks.md"] {
-        let text = template_text(spec_root, file)?;
+        let text = if bug && file == "proposal.md" {
+            BUG_PROPOSAL.to_string()
+        } else {
+            template_text(spec_root, file)?
+        };
         std::fs::write(dir.join(file), text)
             .with_context(|| format!("cannot write {}", dir.join(file).display()))?;
     }
