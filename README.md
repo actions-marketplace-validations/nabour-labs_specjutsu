@@ -97,17 +97,37 @@ and [analysis](docs/analysis.md) for the thinking behind it.
 
 ## Install
 
-Prebuilt binaries for macOS, Linux and Windows are on the
-[releases page](https://github.com/nabour-labs/specjutsu/releases). Or with Cargo,
-from [crates.io](https://crates.io/crates/specjutsu) or from the git tag:
+macOS and Linux:
 
 ```bash
-cargo install specjutsu
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.4.0 specjutsu
+curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh
 ```
 
-To update, install again with `--force`. To get a fix that is merged but not yet
-released, build from `main`. Then run `sj update` in each project:
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex"
+```
+
+Both download the latest release for your platform, check it against the release's
+`SHA256SUMS` and install `sj` into `~/.local/bin` (Windows: `%LOCALAPPDATA%\Programs\sj`,
+added to your user `PATH`). Set `SJ_VERSION=0.4.0` to pin a release or `SJ_INSTALL_DIR`
+to choose the folder. Or use a package manager:
+
+```bash
+brew install nabour-labs/tap/specjutsu   # macOS and Linux
+cargo binstall specjutsu                 # downloads the release binary
+cargo install specjutsu                  # builds from source; needs Rust
+```
+
+The archives themselves (macOS arm64 and x64, Linux x64 and arm64, Windows x64 and
+arm64) are on the [releases page](https://github.com/nabour-labs/specjutsu/releases). A
+browser download on macOS is quarantined by Gatekeeper; clear it with
+`xattr -d com.apple.quarantine sj`. The installers and Homebrew don't need this.
+
+To update, run the installer again, `brew upgrade specjutsu`, or
+`cargo install specjutsu --force`. To get a fix that is merged but not yet released,
+build from `main`. Then run `sj update` in each project:
 
 ```bash
 cargo install specjutsu --force

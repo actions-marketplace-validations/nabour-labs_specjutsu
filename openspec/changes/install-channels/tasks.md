@@ -18,4 +18,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. Docs
 
-- [ ] 4.1 README, site and manual: one install command per platform, Homebrew and binstall, the Gatekeeper note; CONTRIBUTING notes `pwsh`; CHANGELOG entry (no-scenario: docs)
+- [x] 4.1 README, site and manual: one install command per platform, Homebrew and binstall, the Gatekeeper note; CONTRIBUTING notes `pwsh`; CHANGELOG entry (no-scenario: docs)

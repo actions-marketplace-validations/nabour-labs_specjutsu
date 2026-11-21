@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- One-line installers: `curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh`
+  on macOS and Linux, `irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex` on
+  Windows. Both verify the download against `SHA256SUMS`; `SJ_VERSION` pins a release.
+- Homebrew: `brew install nabour-labs/tap/specjutsu`, updated by every release.
+- `cargo binstall specjutsu` downloads the release binary instead of compiling.
+- Releases build `aarch64-pc-windows-msvc`.
+
 ### Changed
 - **Breaking:** the default spec root is now `specjutsu/`. `sj init` and `sj adopt`
   write `spec_root = "specjutsu"` and create `specjutsu/specs/` and
