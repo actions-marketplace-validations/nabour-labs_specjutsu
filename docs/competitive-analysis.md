@@ -47,6 +47,10 @@ describes itself as an agent enablement platform and is left out.
   scenarios have a red run. Superpowers asks for this in a prompt; specjutsu enforces it.
 - **A gate in CI.** The GitHub Action gives the same answer every run and refuses the PR
   until the proof holds.
+- **Proven bug fixes.** A `[keep]` scenario pins behaviour a fix must not change, and the
+  gate checks its test passes before and after. Kiro and Spec Kit record unchanged
+  behaviour too, but check it with a model. See
+  [Bug fixes and kept behaviour](../README.md#bug-fixes-and-kept-behaviour).
 - **Catches gaming.** `sj audit` flags deleted, skipped and focused tests, lost assertions
   and invented dependencies, with no specs needed.
 - **No lock-in.** Existing `openspec/` folders work as they are, Spec Kit imports, and
@@ -64,7 +68,6 @@ branch, and comes to main with its implementation.
 
 | Gap | Who has it today | How they check it | specjutsu change |
 | --- | --- | --- | --- |
-| Bug fixes that record current, expected and unchanged behaviour | Kiro, Spec Kit bug flow | Model judgement | [`bugfix-changes`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/bugfix-changes/proposal.md): `[keep]` scenarios that must pass on base and at head |
 | Specs for code that already exists (OpenSpec's most-requested open issue) | cc-sdd, GSD, BMAD | A model reads the code | [`specs-from-tests`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/specs-from-tests/proposal.md): `sj spec infer` drafts a keep scenario for every untraced test |
 | Requirements that hold for all inputs | Kiro | Property tests, IDE-only, optional | [`property-scenarios`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/property-scenarios/proposal.md): `FOR ALL` scenarios need a property test, and the counterexample is kept as evidence |
 | A public, reproducible token benchmark | No one | — | Planned for v0.5 |

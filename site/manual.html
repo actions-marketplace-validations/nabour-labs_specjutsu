@@ -195,7 +195,7 @@ cargo install --git https://github.com/nabour-labs/specjutsu --branch main specj
 
 <span class="c-m"># which build is installed, and where it came from</span>
 cargo install --list | grep -A1 specjutsu</pre>
-      <p><code>sj --version</code> only shows the version number, and a build from <code>main</code> reports the last release's number. The <code>cargo install --list</code> line names the source instead: a build from GitHub shows the repository URL and commit in brackets after the version, and one from crates.io shows only the version.</p>
+      <p><code>sj --version</code> names the build. One made from a git checkout, including <code>cargo install --git</code>, prints the short commit after the version, such as <code>sj 0.4.0 (f62a48b)</code>. One from crates.io or a release archive prints only the version. <code>cargo install --list</code> also names the source: a build from GitHub shows the repository URL and commit in brackets after the version.</p>
       <p>Agent hooks call <code>sj</code> from <code>PATH</code>, so sessions that are already open use the new binary on their next edit, with no restart. Then run <code>sj update</code> in each project, so the generated skills, hooks and agent instructions match the new version. Files you edited by hand are kept and reported.</p>
     </section>
 

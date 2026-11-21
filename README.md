@@ -50,11 +50,12 @@ matches it. specjutsu checks it deterministically:
 | Test must fail before the code | No | No | No | By prompt | **Enforced, then proven in CI** |
 | PR blocked until proof holds | No | No | No | No | **Yes, GitHub Action** |
 | Test-tampering checks | No | No | No | No | **Yes, `sj audit`** |
+| Bug fix proven not to break nearby behaviour | No | LLM | LLM | No | **Yes, `[keep]` scenarios** |
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
 
 specjutsu is not ahead everywhere yet: OpenSpec parity (more agents, custom workflow
-schemas, multi-repo spec stores) is planned for v0.6 and v0.7, and bugfix specs,
-specs inferred from existing tests and property scenarios go further. See
+schemas, multi-repo spec stores) is planned for v0.6 and v0.7, and specs inferred
+from existing tests and property scenarios go further. See
 [How specjutsu compares](docs/competitive-analysis.md) for the full comparison, its
 sources, and the change that closes each gap.
 
@@ -88,9 +89,9 @@ cargo install --git https://github.com/nabour-labs/specjutsu --branch main specj
 cargo install --list | grep -A1 specjutsu   # the installed build and its source
 ```
 
-`sj --version` shows only the version number, which a build from `main` shares
-with the last release. Open agent sessions use the new binary on their next hook
-call.
+`sj --version` prints the commit after the version for a build from a git
+checkout, such as `sj 0.4.0 (f62a48b)`, and only the version for a crates.io
+install. Open agent sessions use the new binary on their next hook call.
 
 ## Quickstart
 
@@ -498,7 +499,8 @@ folders work unchanged.
 
 - **`sj spec new <change>`** creates `changes/<change>/` with `proposal.md`,
   `design.md`, `tasks.md` and an empty `specs/`. The name must be kebab-case. It
-  prints the next free ID for every prefix in use.
+  prints the next free ID for every prefix in use. `--bug` scaffolds a bug fix
+  instead (see [Bug fixes and kept behaviour](#bug-fixes-and-kept-behaviour)).
 - **`sj instructions <change> [<artifact>]`** tells an agent what to write
   next: the file and its template, the project context, the rules for that
   artifact, the next free ID per prefix, the language and the command that checks
@@ -527,12 +529,14 @@ folders work unchanged.
   - A MODIFIED, REMOVED or RENAMED name that the current spec doesn't have.
   - A task that names no scenario ID. Mark tasks that cover none with
     `(no-scenario: <reason>)`, for example docs.
+  - A scenario marker other than `[keep]`.
 
   It exits 1 on errors. `--strict` also fails on warnings, such as a placeholder
   Purpose.
 - **`sj spec check <change>`** lists scenarios no task names (`uncovered
   AUTH-006`), tasks naming IDs nobody defines, and every
-  `[NEEDS CLARIFICATION: …]` marker outside code.
+  `[NEEDS CLARIFICATION: …]` marker outside code. For a bug change it also
+  fails when no scenario reproduces the bug, and warns when none is `[keep]`.
 - **`sj spec archive <change>`** refuses while validation fails or a task is
   open, unless you pass `--force`. Then it applies RENAMED, REMOVED, MODIFIED and
   ADDED requirements to `specs/` and moves the change to
@@ -543,6 +547,33 @@ folders work unchanged.
   bytes. Like OpenSpec, it writes LF line endings and one blank line between
   requirements. A MODIFIED block that would drop a scenario is an error. Nothing
   is written unless every delta merges.
+
+### Bug fixes and kept behaviour
+
+A bug fix has to do two things: fix the broken case and leave the cases next to
+it alone. specjutsu proves both. A scenario marked `[keep]` describes behaviour
+the change must not alter:
+
+```markdown
+#### Scenario: PAY-012 Refunds under $100 auto-approve
+- **WHEN** a $99 charge is refunded
+- **THEN** the refund is approved without review
+
+#### Scenario: PAY-013 [keep] Refunds over $100 need approval
+- **WHEN** a $150 charge is refunded
+- **THEN** the refund waits for approval
+```
+
+PAY-012 is the reproduction: like any scenario, its test must fail on base.
+PAY-013's test must do the opposite: pass on base and at head. The gate records
+it as `green:keep`, and fails with `keep-red-on-base` when the test fails on
+base (it describes new behaviour, so drop the marker) or `keep-broken` when the
+change breaks it. The PR comment lists kept scenarios under **Kept behaviour**.
+
+`sj spec new fix-small-refunds --bug` writes a proposal with Current,
+Expected and Unchanged Behaviour sections and a `Kind: bug` line, which makes
+`sj spec check` ask for both kinds of scenario. The `sj-debug` skill writes
+bug fixes this way.
 
 ### Project context and rules
 

@@ -32,8 +32,11 @@ files involved), and question your assumptions about inputs.
 - If an existing scenario describes the right behaviour and its test missed the bug, add the
   case to that scenario's test, or add a new scenario.
 - If no scenario describes it, add one to the open change, or create a change with
-  `sj spec new fix-<bug>`. Write the scenario with the concrete failing values, and name it
-  in a task.
+  `sj spec new fix-<bug> --bug`. Write the scenario with the concrete failing values, and name
+  it in a task.
+- Pin what the fix must not change: for behaviour next to the bug, add a `[keep]` scenario
+  (`#### Scenario: FIX-002 [keep] Refunds over $100 still need approval`). Its test must pass
+  before and after the fix; the gate reports `keep-red-on-base` if it doesn't.
 
 Write the test, linked by the scenario ID, and record it red:
 
@@ -53,4 +56,4 @@ run the package's tests (`sj test <package>`) to check nothing else broke. Commi
 
 In a few lines: the cause, why the existing tests missed it, the fix, and any similar code
 that may have the same bug. Suggest a scenario for that code, don't fix it unasked.
-<!-- specjutsu:generated 55fae085b608acd5 -->
+<!-- specjutsu:generated d963faf9f7857e15 -->
