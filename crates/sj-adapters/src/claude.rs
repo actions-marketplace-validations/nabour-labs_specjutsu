@@ -120,9 +120,17 @@ fn ws_indent(ws: &str) -> &str {
     }
 }
 
-struct Style {
-    multiline: bool,
-    unit: String,
+pub(crate) struct Style {
+    pub(crate) multiline: bool,
+    pub(crate) unit: String,
+}
+
+/// How new members of `root` (the top-level object of `text`) are laid out.
+pub(crate) fn style(text: &str, root: &Node) -> Style {
+    Style {
+        multiline: text[root.start..root.end].contains('\n'),
+        unit: indent_unit(text).to_string(),
+    }
 }
 
 fn array_text(entry: &str, ind: &str, s: &Style) -> String {
@@ -146,7 +154,7 @@ fn hooks_text(event: &str, entry: &str, ind: &str, s: &Style) -> String {
 }
 
 /// Add member `key` to `obj`, after its last member; `value` gets the member's line indent.
-fn insert_member(
+pub(crate) fn insert_member(
     text: &str,
     obj: &Node,
     key: &str,
@@ -173,7 +181,7 @@ fn insert_member(
     }
 }
 
-fn insert_element(text: &str, arr: &Node, entry: &str, s: &Style) -> String {
+pub(crate) fn insert_element(text: &str, arr: &Node, entry: &str, s: &Style) -> String {
     match arr.elements().last() {
         Some(last) => {
             let ws = ws_before(text, last.start);
@@ -251,10 +259,7 @@ pub(crate) fn hooks_install(
     let mut t = text.to_string();
     for &(event, entry) in entries {
         let root = root_object(&t)?;
-        let s = Style {
-            multiline: t[root.start..root.end].contains('\n'),
-            unit: indent_unit(&t).to_string(),
-        };
+        let s = style(&t, &root);
         t = match root.get("hooks") {
             None => insert_member(
                 &t,
@@ -457,6 +462,19 @@ pub(crate) fn put(
     Ok(())
 }
 
+/// `.claude/skills/` under `base`, a repository root or a home folder.
+pub fn skills_dir(base: &Path) -> PathBuf {
+    base.join(".claude").join("skills")
+}
+
+/// Whether any `sj-*` skill is in `.claude/skills/` under `base`.
+pub fn has_skills(base: &Path) -> bool {
+    let d = skills_dir(base);
+    SKILLS
+        .iter()
+        .any(|(name, _)| d.join(name).join("SKILL.md").exists())
+}
+
 fn paths(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
     (
         root.join("CLAUDE.md"),
@@ -487,21 +505,29 @@ pub fn plan(root: &Path, force: bool) -> Result<Vec<Step>> {
         .with_context(|| format!("{} is not valid JSON", settings.display()))?;
     let old_md = read_opt(&md)?;
     let new_md = block_install(old_md.as_deref());
-    let mut files = vec![(md, old_md, new_md), (settings, old_settings, new_settings)];
-    for (name, source) in SKILLS {
-        let p = skills.join(name).join("SKILL.md");
-        let old = read_opt(&p)?;
-        files.push((p, old, generated(&lf(source))));
-    }
     let mut out = Vec::new();
-    for (i, (path, old, new)) in files.into_iter().enumerate() {
+    for (path, old, new) in [(md, old_md, new_md), (settings, old_settings, new_settings)] {
+        out.extend(crate::plan::put(path, root, old.as_deref(), new));
+    }
+    out.extend(skills_plan(root, &skills, force)?);
+    Ok(out)
+}
+
+/// Every step that brings the `sj-*` skills in `skills` up to date: each skill written, or
+/// kept when it was edited by hand and not `force`, and each stale generated skill removed.
+pub fn skills_plan(root: &Path, skills: &Path, force: bool) -> Result<Vec<Step>> {
+    let mut out = Vec::new();
+    for (name, source) in SKILLS {
+        let path = skills.join(name).join("SKILL.md");
+        let old = read_opt(&path)?;
+        let new = generated(&lf(source));
         match old.as_deref() {
             Some(o) if o == new => {}
-            Some(o) if i >= 2 && !is_unmodified(o) && !force => out.push(Step::keep(path, root)),
+            Some(o) if !is_unmodified(o) && !force => out.push(Step::keep(path, root)),
             _ => out.push(Step::write(path, root, old.is_some(), new)),
         }
     }
-    out.extend(stale_skills(root, &skills)?);
+    out.extend(stale_skills(root, skills)?);
     Ok(out)
 }
 
@@ -574,6 +600,15 @@ pub fn remove(root: &Path) -> Result<Vec<Change>> {
             put(&settings, root, Some(old), new, &mut out)?;
         }
     }
+    out.extend(skills_remove(root, &skills)?);
+    remove_if_empty(&root.join(".claude"));
+    Ok(out)
+}
+
+/// Delete the unmodified `sj-*` skills in `skills`, reporting hand-edited ones as kept, and
+/// `skills` itself when that leaves it empty.
+pub fn skills_remove(root: &Path, skills: &Path) -> Result<Vec<Change>> {
+    let mut out = Vec::new();
     for (name, _) in SKILLS {
         let dir = skills.join(name);
         let p = dir.join("SKILL.md");
@@ -587,7 +622,6 @@ pub fn remove(root: &Path) -> Result<Vec<Change>> {
             None => {}
         }
     }
-    remove_if_empty(&skills);
-    remove_if_empty(&root.join(".claude"));
+    remove_if_empty(skills);
     Ok(out)
 }
