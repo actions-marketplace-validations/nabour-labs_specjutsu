@@ -11,6 +11,6 @@ Builds on `more-adapters-2` (stacked on its branch). Each task group lands as tw
 
 ## 2. Checks and docs
 
-- [ ] 2.0 Antigravity's `.agents/hooks.json` and Kiro's `.kiro/hooks/specjutsu.json` follow each vendor's documented file schema (ADAPT-030, ADAPT-029).
-- [ ] 2.1 Check the Copilot, Kiro, Windsurf and Antigravity path keys and the Antigravity hooks file shape against a real install of each, and record the results in design.md (no-scenario: manual check against the vendors' tools).
+- [x] 2.0 Antigravity's `.agents/hooks.json` and Kiro's `.kiro/hooks/specjutsu.json` follow each vendor's documented file schema (ADAPT-030, ADAPT-029).
+- [x] 2.1 Check the Copilot, Kiro, Windsurf and Antigravity path keys and hook file shapes against each vendor's documentation, and record the results in design.md (no-scenario: manual check against the vendors' docs).
 - [x] 2.2 README, manual and site: Copilot, Windsurf and Kiro in the agent tables with their levels, `auto` markers and hook files; CHANGELOG entry. `more-adapters-2` already documents Gemini CLI and Antigravity (no-scenario: docs).

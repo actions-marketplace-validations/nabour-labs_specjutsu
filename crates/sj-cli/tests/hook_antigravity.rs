@@ -88,7 +88,9 @@ fn adapt_030_antigravity_hook_blocks_source_edits_before_red() {
             .unwrap();
     let user: serde_json::Value = serde_json::from_str(USER_HOOKS).unwrap();
     assert_eq!(v["audit"], user["audit"]);
-    let entries = v["specjutsu"]["PreToolUse"].as_array().expect("a specjutsu hook");
+    let entries = v["specjutsu"]["PreToolUse"]
+        .as_array()
+        .expect("a specjutsu hook");
     assert!(
         entries.iter().any(|e| e["matcher"]
             == "write_to_file|replace_file_content|multi_replace_file_content"

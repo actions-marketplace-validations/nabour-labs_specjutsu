@@ -25,6 +25,11 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- The Antigravity hook goes under a `specjutsu` hook name in `.agents/hooks.json`,
+  the shape Antigravity documents; the earlier `hooks.PreToolUse` entry was never
+  read. Reinstalling or removing takes out the old entry.
+- Kiro's `.kiro/hooks/specjutsu.json` uses Kiro's hook file schema,
+  `{"version": "v1", "hooks": [{"name", "trigger", "matcher", "action"}]}`.
 - `sj adopt` creates `<spec_root>/specs/` and `<spec_root>/changes/`, so `sj doctor`
   passes right after adopting.
 - `sj gate` reads base spec files in the same order as head, so an open change's

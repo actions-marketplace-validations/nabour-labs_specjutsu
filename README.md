@@ -883,7 +883,7 @@ AGENTS.md can load skills. Amp, Roo Code and other AGENTS.md readers get it with
 | Gemini CLI | `AGENTS.md` block, added to `context.fileName`; skills in `.agents/skills/` | `BeforeTool` for `write_file` and `replace`, in `.gemini/settings.json` | `hook` |
 | Windsurf | `AGENTS.md` block | `pre_write_code`, in `.windsurf/hooks.json` | `hook` |
 | Kiro | `AGENTS.md` block | `PreToolUse` for the `write` category, in `.kiro/hooks/specjutsu.json` | `hook` |
-| Antigravity | `AGENTS.md` block; skills in `.agents/skills/` | `PreToolUse` for `write_to_file`, `replace_file_content` and `multi_replace_file_content`, in `.agents/hooks.json` | `hook` |
+| Antigravity | `AGENTS.md` block; skills in `.agents/skills/` | `PreToolUse` for `write_to_file`, `replace_file_content` and `multi_replace_file_content`, as a `specjutsu` hook in `.agents/hooks.json` | `hook` |
 | Amp, Roo Code, others | `AGENTS.md` block | none | `instructions` |
 
 Each hook makes the same decision as Claude's and answers in the agent's own
