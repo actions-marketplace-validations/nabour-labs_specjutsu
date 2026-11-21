@@ -278,7 +278,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
       <h2>Your agent's sensei.</h2>
       <p class="section-lede" style="margin-bottom:0">specjutsu never calls an LLM. It's the deterministic referee your agent reports to, and CI calls the same binary, so local and CI results always agree.</p>
       <div class="agent-list">
-        <span class="first">Claude Code</span><span>Codex</span><span>Cursor</span><span>Cline</span><span>AGENTS.md</span>
+        <span class="first">Claude Code</span><span>Codex</span><span>Cursor</span><span>Cline</span><span>Copilot</span><span>Gemini CLI</span><span>Windsurf</span><span>Kiro</span><span>Antigravity</span><span>AGENTS.md</span>
       </div>
       <ul class="checks">
         <li><strong>Failures-only output:</strong> a green run prints one line; a red run shows only the failing tests and their scenarios.</li>
@@ -288,7 +288,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
         <li><strong>Ten <code>sj-*</code> skills:</strong> explore, propose, clarify, principles, apply, debug, review, verify, finish and onboard, each driven by <code>sj</code> commands.</li>
         <li><strong>Any language, any repo:</strong> Rust, vitest, Jest, Playwright and pytest today, plus any runner that writes JUnit XML. Monorepos get per-package suites.</li>
       </ul>
-      <p style="color:var(--muted);font-size:14px;margin-top:16px">Claude Code since v0.3.0; Codex, Cursor, Cline and a shared <code>AGENTS.md</code> since v0.4.0 (<code>sj init --agents auto</code>). Copilot, Gemini CLI, Windsurf, Kiro and Antigravity follow in v0.6.</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:16px">Claude Code since v0.3.0; Codex, Cursor, Cline and a shared <code>AGENTS.md</code> since v0.4.0 (<code>sj init --agents auto</code>). Copilot, Gemini CLI, Windsurf, Kiro, Antigravity, shared <code>.agents/skills/</code> and <code>--global</code> skills are in the next release.</p>
     </div>
   </div>
 </section>
@@ -350,7 +350,7 @@ sj migrate --from openspec --write</pre>
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.3</div><p>vitest, Jest, Playwright, pytest and JUnit; monorepos; <code>sj spec</code>, <code>status</code>, <code>next</code>, <code>verify</code>; Claude Code adapter and skills; <code>sj migrate</code>.</p></div>
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.4</div><p>Codex, Cursor and Cline adapters and a shared <code>AGENTS.md</code>; <code>sj spec show</code>, <code>sj view</code>, <code>sj instructions</code>.</p></div>
       <div class="milestone next"><span class="state">next</span><div class="v">v0.5 beta</div><p>Bulk archive, completions and onboarding; public token benchmark; beta launch.</p></div>
-      <div class="milestone"><span class="state">planned</span><div class="v">v0.6</div><p>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters.</p></div>
+      <div class="milestone"><span class="state">planned</span><div class="v">v0.6</div><p>Gemini CLI, Antigravity, Copilot, Windsurf and Kiro adapters; shared and global skills.</p></div>
       <div class="milestone"><span class="state">planned</span><div class="v">v0.7</div><p>Custom workflow schemas; spec stores and worksets across repos.</p></div>
     </div>
   </div>

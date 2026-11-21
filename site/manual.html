@@ -154,7 +154,7 @@
           <tr><td><code>sj import speckit</code>, <code>sj migrate</code></td><td><span class="badge live">v0.3.0</span></td><td>Replace OpenSpec, Spec Kit or Superpowers in one step.</td></tr>
           <tr><td>Codex, Cursor, Cline and <code>AGENTS.md</code> adapters</td><td><span class="badge live">v0.4.0</span></td><td><code>sj init --agents auto</code>; Codex and Cursor get the pre-edit TDD hook.</td></tr>
           <tr><td><code>sj spec show</code>, <code>sj view</code>, <code>sj instructions</code>, <code>sj templates</code></td><td><span class="badge live">v0.4.0</span></td><td>Read specs and changes in the terminal; next-step instructions for agents.</td></tr>
-          <tr><td>Copilot, Gemini CLI, Windsurf, Kiro, Antigravity adapters</td><td><span class="badge plan">v0.6</span></td><td>The skills work in any agent today; adapters install them.</td></tr>
+          <tr><td>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared and global skills</td><td><span class="badge plan">v0.6</span></td><td>A pre-edit hook in each; <code>.agents/skills/</code> beside <code>.claude/skills/</code>; <code>--global</code> installs the skills for every project.</td></tr>
           <tr><td>Token benchmark</td><td><span class="badge plan">v0.5</span></td><td>Public comparison against the tools specjutsu replaces.</td></tr>
         </tbody>
       </table></div>
@@ -395,11 +395,12 @@ sj init --remove-agents claude   <span class="c-m"># remove everything it added<
           <tr><td><code>sj hook claude pre-edit</code></td><td>Before <code>Edit</code>, <code>Write</code>, <code>MultiEdit</code> and <code>NotebookEdit</code> on a source file, blocks the edit until each scenario of the active task has a red run in the ledger. Tests, specs and docs are always allowed. <code>advisory</code> mode only warns.</td></tr>
         </tbody>
       </table></div>
-      <h3>Codex, Cursor, Cline and AGENTS.md</h3>
+      <h3>Codex, Cursor, Cline, Copilot, Gemini CLI, Windsurf, Kiro, Antigravity and AGENTS.md</h3>
 <pre class="code">sj init --agents codex,cursor    <span class="c-m"># several at once; AGENTS.md is written once</span>
 sj init --agents auto            <span class="c-m"># the agents the repo already has files for</span>
+sj init --agents claude,codex --global  <span class="c-m"># the skills only, in your home folder</span>
 sj doctor                        <span class="c-m"># hook, instructions or hook missing, per agent</span></pre>
-      <p>Codex, Cursor and Cline get a specjutsu block in <code>AGENTS.md</code> that names the <code>sj</code> commands of the loop. Amp, Roo Code and other agents that read AGENTS.md get it with <code>--agents agents-md</code>.</p>
+      <p>Every agent but Claude Code gets a specjutsu block in <code>AGENTS.md</code> that names the <code>sj</code> commands of the loop. Gemini CLI gets <code>AGENTS.md</code> added to <code>context.fileName</code> so it reads the block; <code>GEMINI.md</code> stays in the list. Amp, Roo Code and other agents that read AGENTS.md get it with <code>--agents agents-md</code>.</p>
       <div class="tbl"><table>
         <thead><tr><th>Agent</th><th>Pre-edit hook</th><th>Level</th></tr></thead>
         <tbody>
@@ -407,10 +408,16 @@ sj doctor                        <span class="c-m"># hook, instructions or hook 
           <tr><td>Codex</td><td><code>[[hooks.PreToolUse]]</code> for <code>apply_patch</code> edits in <code>.codex/config.toml</code>. Every file in the patch is checked. Trust it once with <code>/hooks</code>.</td><td><code>hook</code></td></tr>
           <tr><td>Cursor</td><td><code>preToolUse</code> for <code>Write</code> and <code>Delete</code> in <code>.cursor/hooks.json</code></td><td><code>hook</code></td></tr>
           <tr><td>Cline</td><td>None: Cline's hooks are TypeScript plugins for its CLI only</td><td><code>instructions</code></td></tr>
+          <tr><td>Copilot (CLI and cloud agent)</td><td><code>PreToolUse</code> for <code>Write</code>, <code>Edit</code>, <code>create</code> and <code>edit</code> in <code>.github/hooks/specjutsu.json</code>. Always exits 0; the cloud agent reads hooks from the default branch only.</td><td><code>hook</code></td></tr>
+          <tr><td>Gemini CLI</td><td><code>BeforeTool</code> for <code>write_file</code> and <code>replace</code> in <code>.gemini/settings.json</code></td><td><code>hook</code></td></tr>
+          <tr><td>Windsurf</td><td><code>pre_write_code</code> in <code>.windsurf/hooks.json</code>; exit 2 blocks</td><td><code>hook</code></td></tr>
+          <tr><td>Kiro</td><td><code>PreToolUse</code> for the <code>write</code> category in <code>.kiro/hooks/specjutsu.json</code>; exit 2 blocks</td><td><code>hook</code></td></tr>
+          <tr><td>Antigravity</td><td><code>PreToolUse</code> for <code>write_to_file</code>, <code>replace_file_content</code> and <code>multi_replace_file_content</code> in <code>.agents/hooks.json</code></td><td><code>hook</code></td></tr>
           <tr><td>Amp, Roo Code, others</td><td>None</td><td><code>instructions</code></td></tr>
         </tbody>
       </table></div>
       <p>Hook entries are added after yours and removed byte for byte. A hook that can't read its input allows the edit with a warning. For any other agent or editor with hooks, <code>sj hook check-edit &lt;path&gt;</code> exits 0 to allow and 2 to block, with the reason on stderr.</p>
+      <p><b>Skills.</b> Codex, Gemini CLI and Antigravity load skills from <code>.agents/skills/</code>, so installing any of them writes the ten <code>sj-*</code> skills there beside <code>.claude/skills/</code>. <code>sj update</code> keeps both copies in step; removing the last of the three removes the <code>sj-*</code> skills and keeps yours. <code>--global</code> on <code>sj init</code>, <code>sj update</code> and <code>--remove-agents</code> acts on <code>~/.claude/skills/</code> and <code>~/.agents/skills/</code> instead and writes nothing in the repository. <code>sj doctor</code> prints <code>skills: project</code>, <code>global</code> or <code>project, global</code>.</p>
       <div class="callout"><p><b>Whatever the agent does</b>, <code>sj gate</code> in CI refuses unproven work. Hooks stop it earlier; the gate is the backstop.</p></div>
     </section>
 
@@ -506,7 +513,8 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
         <h3>sj init</h3>
         <p>Write <code>specjutsu.toml</code> and create the spec folders.</p>
         <dl>
-          <dt>--agents &lt;list&gt;</dt><dd>Install agent adapters: <code>claude</code>, <code>codex</code>, <code>cursor</code>, <code>cline</code>, <code>agents-md</code>, or <code>auto</code> for the agents the repo already has files for. <code>--remove-agents &lt;list&gt;</code> removes them.</dd>
+          <dt>--agents &lt;list&gt;</dt><dd>Install agent adapters: <code>claude</code>, <code>codex</code>, <code>cursor</code>, <code>cline</code>, <code>copilot</code>, <code>gemini</code>, <code>windsurf</code>, <code>kiro</code>, <code>antigravity</code>, <code>agents-md</code>, or <code>auto</code> for the agents the repo already has files for. <code>--remove-agents &lt;list&gt;</code> removes them.</dd>
+          <dt>--global</dt><dd>With <code>--agents</code> or <code>--remove-agents</code>: install or remove only the skills, in <code>~/.claude/skills</code> and <code>~/.agents/skills</code>, for every project.</dd>
           <dt>--force</dt><dd>Replace an existing <code>specjutsu.toml</code>.</dd>
         </dl>
       </div>
@@ -517,12 +525,12 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       </div>
       <div class="cmd">
         <h3>sj doctor</h3>
-        <p>Check the project file, packages, runner executables and spec folders, one problem per line. Never installs anything.</p>
+        <p>Check the project file, packages, runner executables and spec folders, one problem per line, then one line per installed agent and a <code>skills:</code> line saying whether the skills are in the project, global or both. Never installs anything.</p>
       </div>
       <div class="cmd">
         <h3>sj update</h3>
         <p>Regenerate installed agent adapters. A file you edited by hand is kept and reported, and the command exits 1.</p>
-        <dl><dt>--force</dt><dd>Replace hand-edited files too.</dd><dt>--dry-run</dt><dd>Print one <code>write</code>, <code>keep</code> or <code>remove</code> line per file and change nothing; <code>adapters up to date</code> when there is nothing to do. Exits 0.</dd><dt>--json</dt><dd>With <code>--dry-run</code>: <code>{"files": [{"path", "action"}]}</code>.</dd></dl>
+        <dl><dt>--force</dt><dd>Replace hand-edited files too.</dd><dt>--dry-run</dt><dd>Print one <code>write</code>, <code>keep</code> or <code>remove</code> line per file and change nothing; <code>adapters up to date</code> when there is nothing to do. Exits 0.</dd><dt>--json</dt><dd>With <code>--dry-run</code>: <code>{"files": [{"path", "action"}]}</code>.</dd><dt>--global</dt><dd>Refresh the skills installed with <code>sj init --global</code> instead of the repository's.</dd></dl>
       </div>
       <div class="cmd">
         <h3>sj completions &lt;shell&gt;</h3>
