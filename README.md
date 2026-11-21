@@ -2,6 +2,8 @@
 
 **Master the art of the spec.**
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-specjutsu%20gate-2ea44f?logo=github)](https://github.com/marketplace/actions/specjutsu-gate)
+
 **The quality gate for AI-generated code.** specjutsu stops your coding agent from
 shipping work it can't prove: every spec scenario gets a test, every test must fail
 before the code exists, and the pull request is refused until both hold. It's one
@@ -23,7 +25,8 @@ jobs:
 
 Every PR gets one comment, updated on each push, listing the scenarios the change
 touches, the evidence for each (`red:assert`, `red:compile`, `untested`,
-`green-on-base`, …) and how to fix what fails. See [The GitHub Action](#the-github-action).
+`green-on-base`, …) and how to fix what fails. The Action is listed on the GitHub
+Marketplace as [specjutsu gate](https://github.com/marketplace/actions/specjutsu-gate). See [The GitHub Action](#the-github-action).
 
 **No specs yet?** Start with `command: audit`. It needs no setup and catches the ways
 an agent makes checks pass without doing the work: deleted, skipped or focused
@@ -251,6 +254,9 @@ and files elsewhere in that package don't. A top-level `non_source = ["infra/**"
 adds globs to the built-in non-source list.
 
 ## The GitHub Action
+
+The Action is published on the GitHub Marketplace as
+[specjutsu gate](https://github.com/marketplace/actions/specjutsu-gate), where you can also find its latest version.
 
 `uses: nabour-labs/specjutsu@v0` installs a pinned `sj` release (checked against the
 release's `SHA256SUMS`), runs `sj gate` against the pull request's base, writes the

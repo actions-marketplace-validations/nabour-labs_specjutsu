@@ -49,6 +49,7 @@
     <div class="cta">
       <a class="btn primary" href="#quickstart">Get started in 60 seconds</a>
       <a class="btn" href="manual.html">Read the manual</a>
+      <a class="btn" href="https://github.com/marketplace/actions/specjutsu-gate">GitHub Marketplace</a>
     </div>
     <div class="install">
       <code id="install-cmd"><span class="p">$ </span>cargo install specjutsu</code>
@@ -329,7 +330,8 @@ sj migrate --from openspec --write</pre>
 <pre class="code"><span class="c-m"># .github/workflows/ci.yml</span>
 <span class="c-k">- uses:</span> actions/checkout@v4
   <span class="c-k">with:</span> { fetch-depth: 0 }
-<span class="c-k">- run:</span> sj gate --base origin/${{ github.base_ref }}</pre>
+<span class="c-k">- uses:</span> nabour-labs/specjutsu@v0</pre>
+        <p>Get the action from the <a href="https://github.com/marketplace/actions/specjutsu-gate">GitHub Marketplace</a>.</p>
       </div>
     </div>
   </div>
