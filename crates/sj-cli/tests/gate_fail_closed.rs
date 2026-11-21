@@ -1,4 +1,4 @@
-//! GATE CLI scenarios from openspec/changes/gate-fail-closed.
+//! GATE CLI scenarios from specjutsu/changes/gate-fail-closed.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

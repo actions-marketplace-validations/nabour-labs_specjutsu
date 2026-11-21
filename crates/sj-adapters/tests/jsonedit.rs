@@ -1,4 +1,4 @@
-//! Text edits to `.claude/settings.json` (openspec/changes/claude-adapter).
+//! Text edits to `.claude/settings.json` (specjutsu/changes/claude-adapter).
 
 use sj_adapters::claude::{settings_install, settings_remove};
 

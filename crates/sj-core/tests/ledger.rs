@@ -1,4 +1,4 @@
-//! LEDGER scenarios covered by sj-core (openspec/changes/test-ledger).
+//! LEDGER scenarios covered by sj-core (specjutsu/changes/test-ledger).
 
 mod support;
 

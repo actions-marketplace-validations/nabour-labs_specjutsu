@@ -1,5 +1,5 @@
 //! `sj hook check-edit <path>`: the pre-edit decision with no agent-specific JSON
-//! (openspec/changes/more-adapters).
+//! (specjutsu/changes/more-adapters).
 
 use std::path::Path;
 

@@ -1,4 +1,4 @@
-//! CONF-032 from openspec/changes/own-spec-root: which folder commands use
+//! CONF-032 from specjutsu/changes/own-spec-root: which folder commands use
 //! when `spec_root` is not set.
 
 use std::path::Path;

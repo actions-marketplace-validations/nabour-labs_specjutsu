@@ -1,4 +1,4 @@
-//! TRACE-007 and TRACE-008 from openspec/changes/polyglot-trace: finding test files per suite.
+//! TRACE-007 and TRACE-008 from specjutsu/changes/polyglot-trace: finding test files per suite.
 
 use std::path::Path;
 

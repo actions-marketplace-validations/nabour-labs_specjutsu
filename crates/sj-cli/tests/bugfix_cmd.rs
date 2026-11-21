@@ -1,4 +1,4 @@
-//! SPEC-038..042 (openspec/changes/bugfix-changes): `[keep]` markers and bug changes.
+//! SPEC-038..042 (specjutsu/changes/bugfix-changes): `[keep]` markers and bug changes.
 
 use std::path::Path;
 

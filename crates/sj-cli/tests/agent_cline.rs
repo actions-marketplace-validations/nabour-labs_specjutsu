@@ -1,4 +1,4 @@
-//! `sj init --agents cline`: instructions only (openspec/changes/more-adapters).
+//! `sj init --agents cline`: instructions only (specjutsu/changes/more-adapters).
 
 use std::collections::BTreeMap;
 use std::path::Path;

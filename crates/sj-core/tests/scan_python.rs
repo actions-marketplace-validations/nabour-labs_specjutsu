@@ -1,4 +1,4 @@
-//! TRACE-013 and TRACE-014 from openspec/changes/polyglot-trace: pytest tests.
+//! TRACE-013 and TRACE-014 from specjutsu/changes/polyglot-trace: pytest tests.
 
 use std::path::Path;
 

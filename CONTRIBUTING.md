@@ -9,12 +9,12 @@ specjutsu is built with itself. Install a released `sj` (or `cargo install --pat
 crates/sj-cli`) so it's on your `PATH`; the Claude Code hooks in `.claude/` call it.
 
 1. **Spec it.** Behaviour changes start as a change: `sj spec new <change>` creates
-   `openspec/changes/<change>/` and prints the next free ID per prefix. Every
+   `specjutsu/changes/<change>/` and prints the next free ID per prefix. Every
    scenario starts with a stable ID: `#### Scenario: TRACE-007 Short name`. One
    prefix per capability (TRACE, GATE, LEDGER, RUN, CONF, IDS, SPEC, IMP, LOOP,
    ADAPT, SKILL, MIG). Never reuse an ID. Each task names its scenario IDs;
    `sj spec validate` and `sj spec check` must be clean. Rules live in
-   `openspec/principles.md`.
+   `specjutsu/principles.md`.
 2. **Red.** Write the failing test, with the ID in its name
    (`fn trace_007_short_name()`), run `sj test TRACE-007`, and commit it:
    `test(TRACE-007): red`.

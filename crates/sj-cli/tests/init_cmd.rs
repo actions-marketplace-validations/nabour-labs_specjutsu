@@ -1,4 +1,4 @@
-//! CONF-006 and CONF-007 from openspec/changes/project-config: `sj init`.
+//! CONF-006 and CONF-007 from specjutsu/changes/project-config: `sj init`.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;

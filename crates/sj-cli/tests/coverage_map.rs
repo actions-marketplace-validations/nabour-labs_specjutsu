@@ -1,4 +1,4 @@
-//! DRIFT-002..004 from openspec/changes/spec-drift: `sj coverage map` with a fixture coverage
+//! DRIFT-002..004 from specjutsu/changes/spec-drift: `sj coverage map` with a fixture coverage
 //! command that copies canned LCOV files, so no coverage tool is needed.
 
 use std::path::{Path, PathBuf};

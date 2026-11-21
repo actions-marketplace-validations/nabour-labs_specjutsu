@@ -1,5 +1,5 @@
 //! `sj hook copilot pre-edit` and `.github/hooks/specjutsu.json`
-//! (openspec/changes/more-adapters-3).
+//! (specjutsu/changes/more-adapters-3).
 
 use std::path::Path;
 

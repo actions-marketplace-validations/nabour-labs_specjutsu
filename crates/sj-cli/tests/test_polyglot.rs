@@ -1,4 +1,4 @@
-//! RUN-011..017 CLI scenarios from openspec/changes/polyglot-runners: `sj test` across suites.
+//! RUN-011..017 CLI scenarios from specjutsu/changes/polyglot-runners: `sj test` across suites.
 //!
 //! Fake `pnpm` and `python3` executables on PATH log their arguments and write canned JUnit
 //! reports, so the default launchers are exercised without real runners (Unix only). The junit

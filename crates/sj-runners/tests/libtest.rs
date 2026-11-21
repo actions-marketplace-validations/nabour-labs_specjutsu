@@ -1,4 +1,4 @@
-//! GATE scenarios covered by the cargo runner (openspec/changes/gate-red-on-base).
+//! GATE scenarios covered by the cargo runner (specjutsu/changes/gate-red-on-base).
 
 use sj_runners::cargo::{parse_libtest, Outcome, Run, TestResult};
 

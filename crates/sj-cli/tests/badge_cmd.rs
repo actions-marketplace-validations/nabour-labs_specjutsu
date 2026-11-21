@@ -1,4 +1,4 @@
-//! CI-004..006 from openspec/changes/gate-action: `sj badge`.
+//! CI-004..006 from specjutsu/changes/gate-action: `sj badge`.
 
 use std::path::Path;
 
