@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::plan::{apply, Step};
 use anyhow::{bail, Context, Result};
 
 use crate::jsonedit::{self, indent_unit, line_indent, Node};
@@ -14,7 +15,7 @@ pub const END: &str = "<!-- specjutsu:end -->";
 pub const BLOCK_BODY: &str = include_str!("../assets/claude/CLAUDE.block.md");
 
 /// The skills, as (name, source text).
-pub const SKILLS: [(&str, &str); 9] = [
+pub const SKILLS: [(&str, &str); 10] = [
     (
         "sj-explore",
         include_str!("../assets/skills/sj-explore/SKILL.md"),
@@ -50,6 +51,10 @@ pub const SKILLS: [(&str, &str); 9] = [
     (
         "sj-finish",
         include_str!("../assets/skills/sj-finish/SKILL.md"),
+    ),
+    (
+        "sj-onboard",
+        include_str!("../assets/skills/sj-onboard/SKILL.md"),
     ),
 ];
 
@@ -473,15 +478,9 @@ pub fn is_installed(root: &Path) -> bool {
         || std::fs::read_to_string(settings).is_ok_and(|t| has_our_hooks(&t))
 }
 
-/// One planned write: the new text, or `None` for a hand-edited skill that is kept.
-struct Planned {
-    path: PathBuf,
-    text: Option<String>,
-    change: Change,
-}
-
-/// Every file `install` would write, computed without writing.
-fn planned(root: &Path, force: bool) -> Result<Vec<Planned>> {
+/// Every file `install` would write, keep or remove, computed without touching anything.
+/// A generated `sj-*` skill this version no longer ships is removed; an edited one is left.
+pub fn plan(root: &Path, force: bool) -> Result<Vec<Step>> {
     let (md, settings, skills) = paths(root);
     let old_settings = read_opt(&settings)?;
     let new_settings = settings_install(old_settings.as_deref())
@@ -496,48 +495,47 @@ fn planned(root: &Path, force: bool) -> Result<Vec<Planned>> {
     }
     let mut out = Vec::new();
     for (i, (path, old, new)) in files.into_iter().enumerate() {
-        let r = rel(&path, root);
-        let change = match old.as_deref() {
-            Some(o) if o == new => continue,
-            Some(o) if i >= 2 && !is_unmodified(o) && !force => {
-                out.push(Planned {
-                    path,
-                    text: None,
-                    change: Change::Kept(r),
-                });
-                continue;
-            }
-            Some(_) => Change::Updated(r),
-            None => Change::Created(r),
-        };
-        out.push(Planned {
-            path,
-            text: Some(new),
-            change,
-        });
+        match old.as_deref() {
+            Some(o) if o == new => {}
+            Some(o) if i >= 2 && !is_unmodified(o) && !force => out.push(Step::keep(path, root)),
+            _ => out.push(Step::write(path, root, old.is_some(), new)),
+        }
+    }
+    out.extend(stale_skills(root, &skills)?);
+    Ok(out)
+}
+
+/// A removal step for each unedited generated `sj-*` skill that is not in [`SKILLS`].
+fn stale_skills(root: &Path, skills: &Path) -> Result<Vec<Step>> {
+    let Ok(entries) = std::fs::read_dir(skills) else {
+        return Ok(Vec::new());
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("sj-") && !SKILLS.iter().any(|(s, _)| s == n))
+        .collect();
+    names.sort();
+    let mut out = Vec::new();
+    for n in names {
+        let p = skills.join(&n).join("SKILL.md");
+        if read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
+            out.push(Step::delete(p, root));
+        }
     }
     Ok(out)
 }
 
 /// What `install` would change, without writing anything.
 pub fn plan_install(root: &Path, force: bool) -> Result<Vec<Change>> {
-    Ok(planned(root, force)?
-        .into_iter()
-        .map(|p| p.change)
-        .collect())
+    Ok(plan(root, force)?.into_iter().map(|s| s.change).collect())
 }
 
 /// Install or refresh every file. A hand-edited skill is kept unless `force`. Nothing is
 /// written when the settings file can't be read as JSON.
 pub fn install(root: &Path, force: bool) -> Result<Vec<Change>> {
-    let mut out = Vec::new();
-    for p in planned(root, force)? {
-        if let Some(text) = &p.text {
-            write(&p.path, text)?;
-        }
-        out.push(p.change);
-    }
-    Ok(out)
+    apply(plan(root, force)?)
 }
 
 pub(crate) fn remove_if_empty(dir: &Path) {

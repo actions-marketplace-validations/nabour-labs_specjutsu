@@ -72,7 +72,7 @@ pub fn is_installed(root: &Path) -> bool {
 
 /// Add the `preToolUse` entry, keeping every other byte. Nothing is written when the file
 /// isn't valid JSON.
-pub fn install(root: &Path) -> Result<Vec<Change>> {
+pub fn plan(root: &Path) -> Result<Vec<crate::plan::Step>> {
     let p = path(root);
     let old = read_opt(&p)?;
     let new = match old.as_deref() {
@@ -82,9 +82,14 @@ pub fn install(root: &Path) -> Result<Vec<Change>> {
         Some(t) => hooks_install(t, &ENTRIES, is_ours)
             .with_context(|| format!("{} is not valid JSON", p.display()))?,
     };
-    let mut out = Vec::new();
-    put(&p, root, old.as_deref(), &new, &mut out)?;
-    Ok(out)
+    Ok(crate::plan::put(p, root, old.as_deref(), new)
+        .into_iter()
+        .collect())
+}
+
+/// Carry out [`plan`].
+pub fn install(root: &Path) -> Result<Vec<Change>> {
+    crate::plan::apply(plan(root)?)
 }
 
 /// Remove the entry. A file left with nothing but `version` is deleted, with `.cursor/` if

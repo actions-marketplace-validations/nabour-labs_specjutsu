@@ -37,7 +37,7 @@ tests, lost assertions, and dependencies that don't exist. See
 
 Under the Action is `sj`, a CLI that covers the whole loop: authoring (`sj spec`),
 the agent's working loop (`sj status`, `next`, `verify`), the proof layer
-(`sj trace`, `sj test`, `sj gate`), a Claude Code adapter with nine skills, and
+(`sj trace`, `sj test`, `sj gate`), a Claude Code adapter with ten skills, and
 `sj migrate`. Its spec format is OpenSpec's, so existing `openspec/` folders work
 unchanged, and it replaces the OpenSpec, Spec Kit and Superpowers stack.
 
@@ -95,6 +95,27 @@ cargo install --list | grep -A1 specjutsu   # the installed build and its source
 checkout, such as `sj 0.4.0 (f62a48b)`, and only the version for a crates.io
 install. Open agent sessions use the new binary on their next hook call.
 
+### Shell completions
+
+`sj completions <shell>` prints a completion script for `bash`, `zsh`, `fish`,
+`powershell` or `elvish`, generated from the binary's own commands and flags. It
+writes no file; save the output where your shell looks, and regenerate it after
+upgrading:
+
+```bash
+# bash
+sj completions bash > ~/.local/share/bash-completion/completions/sj
+# zsh: then add `fpath=(~/.zfunc $fpath)` before `compinit` in ~/.zshrc
+mkdir -p ~/.zfunc && sj completions zsh > ~/.zfunc/_sj
+# fish
+sj completions fish > ~/.config/fish/completions/sj.fish
+# elvish: then add `use sj` to ~/.config/elvish/rc.elv
+sj completions elvish > ~/.config/elvish/lib/sj.elv
+```
+
+In PowerShell, add `sj completions powershell | Out-String | Invoke-Expression` to
+your `$PROFILE`.
+
 ## Quickstart
 
 ```bash
@@ -115,6 +136,7 @@ sj spec show AUTH-003   # one scenario, change or capability; a scenario with it
 sj spec validate    # spec format, delta structure, every task names its scenarios
 sj spec check add-oauth-login    # uncovered scenarios, unknown IDs, open questions
 sj spec archive add-oauth-login  # merge the deltas into specs/, move to changes/archive/
+sj spec archive --all-done       # archive every change whose tasks are all done, together
 sj status           # each open change: tasks, scenario evidence, the next task
 sj view             # one-screen dashboard: capabilities, open changes, evidence totals
 sj next             # the next task: its scenarios, changed files, test commands
@@ -123,6 +145,8 @@ sj verify           # before a PR: what the gate checks, without red-on-base
 sj init --agents claude  # install the Claude Code adapter: CLAUDE.md block, skills, hooks
 sj init --agents auto    # install for every agent the repo already has files for
 sj update           # regenerate installed adapters; hand-edited files are kept
+sj update --dry-run # print what update would write, keep or remove; change nothing
+sj completions zsh  # print a shell completion script (bash, zsh, fish, powershell, elvish)
 sj import speckit   # preview converting Spec Kit's specs/NNN-*/ features; --write converts
 ```
 
@@ -550,6 +574,14 @@ folders work unchanged.
   requirements. A MODIFIED block that would drop a scenario is an error. Nothing
   is written unless every delta merges.
 
+  It takes several names, `sj spec archive add-oauth-login fix-token-expiry`, or
+  `--all-done` for every open change with at least one task and all of them done
+  (it prints `nothing to archive` when there are none). The changes are archived
+  in name order as one operation: if any one is refused, nothing is written and
+  each problem is listed. Two changes whose deltas modify, remove or rename the
+  same requirement are refused even with `--force`; archive one, then rebase the
+  other's delta.
+
 ### Bug fixes and kept behaviour
 
 A bug fix has to do two things: fix the broken case and leave the cases next to
@@ -675,7 +707,7 @@ takes `--json`, except `sj task done`.
 
 ## Skills
 
-`skills/` holds nine agent skills that cover spec-driven work from idea to merge.
+`skills/` holds ten agent skills that cover spec-driven work from idea to merge.
 Each one drives the work through `sj` commands instead of having the agent read
 spec folders and logs:
 
@@ -690,6 +722,13 @@ spec folders and logs:
 | `sj-review` | review a diff against its scenarios and the principles | Superpowers code review; Spec Kit checklist |
 | `sj-verify` | check `sj verify` before calling anything done | Superpowers verification-before-completion |
 | `sj-finish` | verify, archive, and open the PR | Superpowers finishing-a-branch, git worktrees; OpenSpec archive, sync |
+| `sj-onboard` | walk a newcomer through one toy change, then remove it | OpenSpec onboard |
+
+`sj-onboard` runs the whole loop in a scratch change, `sj-onboard-demo`: `sj spec
+new`, one scenario, a red `sj test`, the smallest code, a green `sj test`, `sj task
+done` and `sj verify`, explaining each step first. It refuses to start on a dirty
+working tree or when `sj-onboard-demo` already exists. At the end it deletes the
+change, the demo test and the demo code without archiving, so `specs/` is unchanged.
 
 [skills/COVERAGE.md](skills/COVERAGE.md) maps every replaced skill and command to
 its skill. `cargo test` checks the skills: frontmatter whose description says when
@@ -702,6 +741,7 @@ adapters install them.
 ```bash
 sj init --agents claude          # install (writes specjutsu.toml too if it's missing)
 sj update                        # regenerate; prints `adapters up to date` when nothing changed
+sj update --dry-run              # preview: one `write`, `keep` or `remove` line per file; --json too
 sj init --remove-agents claude   # remove everything it added
 ```
 
@@ -710,7 +750,7 @@ It writes three things and touches nothing else:
 - **A block in CLAUDE.md**, between `<!-- specjutsu:begin -->` and
   `<!-- specjutsu:end -->`, appended after your own content. It is under 1,200
   bytes.
-- **The nine skills**, under `.claude/skills/sj-*/SKILL.md`. Each ends with a
+- **The ten skills**, under `.claude/skills/sj-*/SKILL.md`. Each ends with a
   generated-hash line. `sj update` reports a skill you edited by hand
   (`modified … (kept; sj update --force replaces it)`), keeps it, and exits 1.
 - **Two hooks** in `.claude/settings.json`, added after your existing ones. The
@@ -737,6 +777,14 @@ valid. The hooks call `sj` from `PATH`:
   task and ledger, even though Claude Code points the hook at the main checkout.
   Agents working side by side in their own worktrees don't block each other.
 
+`sj update --dry-run` prints the plan without changing anything: one line per
+file, `write <path>`, `keep <path>` (a hand-edited file `--force` would replace)
+or `remove <path>` (a generated `sj-*` skill this version no longer ships, which
+`sj update` deletes unless you edited it). It prints `adapters up to date` when
+there is nothing to do and `no adapters installed` when there is no adapter.
+`--json` prints `{"files": [{"path": …, "action": …}]}` instead. It always
+exits 0.
+
 ## Other agents
 
 ```bash
@@ -755,7 +803,7 @@ AGENTS.md can load skills. Amp, Roo Code and other AGENTS.md readers get it with
 
 | Agent | Instructions | Pre-edit hook | Level |
 | --- | --- | --- | --- |
-| Claude Code | `CLAUDE.md` block, nine skills | `PreToolUse` in `.claude/settings.json` | `hook` |
+| Claude Code | `CLAUDE.md` block, ten skills | `PreToolUse` in `.claude/settings.json` | `hook` |
 | Codex | `AGENTS.md` block | `[[hooks.PreToolUse]]` for `apply_patch` edits, in `.codex/config.toml` | `hook` |
 | Cursor | `AGENTS.md` block | `preToolUse` for `Write` and `Delete`, in `.cursor/hooks.json` | `hook` |
 | Cline | `AGENTS.md` block | none: Cline's hooks are TypeScript plugins for its CLI only | `instructions` |

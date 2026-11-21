@@ -389,74 +389,228 @@ fn dated(name: &str, date: &str) -> String {
     }
 }
 
-/// Refuse, or merge every delta of `change` into `specs/` and move the change to the archive.
-pub fn archive(spec_root: &Path, change: &str, opts: &Options) -> Result<Outcome> {
-    let c = find_change(spec_root, change)?;
-    if !opts.force {
-        let mut reasons = validate(spec_root, Some(change))?.errors;
-        let tasks_file = c.dir.join("tasks.md");
-        for t in tasks(&tasks_file)? {
-            if !t.done {
-                reasons.push(Problem {
-                    message: format!("open task {}", t.text),
-                    file: tasks_file.clone(),
-                    line: t.line,
-                });
+/// One change's part of a [`Plan`]: where it moves and the spec files it writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedChange {
+    pub name: String,
+    dir: PathBuf,
+    pub dest: PathBuf,
+    /// Each spec file this change touches, with the text after its merge.
+    writes: Vec<(PathBuf, String, SpecUpdate)>,
+}
+
+/// Every write and move of an archive run, computed before anything is touched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    pub changes: Vec<PlannedChange>,
+}
+
+/// What [`plan`] found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Planned {
+    /// Validation errors or open tasks in at least one change; nothing will be written.
+    Refused(Vec<Problem>),
+    Ready(Plan),
+}
+
+/// One change as [`apply`] archived it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Archived {
+    pub change: String,
+    pub specs: Vec<SpecUpdate>,
+    pub dest: PathBuf,
+}
+
+fn refusals(spec_root: &Path, change: &str, dir: &Path) -> Result<Vec<Problem>> {
+    let mut reasons = validate(spec_root, Some(change))?.errors;
+    let tasks_file = dir.join("tasks.md");
+    for t in tasks(&tasks_file)? {
+        if !t.done {
+            reasons.push(Problem {
+                message: format!("open task {}", t.text),
+                file: tasks_file.clone(),
+                line: t.line,
+            });
+        }
+    }
+    Ok(reasons)
+}
+
+/// The requirements a delta edits in place: MODIFIED, REMOVED and RENAMED (by its old name),
+/// each with its 1-based line.
+fn edited(delta: &str) -> Vec<(String, usize)> {
+    let d = blocks::parse_delta(&blocks::normalize(delta));
+    let mut out: Vec<(String, usize)> = d
+        .modified
+        .iter()
+        .map(|b| (b.name.clone(), b.header + 1))
+        .collect();
+    out.extend(d.removed.iter().map(|r| (r.name.clone(), r.line)));
+    out.extend(d.renamed.iter().map(|r| (r.from.clone(), r.line)));
+    out
+}
+
+/// One problem for each requirement that two changes in one run both edit.
+fn conflicts(found: &[(&str, super::Change)]) -> Result<Vec<Problem>> {
+    // (capability, folded name) to the first change that edits it.
+    let mut owner: BTreeMap<(String, String), String> = BTreeMap::new();
+    let mut out = Vec::new();
+    for (_, c) in found {
+        let delta_dir = c.dir.join("specs");
+        for file in spec_files(&delta_dir)? {
+            let capability = file
+                .parent()
+                .and_then(|p| p.strip_prefix(&delta_dir).ok())
+                .context("delta spec outside the change's specs folder")?
+                .to_string_lossy()
+                .replace('\\', "/");
+            for (name, line) in edited(&read(&file)?) {
+                let key = (capability.clone(), fold(&name));
+                match owner.get(&key) {
+                    Some(first) if first != &c.name => out.push(Problem {
+                        message: format!(
+                            "conflict: {first} and {} both edit {capability}: {name}; \
+                             archive one, then rebase the other's delta",
+                            c.name
+                        ),
+                        file: file.clone(),
+                        line,
+                    }),
+                    Some(_) => {}
+                    None => {
+                        owner.insert(key, c.name.clone());
+                    }
+                }
             }
         }
-        if !reasons.is_empty() {
-            return Ok(Outcome::Refused(reasons));
+    }
+    Ok(out)
+}
+
+/// Open changes, in name order, whose `tasks.md` has at least one task and every task checked.
+pub fn finished(spec_root: &Path) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for c in super::open_changes(spec_root)? {
+        let t = tasks(&c.dir.join("tasks.md"))?;
+        if !t.is_empty() && t.iter().all(|t| t.done) {
+            out.push(c.name);
         }
     }
-    let dest = spec_root
-        .join("changes/archive")
-        .join(dated(&c.name, &opts.date));
-    if dest.exists() {
-        bail!("archive destination already exists: {}", dest.display());
+    Ok(out)
+}
+
+/// Check every change in `changes` and merge all their deltas in memory, in the order given:
+/// a later change's merge builds on an earlier one's result. Nothing is written.
+pub fn plan(spec_root: &Path, changes: &[&str], opts: &Options) -> Result<Planned> {
+    let mut found = Vec::with_capacity(changes.len());
+    for name in changes {
+        let c = find_change(spec_root, name)?;
+        if found
+            .iter()
+            .any(|(_, f): &(&str, super::Change)| f.name == c.name)
+        {
+            bail!("change `{}` is named more than once", c.name);
+        }
+        found.push((*name, c));
+    }
+    let mut reasons = Vec::new();
+    if !opts.force {
+        for (name, c) in &found {
+            reasons.extend(refusals(spec_root, name, &c.dir)?);
+        }
+    }
+    // Conflicts are refused even with --force: merging both would drop one change's edit.
+    reasons.extend(conflicts(&found)?);
+    if !reasons.is_empty() {
+        return Ok(Planned::Refused(reasons));
     }
 
-    // Merge everything in memory first: one failing delta writes nothing.
-    let delta_dir = c.dir.join("specs");
-    let mut writes: Vec<(PathBuf, String, SpecUpdate)> = Vec::new();
-    for file in spec_files(&delta_dir)? {
-        let rel = file
-            .parent()
-            .and_then(|p| p.strip_prefix(&delta_dir).ok())
-            .context("delta spec outside the change's specs folder")?;
-        let capability = rel.to_string_lossy().replace('\\', "/");
-        let target = spec_root.join("specs").join(rel).join("spec.md");
-        let current = if target.is_file() {
-            Some(read(&target)?)
-        } else {
-            None
-        };
-        let delta = read(&file)?;
-        let merged = merge(current.as_deref(), &delta, &capability, &c.name)?;
-        let update = SpecUpdate {
-            file: target.clone(),
-            created: current.is_none(),
-            added: merged.added,
-            modified: merged.modified,
-            removed: merged.removed,
-            renamed: merged.renamed,
-        };
-        writes.push((target, merged.text, update));
+    // The merged text of every spec touched so far, so changes to one capability chain.
+    let mut texts: BTreeMap<PathBuf, String> = BTreeMap::new();
+    let mut planned = Vec::with_capacity(found.len());
+    for (_, c) in found {
+        let dest = spec_root
+            .join("changes/archive")
+            .join(dated(&c.name, &opts.date));
+        if dest.exists() {
+            bail!("archive destination already exists: {}", dest.display());
+        }
+        let delta_dir = c.dir.join("specs");
+        let mut writes = Vec::new();
+        for file in spec_files(&delta_dir)? {
+            let rel = file
+                .parent()
+                .and_then(|p| p.strip_prefix(&delta_dir).ok())
+                .context("delta spec outside the change's specs folder")?;
+            let capability = rel.to_string_lossy().replace('\\', "/");
+            let target = spec_root.join("specs").join(rel).join("spec.md");
+            let current = match texts.get(&target) {
+                Some(t) => Some(t.clone()),
+                None if target.is_file() => Some(read(&target)?),
+                None => None,
+            };
+            let delta = read(&file)?;
+            let merged = merge(current.as_deref(), &delta, &capability, &c.name)?;
+            let update = SpecUpdate {
+                file: target.clone(),
+                created: current.is_none(),
+                added: merged.added,
+                modified: merged.modified,
+                removed: merged.removed,
+                renamed: merged.renamed,
+            };
+            texts.insert(target.clone(), merged.text.clone());
+            writes.push((target, merged.text, update));
+        }
+        planned.push(PlannedChange {
+            name: c.name,
+            dir: c.dir,
+            dest,
+            writes,
+        });
     }
-    let mut specs = Vec::new();
-    for (target, text, update) in writes {
-        if let Some(parent) = target.parent() {
+    Ok(Planned::Ready(Plan { changes: planned }))
+}
+
+/// Write every merged spec in `plan` and move each change to its archive folder.
+pub fn apply(plan: Plan) -> Result<Vec<Archived>> {
+    let mut out = Vec::with_capacity(plan.changes.len());
+    for c in plan.changes {
+        let mut specs = Vec::with_capacity(c.writes.len());
+        for (target, text, update) in c.writes {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("cannot create {}", parent.display()))?;
+            }
+            std::fs::write(&target, text)
+                .with_context(|| format!("cannot write {}", target.display()))?;
+            specs.push(update);
+        }
+        if let Some(parent) = c.dest.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("cannot create {}", parent.display()))?;
         }
-        std::fs::write(&target, text)
-            .with_context(|| format!("cannot write {}", target.display()))?;
-        specs.push(update);
+        std::fs::rename(&c.dir, &c.dest)
+            .with_context(|| format!("cannot move {} to {}", c.dir.display(), c.dest.display()))?;
+        out.push(Archived {
+            change: c.name,
+            specs,
+            dest: c.dest,
+        });
     }
-    if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("cannot create {}", parent.display()))?;
+    Ok(out)
+}
+
+/// Refuse, or merge every delta of `change` into `specs/` and move the change to the archive.
+pub fn archive(spec_root: &Path, change: &str, opts: &Options) -> Result<Outcome> {
+    match plan(spec_root, &[change], opts)? {
+        Planned::Refused(reasons) => Ok(Outcome::Refused(reasons)),
+        Planned::Ready(p) => {
+            let a = apply(p)?.pop().context("archive plan held no change")?;
+            Ok(Outcome::Archived {
+                specs: a.specs,
+                dest: a.dest,
+            })
+        }
     }
-    std::fs::rename(&c.dir, &dest)
-        .with_context(|| format!("cannot move {} to {}", c.dir.display(), dest.display()))?;
-    Ok(Outcome::Archived { specs, dest })
 }

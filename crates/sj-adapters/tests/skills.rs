@@ -4,7 +4,7 @@ use std::path::Path;
 
 use sj_adapters::skills::{self, Problem};
 
-const SKILLS: [&str; 9] = [
+const SKILLS: [&str; 10] = [
     "sj-explore",
     "sj-propose",
     "sj-clarify",
@@ -14,6 +14,7 @@ const SKILLS: [&str; 9] = [
     "sj-review",
     "sj-verify",
     "sj-finish",
+    "sj-onboard",
 ];
 
 const COVERAGE: &str = "| Tool | Item | Skill |
@@ -36,6 +37,7 @@ const COVERAGE: &str = "| Tool | Item | Skill |
 | OpenSpec | archive | sj-finish |
 | OpenSpec | sync | sj-finish |
 | OpenSpec | update | sj-propose |
+| OpenSpec | onboard | sj-onboard |
 | Spec Kit | constitution | sj-principles |
 | Spec Kit | specify | sj-propose |
 | Spec Kit | clarify | sj-clarify |
@@ -45,6 +47,12 @@ const COVERAGE: &str = "| Tool | Item | Skill |
 | Spec Kit | checklist | sj-review |
 | Spec Kit | implement | sj-apply |
 ";
+
+/// An onboarding body that satisfies SKILL-005..007.
+const ONBOARD: &str = "Stop if `git status` shows uncommitted changes or \
+`changes/sj-onboard-demo/` exists. Create the change `sj-onboard-demo` with `sj spec new`, \
+run `sj test DEMO-001` red, then green, then `sj task done`, then `sj verify`. At the end, \
+delete `changes/sj-onboard-demo/`, the demo test and the demo code. Don't archive it.";
 
 /// A body that satisfies every per-skill rule.
 fn body(name: &str) -> String {
@@ -56,6 +64,7 @@ fn body(name: &str) -> String {
         "sj-propose" => "Run `sj spec new`, then `sj spec validate` and `sj spec check`. Read principles.md and record each deviation in design.md.",
         "sj-clarify" => "Run `sj spec check`.",
         "sj-review" => "Read principles.md and record each deviation in design.md.",
+        "sj-onboard" => ONBOARD,
         _ => "Run `sj status`.",
     };
     format!("# {name}\n\n{needs}\n")
@@ -100,6 +109,7 @@ fn skill_001_coverage_is_complete() {
     let dir = valid();
     let coverage = COVERAGE
         .replace("| Superpowers | brainstorming | sj-explore |\n", "")
+        .replace("| OpenSpec | onboard | sj-onboard |\n", "")
         .replace(
             "| OpenSpec | sync | sj-finish |",
             "| OpenSpec | sync | sj-finish |\n| OpenSpec | sync | sj-apply |",
@@ -112,6 +122,7 @@ fn skill_001_coverage_is_complete() {
     let got = messages(dir.path());
     for want in [
         "coverage: Superpowers brainstorming is not mapped",
+        "coverage: OpenSpec onboard is not mapped",
         "coverage: OpenSpec sync is mapped twice",
         "coverage: Spec Kit plan maps to unknown skill sj-plan",
     ] {
@@ -123,8 +134,13 @@ fn skill_001_coverage_is_complete() {
 fn skill_001_a_missing_skill_or_coverage_file_fails() {
     let dir = valid();
     std::fs::remove_dir_all(dir.path().join("sj-clarify")).unwrap();
+    std::fs::remove_dir_all(dir.path().join("sj-onboard")).unwrap();
     std::fs::remove_file(dir.path().join("COVERAGE.md")).unwrap();
     let got = messages(dir.path());
+    assert!(
+        got.iter().any(|m| m == "sj-onboard: missing SKILL.md"),
+        "{got:?}"
+    );
     assert!(
         got.iter().any(|m| m == "sj-clarify: missing SKILL.md"),
         "{got:?}"
@@ -253,6 +269,9 @@ fn skill_004_planning_and_review_reference_the_principles_file() {
 #[test]
 fn skill_001_this_repos_skills_check_clean() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    for s in SKILLS {
+        assert!(dir.join(s).join("SKILL.md").is_file(), "{s} is not shipped");
+    }
     assert_eq!(messages(&dir), Vec::<String>::new());
 }
 
@@ -263,4 +282,76 @@ fn skill_002_this_repos_skill_bodies_are_within_the_limit() {
         let text = std::fs::read_to_string(dir.join(s).join("SKILL.md")).unwrap();
         assert!(text.len() <= 6000 + 400, "{s}: {} bytes", text.len());
     }
+}
+
+#[test]
+fn skill_001_openspec_onboard_maps_to_sj_onboard() {
+    let dir = valid();
+    let coverage = COVERAGE.replace("| OpenSpec | onboard | sj-onboard |\n", "");
+    put(dir.path(), "COVERAGE.md", &coverage);
+    std::fs::remove_dir_all(dir.path().join("sj-onboard")).unwrap();
+    let got = messages(dir.path());
+    for want in [
+        "coverage: OpenSpec onboard is not mapped",
+        "sj-onboard: missing SKILL.md",
+    ] {
+        assert!(got.iter().any(|m| m == want), "{want}: {got:?}");
+    }
+}
+
+fn onboard(body: &str) -> Vec<String> {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-onboard/SKILL.md",
+        &skill_md("sj-onboard", body),
+    );
+    messages(dir.path())
+}
+
+// spec: SKILL-005
+#[test]
+fn skill_005_onboard_names_the_full_loop() {
+    let got = onboard("Run `sj verify`, then `sj spec new`, then `sj test`.\n");
+    for want in [
+        "sj-onboard: does not name `sj task done`",
+        "sj-onboard: names `sj verify` before `sj spec new`",
+        "sj-onboard: does not name the scratch change sj-onboard-demo",
+    ] {
+        assert!(got.iter().any(|m| m == want), "{want}: {got:?}");
+    }
+    assert!(!onboard(ONBOARD).iter().any(|m| m.starts_with("sj-onboard")));
+}
+
+// spec: SKILL-006
+#[test]
+fn skill_006_onboard_cleans_up_after_itself() {
+    let got = onboard(&ONBOARD.replace(
+        "At the end, delete `changes/sj-onboard-demo/`, the demo test and the demo code. Don't archive it.",
+        "At the end, run `sj spec archive sj-onboard-demo`.",
+    ));
+    for want in [
+        "sj-onboard: does not delete changes/sj-onboard-demo/, the demo test and the demo code",
+        "sj-onboard: runs `sj spec archive`",
+    ] {
+        assert!(got.iter().any(|m| m == want), "{want}: {got:?}");
+    }
+}
+
+// spec: SKILL-007
+#[test]
+fn skill_007_onboard_refuses_a_dirty_start() {
+    let got = onboard(&ONBOARD.replace(
+        "Stop if `git status` shows uncommitted changes or `changes/sj-onboard-demo/` exists. ",
+        "",
+    ));
+    assert!(
+        got.iter().any(|m| m
+            == "sj-onboard: does not stop on uncommitted changes or an existing sj-onboard-demo"),
+        "{got:?}"
+    );
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let text = std::fs::read_to_string(dir.join("sj-onboard/SKILL.md")).unwrap();
+    assert!(text.len() <= 6000 + 400, "{} bytes", text.len());
+    assert_eq!(messages(&dir), Vec::<String>::new());
 }

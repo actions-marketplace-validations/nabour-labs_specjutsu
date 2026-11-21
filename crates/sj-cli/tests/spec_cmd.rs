@@ -358,3 +358,169 @@ fn spec_010_archive_creates_a_new_capability() {
         "# billing Specification\n\n## Purpose\nCharge customers monthly and send them an invoice.\n\n## Requirements\n"
     ), "{spec}");
 }
+
+/// `with_change` plus a second finished change, `add-login`, that adds to the same capability.
+fn with_two_changes(dir: &Path, refresh_tasks: &str) {
+    with_change(dir, "- **THEN** it is replaced\n");
+    put(dir, "openspec/changes/add-refresh/tasks.md", refresh_tasks);
+    put(
+        dir,
+        "openspec/changes/add-login/specs/auth/spec.md",
+        "## ADDED Requirements\n\n### Requirement: Session\nThe system SHALL keep a session.\n\n#### Scenario: AUTH-006 Session\n- **WHEN** a user logs in\n- **THEN** a session exists\n",
+    );
+    put(
+        dir,
+        "openspec/changes/add-login/tasks.md",
+        "# Tasks\n\n- [x] 1.1 Session (AUTH-006)\n",
+    );
+}
+
+/// Every file under `dir`, relative path to contents.
+fn snapshot(dir: &Path) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                let rel = p
+                    .strip_prefix(dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.insert(rel, std::fs::read_to_string(&p).unwrap());
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn spec_030_archive_several_finished_changes() {
+    let dir = project();
+    with_two_changes(dir.path(), "# Tasks\n\n- [x] 1.1 Rotate (AUTH-005)\n");
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    sj(dir.path(), &["archive", "add-login", "add-refresh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "archived add-login → openspec/changes/archive/{today}-add-login\n"
+        )))
+        .stdout(predicate::str::contains(format!(
+            "archived add-refresh → openspec/changes/archive/{today}-add-refresh\n"
+        )));
+    let root = dir.path().join("openspec");
+    for name in ["add-login", "add-refresh"] {
+        assert!(
+            !root.join("changes").join(name).exists(),
+            "{name} not moved"
+        );
+        assert!(root
+            .join(format!("changes/archive/{today}-{name}/tasks.md"))
+            .is_file());
+    }
+    // Both deltas land in the one spec: the second merge builds on the first.
+    let spec = std::fs::read_to_string(root.join("specs/auth/spec.md")).unwrap();
+    assert!(spec.contains("### Requirement: Session"), "{spec}");
+    assert!(spec.contains("### Requirement: Rotate"), "{spec}");
+    assert!(spec.contains("### Requirement: Revoke"), "{spec}");
+}
+
+#[test]
+fn spec_031_one_failing_change_archives_nothing() {
+    let dir = project();
+    with_two_changes(dir.path(), "# Tasks\n\n- [ ] 1.1 Rotate (AUTH-005)\n");
+    let before = snapshot(&dir.path().join("openspec"));
+    sj(dir.path(), &["archive", "add-login", "add-refresh"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("add-refresh"))
+        .stdout(predicate::str::contains("open task 1.1 Rotate (AUTH-005)"))
+        .stdout(predicate::str::contains("archived").not());
+    assert_eq!(snapshot(&dir.path().join("openspec")), before);
+}
+
+/// A change that MODIFIES `auth`'s `Login flow` with its own THEN line.
+fn modifies_login_flow(dir: &Path, change: &str, then_line: &str) {
+    put(
+        dir,
+        &format!("openspec/changes/{change}/specs/auth/spec.md"),
+        &format!(
+            "## MODIFIED Requirements\n\n### Requirement: Login flow\nThe system SHALL sign users in.\n\n#### Scenario: AUTH-001 Login works\n- **WHEN** asked\n- **THEN** {then_line}\n"
+        ),
+    );
+    put(
+        dir,
+        &format!("openspec/changes/{change}/tasks.md"),
+        "# Tasks\n\n- [x] 1.1 Login flow (AUTH-001)\n",
+    );
+}
+
+#[test]
+fn spec_032_two_changes_editing_one_requirement_are_refused() {
+    let dir = project();
+    put(
+        dir.path(),
+        "openspec/specs/auth/spec.md",
+        &auth_spec().replace("Requirement: Login\n", "Requirement: Login flow\n"),
+    );
+    modifies_login_flow(dir.path(), "add-login", "it sends a code");
+    modifies_login_flow(dir.path(), "add-sso", "it redirects to the provider");
+    let before = snapshot(&dir.path().join("openspec"));
+    sj(dir.path(), &["archive", "add-login", "add-sso"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("add-login"))
+        .stdout(predicate::str::contains("add-sso"))
+        .stdout(predicate::str::contains("auth: Login flow"))
+        .stdout(predicate::str::contains("archived").not());
+    assert_eq!(snapshot(&dir.path().join("openspec")), before);
+
+    // Each one alone still archives.
+    sj(dir.path(), &["archive", "add-login"]).assert().success();
+}
+
+#[test]
+fn spec_033_all_done_archives_only_finished_changes() {
+    let dir = project();
+    with_two_changes(dir.path(), "# Tasks\n\n- [x] 1.1 Rotate (AUTH-005)\n");
+    put(
+        dir.path(),
+        "openspec/changes/add-sso/specs/auth/spec.md",
+        "## ADDED Requirements\n\n### Requirement: Single sign-on\nThe system SHALL accept SSO.\n\n#### Scenario: AUTH-007 SSO\n- **WHEN** a provider signs a user in\n- **THEN** a session exists\n",
+    );
+    put(
+        dir.path(),
+        "openspec/changes/add-sso/tasks.md",
+        "# Tasks\n\n- [ ] 1.1 Provider (AUTH-007)\n- [ ] 1.2 Callback (AUTH-007)\n",
+    );
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let out = sj(dir.path(), &["archive", "--all-done"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let out = String::from_utf8(out).unwrap();
+    let archived: Vec<&str> = out.lines().filter(|l| l.starts_with("archived ")).collect();
+    assert_eq!(
+        archived,
+        vec![
+            format!("archived add-login → openspec/changes/archive/{today}-add-login"),
+            format!("archived add-refresh → openspec/changes/archive/{today}-add-refresh"),
+        ],
+        "{out}"
+    );
+    let changes = dir.path().join("openspec/changes");
+    assert!(changes.join("add-sso/tasks.md").is_file());
+    assert!(!changes.join("add-login").exists());
+    assert!(!changes.join("add-refresh").exists());
+
+    // Rerunning with nothing finished is a no-op.
+    sj(dir.path(), &["archive", "--all-done"])
+        .assert()
+        .success()
+        .stdout("nothing to archive\n");
+}

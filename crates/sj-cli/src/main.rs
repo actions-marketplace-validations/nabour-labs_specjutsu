@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 /// specjutsu — make AI coding agents prove their work.
 #[derive(Parser)]
@@ -140,6 +140,12 @@ enum Command {
         /// Replace generated files even when they were edited by hand.
         #[arg(long)]
         force: bool,
+        /// Print the files the update would write, keep or remove, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// With --dry-run: print the plan as `{"files": [{"path", "action"}]}`.
+        #[arg(long, requires = "dry_run")]
+        json: bool,
     },
     /// Detect an existing project's packages and runners and write specjutsu.toml.
     Adopt {
@@ -264,6 +270,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Print a shell completion script to stdout, e.g. `sj completions zsh > ~/.zfunc/_sj`.
+    Completions {
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
 }
 
 #[derive(clap::Args)]
@@ -323,9 +334,14 @@ enum SpecCommand {
         #[arg(long)]
         json: bool,
     },
-    /// Apply the change's deltas to specs/ and move it to changes/archive/.
+    /// Apply each change's deltas to specs/ and move it to changes/archive/. With several
+    /// changes, all are checked and merged first; one failure archives none.
     Archive {
-        change: String,
+        #[arg(required_unless_present = "all_done", num_args = 1..)]
+        changes: Vec<String>,
+        /// Archive every open change whose tasks are all checked, in name order.
+        #[arg(long, conflicts_with = "changes")]
+        all_done: bool,
         #[command(flatten)]
         args: SpecArgs,
         /// Archive despite validation errors and open tasks.
@@ -349,6 +365,29 @@ enum ImportCommand {
         #[arg(long)]
         json: bool,
     },
+}
+
+/// Shells `sj completions` supports, in the order the error message lists them.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+    #[value(name = "powershell")]
+    PowerShell,
+    Elvish,
+}
+
+impl From<CompletionShell> for clap_complete::Shell {
+    fn from(s: CompletionShell) -> Self {
+        match s {
+            CompletionShell::Bash => Self::Bash,
+            CompletionShell::Zsh => Self::Zsh,
+            CompletionShell::Fish => Self::Fish,
+            CompletionShell::PowerShell => Self::PowerShell,
+            CompletionShell::Elvish => Self::Elvish,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -462,8 +501,45 @@ fn run() -> Result<ExitCode> {
             agents_cmd(&root, &agents, false, false)
         }
         Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
-        Command::Update { root, force } => {
+        Command::Completions { shell } => {
+            let shell: clap_complete::Shell = shell.into();
+            clap_complete::generate(shell, &mut Cli::command(), "sj", &mut std::io::stdout());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Update {
+            root,
+            force,
+            dry_run,
+            json,
+        } => {
             let installed = installed_agents(&root);
+            if dry_run {
+                let steps = if installed.is_empty() {
+                    Vec::new()
+                } else {
+                    plan_agents(&root, &installed, force)?
+                };
+                if json {
+                    let files: Vec<_> = steps
+                        .iter()
+                        .map(|s| serde_json::json!({"path": s.path(), "action": s.action()}))
+                        .collect();
+                    let v = serde_json::json!({ "files": files });
+                    println!("{}", serde_json::to_string_pretty(&v)?);
+                    return Ok(ExitCode::SUCCESS);
+                }
+                if installed.is_empty() {
+                    println!("no adapters installed");
+                    return Ok(ExitCode::SUCCESS);
+                }
+                if steps.is_empty() {
+                    println!("adapters up to date");
+                }
+                for s in &steps {
+                    println!("{} {}", s.action(), s.path());
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
             if installed.is_empty() {
                 println!("no adapters installed");
                 return Ok(ExitCode::SUCCESS);
@@ -906,20 +982,31 @@ fn installed_agents(root: &Path) -> Vec<String> {
 
 /// Install or refresh each named adapter and print what changed. `agents` is resolved:
 /// no `auto`, and `agents-md` listed where it is implied.
-fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
-    use sj_adapters::{agents_md, claude, claude::Change, codex, cursor};
-    let mut changes = Vec::new();
+/// Every file installing or updating `agents` would write, keep or remove.
+fn plan_agents(
+    root: &Path,
+    agents: &[String],
+    force: bool,
+) -> Result<Vec<sj_adapters::plan::Step>> {
+    use sj_adapters::{agents_md, claude, codex, cursor};
+    let mut steps = Vec::new();
     for a in agents {
         match a.as_str() {
-            "claude" => changes.extend(claude::install(root, force)?),
-            "codex" => changes.extend(codex::install(root)?),
-            "cursor" => changes.extend(cursor::install(root)?),
+            "claude" => steps.extend(claude::plan(root, force)?),
+            "codex" => steps.extend(codex::plan(root)?),
+            "cursor" => steps.extend(cursor::plan(root)?),
             // Cline's hooks run only in its CLI, so it gets the shared instructions only.
             "cline" => {}
-            "agents-md" => changes.extend(agents_md::install(root)?),
+            "agents-md" => steps.extend(agents_md::plan(root)?),
             other => anyhow::bail!("unknown agent {other}"),
         }
     }
+    Ok(steps)
+}
+
+fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
+    use sj_adapters::claude::Change;
+    let changes = sj_adapters::plan::apply(plan_agents(root, agents, force)?)?;
     if changes.is_empty() {
         println!("adapters up to date");
     }
@@ -1251,7 +1338,8 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
         }
         SpecCommand::Show { item, args, json } => show_cmd(&item, &args, json),
         SpecCommand::Archive {
-            change,
+            changes,
+            all_done,
             args,
             force,
         } => {
@@ -1260,32 +1348,49 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 force,
                 date: chrono::Local::now().format("%Y-%m-%d").to_string(),
             };
-            match archive::archive(&spec_root, &change, &opts)? {
-                archive::Outcome::Refused(reasons) => {
+            let changes = if all_done {
+                archive::finished(&spec_root)?
+            } else {
+                changes
+            };
+            if changes.is_empty() {
+                println!("nothing to archive");
+                return Ok(ExitCode::SUCCESS);
+            }
+            let names: Vec<&str> = changes.iter().map(String::as_str).collect();
+            match archive::plan(&spec_root, &names, &opts)? {
+                archive::Planned::Refused(reasons) => {
                     println!("archive: refused");
                     for p in &reasons {
                         println!("fail    {}", location(p, &root));
                     }
                     Ok(ExitCode::from(1))
                 }
-                archive::Outcome::Archived { specs, dest } => {
-                    for s in &specs {
-                        let file = rel(&s.file, &root);
-                        if s.created {
-                            println!("created {file} (+{})", s.added);
-                        } else {
-                            println!(
-                                "updated {file} (+{} ~{} -{} →{})",
-                                s.added, s.modified, s.removed, s.renamed
-                            );
-                        }
+                archive::Planned::Ready(plan) => {
+                    for a in archive::apply(plan)? {
+                        print_archived(&a, &root);
                     }
-                    println!("archived {change} → {}", rel(&dest, &root));
                     Ok(ExitCode::SUCCESS)
                 }
             }
         }
     }
+}
+
+/// The lines for one archived change: each spec it wrote, then where it moved.
+fn print_archived(a: &sj_core::authoring::archive::Archived, root: &Path) {
+    for s in &a.specs {
+        let file = rel(&s.file, root);
+        if s.created {
+            println!("created {file} (+{})", s.added);
+        } else {
+            println!(
+                "updated {file} (+{} ~{} -{} →{})",
+                s.added, s.modified, s.removed, s.renamed
+            );
+        }
+    }
+    println!("archived {} → {}", a.change, rel(&a.dest, root));
 }
 
 fn import_speckit_cmd(args: &SpecArgs, write: bool, force: bool, json: bool) -> Result<ExitCode> {

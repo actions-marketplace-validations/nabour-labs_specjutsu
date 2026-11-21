@@ -6,7 +6,22 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `sj spec archive` takes several change names, or `--all-done` for every
+  change whose tasks are all done. They archive as one operation: if any one is
+  refused, nothing is written. Two changes that edit the same requirement are
+  refused, even with `--force`.
+- `sj update --dry-run` prints what an update would write, keep or remove, and
+  changes nothing. `--json` prints the same plan as JSON.
+- `sj completions <shell>` prints a completion script for bash, zsh, fish,
+  PowerShell or elvish.
+- The `sj-onboard` skill walks a new user through one toy change end to end in a
+  scratch change, `sj-onboard-demo`, then removes it. `skills/COVERAGE.md` maps
+  OpenSpec's `onboard` to it.
+
 ### Changed
+- `sj update` removes generated `sj-*` skills this version no longer ships,
+  unless you edited them.
 - `sj --version` prints the short git commit after the version when `sj` was
   built from a git checkout or with `cargo install --git`, such as
   `sj 0.4.0 (f62a48b)`. A crates.io install prints only the version, as before.
