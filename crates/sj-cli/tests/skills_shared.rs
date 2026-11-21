@@ -1,5 +1,5 @@
 //! The `sj-*` skills in the shared `.agents/skills/` folder, beside Claude Code's copy
-//! (openspec/changes/more-adapters-2).
+//! (specjutsu/changes/more-adapters-2).
 
 use std::path::Path;
 

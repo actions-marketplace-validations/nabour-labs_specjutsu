@@ -1,4 +1,4 @@
-//! GATE scenarios from openspec/changes/gate-open-change-base: base and head read an open
+//! GATE scenarios from specjutsu/changes/gate-open-change-base: base and head read an open
 //! change's copy of a scenario the same way.
 
 mod support;
