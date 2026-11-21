@@ -378,3 +378,92 @@ fn mig_007_a_migrated_project_is_ready_to_work() {
         .assert()
         .success();
 }
+
+fn read(repo: &support::Repo, path: &str) -> String {
+    std::fs::read_to_string(repo.path().join(path)).unwrap()
+}
+
+/// An Antigravity workflow as OpenSpec generates it: only a description, and a body that
+/// runs the OpenSpec CLI.
+fn opsx_workflow(what: &str) -> String {
+    format!(
+        "---\ndescription: \"{what}\"\n---\n\n{what}.\n\n1. Run `openspec status --change \"<name>\" --json`.\n"
+    )
+}
+
+#[test]
+fn mig_008_openspecs_antigravity_workflows_are_removed() {
+    let repo = support::Repo::with_lib("");
+    repo.write("openspec/specs/math/spec.md", SPEC);
+    repo.write("openspec/changes/.gitkeep", "");
+    repo.write(
+        ".agents/workflows/opsx-propose.md",
+        &opsx_workflow("Propose a change"),
+    );
+    repo.write(
+        ".agents/workflows/opsx-apply.md",
+        &opsx_workflow("Apply a change"),
+    );
+    let deploy = "---\ndescription: \"Deploy the app\"\n---\n\nRun `pnpm deploy`.\n";
+    repo.write(".agents/workflows/deploy.md", deploy);
+    let notes = "---\ndescription: \"Our notes on the OpenSpec workflow\"\n---\n\nRead `docs/notes.md` first.\n";
+    repo.write(".agents/workflows/opsx-notes.md", notes);
+    repo.commit("antigravity project");
+
+    migrate(repo.path(), &["--from", "openspec"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "remove .agents/workflows/opsx-propose.md (OpenSpec workflow)\n",
+        ))
+        .stdout(predicate::str::contains(
+            "remove .agents/workflows/opsx-apply.md (OpenSpec workflow)\n",
+        ))
+        .stdout(predicate::str::contains("deploy.md").not())
+        .stdout(predicate::str::contains("opsx-notes.md").not());
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+
+    assert!(!repo
+        .path()
+        .join(".agents/workflows/opsx-propose.md")
+        .exists());
+    assert!(!repo.path().join(".agents/workflows/opsx-apply.md").exists());
+    assert_eq!(read(&repo, ".agents/workflows/deploy.md"), deploy);
+    assert_eq!(read(&repo, ".agents/workflows/opsx-notes.md"), notes);
+}
+
+#[test]
+fn mig_010_detected_agents_get_their_adapters() {
+    let repo = support::Repo::with_lib("");
+    repo.write("openspec/specs/math/spec.md", SPEC);
+    repo.write("openspec/changes/.gitkeep", "");
+    repo.write("AGENTS.md", "# Agents\n\nProject rules.\n");
+    repo.write(".cursor/rules/style.mdc", "Use tabs.\n");
+    repo.commit("cursor project");
+
+    migrate(repo.path(), &["--from", "openspec"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("change AGENTS.md (adapter)\n"))
+        .stdout(predicate::str::contains(
+            "create .cursor/hooks.json (adapter)\n",
+        ));
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+
+    let agents = read(&repo, "AGENTS.md");
+    assert!(
+        agents.starts_with("# Agents\n\nProject rules.\n"),
+        "{agents}"
+    );
+    assert!(agents.contains("sj next"), "{agents}");
+    assert!(read(&repo, ".cursor/hooks.json").contains("sj hook cursor pre-edit"));
+    assert!(repo
+        .path()
+        .join(".claude/skills/sj-apply/SKILL.md")
+        .is_file());
+    assert!(read(&repo, "CLAUDE.md").contains("sj next"));
+}
