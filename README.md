@@ -139,6 +139,29 @@ cargo install --list | grep -A1 specjutsu   # the installed build and its source
 checkout, such as `sj 0.5.0 (f62a48b)`, and only the version for a crates.io
 install. Open agent sessions use the new binary on their next hook call.
 
+### Let your agent install it
+
+The `specjutsu` setup skill takes an agent from no `sj` to a checked setup: it
+installs `sj` (asking first), runs `sj adopt` on an existing project or `sj init` on
+a new one, installs the agent adapters with `sj init --agents auto`, and finishes
+with `sj doctor` and `sj status`. It never replaces an existing `specjutsu.toml`.
+Add it with the [skills CLI](https://skills.sh), where it is also the `/specjutsu`
+command in Claude Code:
+
+```bash
+npx skills add nabour-labs/specjutsu --skill specjutsu
+```
+
+Or paste this into any agent:
+
+```text
+Set up specjutsu in this project: read
+https://raw.githubusercontent.com/nabour-labs/specjutsu/main/skills/specjutsu/SKILL.md
+and follow it.
+```
+
+Once set up, the project has the `sj-*` skills, so the setup skill isn't needed again.
+
 ### Shell completions
 
 `sj completions <shell>` prints a completion script for `bash`, `zsh`, `fish`,
@@ -751,7 +774,8 @@ takes `--json`, except `sj task done`.
 
 ## Skills
 
-`skills/` holds ten agent skills that cover spec-driven work from idea to merge.
+`skills/` holds ten agent skills that cover spec-driven work from idea to merge,
+plus the setup skill `specjutsu` (see [Let your agent install it](#let-your-agent-install-it)).
 Each one drives the work through `sj` commands instead of having the agent read
 spec folders and logs:
 
@@ -778,7 +802,7 @@ change, the demo test and the demo code without archiving, so `specs/` is unchan
 its skill. `cargo test` checks the skills: frontmatter whose description says when
 to use the skill, a body of at most 6,000 bytes, no commands from the tools they
 replace, the `sj` commands each workflow needs, and complete coverage. Agent
-adapters install them.
+adapters install the ten `sj-*` skills; the setup skill is fetched on its own.
 
 ## The Claude Code adapter
 

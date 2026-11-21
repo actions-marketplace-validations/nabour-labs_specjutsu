@@ -1196,6 +1196,10 @@ fn adopt_cmd(root: &Path, dry_run: bool, force: bool) -> Result<ExitCode> {
         print!("{}", config.to_toml());
     } else {
         std::fs::write(&file, config.to_toml())?;
+        let spec_root = root.join(&config.spec_root);
+        for dir in ["specs", "changes"] {
+            std::fs::create_dir_all(spec_root.join(dir))?;
+        }
         println!(
             "adopt: wrote {FILE} (spec root {}, {})",
             config.spec_root,

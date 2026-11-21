@@ -355,3 +355,86 @@ fn skill_007_onboard_refuses_a_dirty_start() {
     assert!(text.len() <= 6000 + 400, "{} bytes", text.len());
     assert_eq!(messages(&dir), Vec::<String>::new());
 }
+
+/// A setup skill body that satisfies SKILL-008 and SKILL-009.
+const SETUP: &str = "Run `sj --version`. If it is missing, ask the user, then run `install.sh`, \
+or `cargo install specjutsu` on Windows. Keep an existing `specjutsu.toml`. Run `sj adopt` on \
+an existing project, then `sj init --agents auto`, then `sj doctor` and `sj status`.";
+
+fn setup(body: &str) -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    put(
+        dir.path(),
+        "specjutsu/SKILL.md",
+        &skill_md("specjutsu", body),
+    );
+    skills::check_setup(dir.path())
+        .unwrap()
+        .iter()
+        .map(Problem::to_string)
+        .collect()
+}
+
+#[test]
+fn skill_008_the_setup_skill_names_the_setup_steps_in_order() {
+    assert_eq!(setup(SETUP), Vec::<String>::new());
+    let got = setup(&SETUP.replace("`sj doctor` and ", ""));
+    assert!(
+        got.contains(&"specjutsu: does not name `sj doctor`".to_string()),
+        "{got:?}"
+    );
+    let swapped = "Ask the user. Keep `specjutsu.toml`. Run `sj --version`, `install.sh`, \
+`cargo install specjutsu`, `sj init --agents auto`, then `sj adopt`, `sj doctor`, `sj status`.";
+    let got = setup(swapped);
+    assert!(
+        got.contains(&"specjutsu: names `sj init --agents` before `sj adopt`".to_string()),
+        "{got:?}"
+    );
+    let got = setup(&SETUP.replace("`cargo install specjutsu`", "a build from source"));
+    assert!(
+        got.contains(&"specjutsu: does not name `cargo install specjutsu`".to_string()),
+        "{got:?}"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let got: Vec<String> = skills::check_setup(dir.path())
+        .unwrap()
+        .iter()
+        .map(Problem::to_string)
+        .collect();
+    assert_eq!(got, vec!["specjutsu: missing SKILL.md".to_string()]);
+}
+
+#[test]
+fn skill_009_the_setup_skill_never_forces() {
+    let got = setup(&format!("{SETUP} If that fails, run `sj init --force`."));
+    assert!(
+        got.contains(&"specjutsu: passes `--force`".to_string()),
+        "{got:?}"
+    );
+    let got = setup(
+        &SETUP
+            .replace("ask the user, then ", "")
+            .replace("Keep an existing `specjutsu.toml`. ", ""),
+    );
+    assert!(
+        got.contains(&"specjutsu: does not ask before installing".to_string()),
+        "{got:?}"
+    );
+    assert!(
+        got.contains(&"specjutsu: does not keep an existing specjutsu.toml".to_string()),
+        "{got:?}"
+    );
+}
+
+#[test]
+fn skill_008_this_repos_setup_skill_checks_clean() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got: Vec<String> = skills::check_setup(&dir)
+        .unwrap()
+        .iter()
+        .map(Problem::to_string)
+        .collect();
+    assert_eq!(got, Vec::<String>::new());
+    let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/skills/specjutsu");
+    assert!(!assets.exists(), "the setup skill must not be embedded");
+}

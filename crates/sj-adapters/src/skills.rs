@@ -78,11 +78,10 @@ const DEMO: &str = "sj-onboard-demo";
 /// Commands `sj-onboard` must name, in this order (SKILL-005).
 const ONBOARD_LOOP: [&str; 4] = ["sj spec new", "sj test", "sj task done", "sj verify"];
 
-/// The onboarding walk-through: the full loop, cleanup without archiving, and a clean start.
-fn check_onboard(text: &str, out: &mut Vec<Problem>) {
-    let name = "sj-onboard";
+/// Each command in `cmds` is named, and first named after the ones before it.
+fn in_order(name: &str, text: &str, cmds: &[&str], out: &mut Vec<Problem>) {
     let mut found: Vec<(&str, usize)> = Vec::new();
-    for c in ONBOARD_LOOP {
+    for &c in cmds {
         let Some(at) = text.find(c) else {
             out.push(problem(name, format!("does not name `{c}`")));
             continue;
@@ -93,6 +92,42 @@ fn check_onboard(text: &str, out: &mut Vec<Problem>) {
         }
         found.push((c, at));
     }
+}
+
+/// The setup skill, for agents that may not have `sj` yet (SKILL-008, SKILL-009). It lives
+/// in `skills/` beside the `sj-*` set but is not embedded in the adapters.
+pub const SETUP: &str = "specjutsu";
+
+/// Steps the setup skill must name, in this order (SKILL-008).
+const SETUP_STEPS: [&str; 6] = [
+    "sj --version",
+    "install.sh",
+    "sj adopt",
+    "sj init --agents",
+    "sj doctor",
+    "sj status",
+];
+
+fn check_setup_text(text: &str, out: &mut Vec<Problem>) {
+    in_order(SETUP, text, &SETUP_STEPS, out);
+    if !text.contains("cargo install specjutsu") {
+        out.push(problem(SETUP, "does not name `cargo install specjutsu`"));
+    }
+    if text.contains("--force") {
+        out.push(problem(SETUP, "passes `--force`"));
+    }
+    if !text.to_ascii_lowercase().contains("ask") {
+        out.push(problem(SETUP, "does not ask before installing"));
+    }
+    if !text.contains("specjutsu.toml") {
+        out.push(problem(SETUP, "does not keep an existing specjutsu.toml"));
+    }
+}
+
+/// The onboarding walk-through: the full loop, cleanup without archiving, and a clean start.
+fn check_onboard(text: &str, out: &mut Vec<Problem>) {
+    let name = "sj-onboard";
+    in_order(name, text, &ONBOARD_LOOP, out);
     if !text.contains(DEMO) {
         out.push(problem(
             name,
@@ -251,6 +286,9 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     if name == "sj-onboard" {
         check_onboard(&text, out);
     }
+    if name == SETUP {
+        check_setup_text(&text, out);
+    }
     if PRINCIPLED.contains(&name) {
         if !text.contains("principles.md") {
             out.push(problem(name, "does not name principles.md"));
@@ -322,5 +360,12 @@ pub fn check(skills_dir: &Path) -> Result<Vec<Problem>> {
         check_skill(skills_dir, name, &mut out)?;
     }
     check_coverage(skills_dir, &mut out)?;
+    Ok(out)
+}
+
+/// Every problem in the setup skill `skills_dir/specjutsu/SKILL.md` (SKILL-008, SKILL-009).
+pub fn check_setup(skills_dir: &Path) -> Result<Vec<Problem>> {
+    let mut out = Vec::new();
+    check_skill(skills_dir, SETUP, &mut out)?;
     Ok(out)
 }

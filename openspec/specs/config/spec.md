@@ -127,3 +127,10 @@ The system SHALL read project context from `<spec_root>/principles.md` on every 
 #### Scenario: CONF-030 A build from a checkout shows its commit
 - **WHEN** `sj` is built from a checkout whose `git rev-parse --short HEAD` is `f62a48b` and the package version is `0.4.0`
 - **THEN** `sj --version` prints `sj 0.4.0 (f62a48b)`
+
+### Requirement: sj adopt creates the spec folders
+When `sj adopt` writes `specjutsu.toml`, it SHALL also create `<spec_root>/specs/` and `<spec_root>/changes/` when they are missing, and leave existing ones untouched. `sj adopt --dry-run` SHALL create no folder.
+
+#### Scenario: CONF-034 Adopt creates the spec folders
+- **WHEN** `sj adopt` runs in a repository with a root `Cargo.toml` and no spec folders, and `sj doctor` runs after it
+- **THEN** `specjutsu/specs/` and `specjutsu/changes/` exist and `sj doctor` reports no `missing spec root` line; and `sj adopt --dry-run` in the same kind of repository creates neither folder
