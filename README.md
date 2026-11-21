@@ -2,6 +2,8 @@
 
 **Master the art of the spec.**
 
+**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**
+
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-specjutsu%20gate-2ea44f?logo=github)](https://github.com/marketplace/actions/specjutsu-gate)
 
 **The quality gate for AI-generated code.** specjutsu stops your coding agent from
