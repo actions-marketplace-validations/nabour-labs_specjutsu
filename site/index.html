@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>specjutsu — Master the art of the spec</title>
 <link rel="canonical" href="https://nabour-labs.github.io/specjutsu/">
-<meta name="description" content="specjutsu is an open-source, single-binary CLI that makes AI coding agents prove their work: every spec scenario gets a test, every test fails first, and CI refuses anything unproven.">
+<meta name="description" content="specjutsu is the power tool for spec-driven development with AI: an open-source, single-binary CLI that makes coding agents prove their work at minimal token cost: every spec scenario gets a test, every test fails first, and CI refuses anything unproven.">
 <meta property="og:title" content="specjutsu — Master the art of the spec">
 <meta property="og:description" content="AI agents that prove their work. Every scenario tested, every test red first, every merge verified.">
 <meta property="og:image" content="https://nabour-labs.github.io/specjutsu/assets/og.jpg">
@@ -46,6 +46,7 @@
   <div class="wrap hero-copy">
     <span class="pill"><span class="dot"></span>v0.4.0 · open source · MIT · single binary</span>
     <h1>Master the art<br>of the <span class="grad-text">spec.</span></h1>
+    <p class="lede">The <strong>power tool for spec-driven development with AI</strong>: OpenSpec or Spec Kit on steroids, at a fraction of the token cost.</p>
     <p class="lede">The <strong>quality gate for AI-generated code</strong>. Every spec scenario gets a test, every test fails first, and one GitHub Action refuses the pull request until both hold.</p>
     <div class="cta">
       <a class="btn primary" href="#quickstart">Get started in 60 seconds</a>
@@ -277,7 +278,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
       <h2>Your agent's sensei.</h2>
       <p class="section-lede" style="margin-bottom:0">specjutsu never calls an LLM. It's the deterministic referee your agent reports to, and CI calls the same binary, so local and CI results always agree.</p>
       <div class="agent-list">
-        <span class="first">Claude Code</span><span>Cursor</span><span>Antigravity</span><span>Codex</span><span>GitHub Copilot</span>
+        <span class="first">Claude Code</span><span>Codex</span><span>Cursor</span><span>Cline</span><span>AGENTS.md</span>
       </div>
       <ul class="checks">
         <li><strong>Failures-only output:</strong> a green run prints one line; a red run shows only the failing tests and their scenarios.</li>
@@ -287,7 +288,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
         <li><strong>Ten <code>sj-*</code> skills:</strong> explore, propose, clarify, principles, apply, debug, review, verify, finish and onboard, each driven by <code>sj</code> commands.</li>
         <li><strong>Any language, any repo:</strong> Rust, vitest, Jest, Playwright and pytest today, plus any runner that writes JUnit XML. Monorepos get per-package suites.</li>
       </ul>
-      <p style="color:var(--muted);font-size:14px;margin-top:16px">The Claude Code adapter ships in v0.3.0 (<code>sj init --agents claude</code>). Cursor, Antigravity, Codex and Copilot follow in v0.5.</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:16px">Claude Code since v0.3.0; Codex, Cursor, Cline and a shared <code>AGENTS.md</code> since v0.4.0 (<code>sj init --agents auto</code>). Copilot, Gemini CLI, Windsurf, Kiro and Antigravity follow in v0.6.</p>
     </div>
   </div>
 </section>
@@ -347,7 +348,10 @@ sj migrate --from openspec --write</pre>
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.1</div><p><code>sj trace</code> on OpenSpec + <code>cargo test</code>; CI report.</p></div>
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.2</div><p><code>sj gate</code> with red-on-base. Blocking on this repo.</p></div>
       <div class="milestone done"><span class="state">shipped</span><div class="v">v0.3</div><p>vitest, Jest, Playwright, pytest and JUnit; monorepos; <code>sj spec</code>, <code>status</code>, <code>next</code>, <code>verify</code>; Claude Code adapter and skills; <code>sj migrate</code>.</p></div>
-      <div class="milestone next"><span class="state">next</span><div class="v">v0.5</div><p>Cursor, Antigravity, Codex and Copilot adapters; token benchmark; public launch.</p></div>
+      <div class="milestone done"><span class="state">shipped</span><div class="v">v0.4</div><p>Codex, Cursor and Cline adapters and a shared <code>AGENTS.md</code>; <code>sj spec show</code>, <code>sj view</code>, <code>sj instructions</code>.</p></div>
+      <div class="milestone next"><span class="state">next</span><div class="v">v0.5 beta</div><p>Bulk archive, completions and onboarding; public token benchmark; beta launch.</p></div>
+      <div class="milestone"><span class="state">planned</span><div class="v">v0.6</div><p>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters.</p></div>
+      <div class="milestone"><span class="state">planned</span><div class="v">v0.7</div><p>Custom workflow schemas; spec stores and worksets across repos.</p></div>
     </div>
   </div>
 </section>
@@ -356,7 +360,7 @@ sj migrate --from openspec --write</pre>
   <div class="wrap">
     <img class="mark" src="assets/sj-mark.png" alt="specjutsu SJ logo" width="120" height="120" loading="lazy">
     <h2>Stop trusting. Start proving.</h2>
-    <p class="section-lede" style="margin:0 auto 30px">Star the repo to follow the road to v0.5, or send your first PR: adding a test runner or an agent adapter is the intended way in.</p>
+    <p class="section-lede" style="margin:0 auto 30px">Star the repo to follow the road to the v0.5 beta, or send your first PR: adding a test runner or an agent adapter is the intended way in.</p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/nabour-labs/specjutsu">Star on GitHub</a>
       <a class="btn" href="https://github.com/nabour-labs/specjutsu/blob/main/CONTRIBUTING.md">Contribute</a>

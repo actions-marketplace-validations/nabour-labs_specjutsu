@@ -2,15 +2,35 @@
 
 **Master the art of the spec.**
 
-**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**
+**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-specjutsu%20gate-2ea44f?logo=github)](https://github.com/marketplace/actions/specjutsu-gate)
+
+**The power tool for spec-driven development with AI.** Think OpenSpec or Spec Kit on
+steroids: the same durable Markdown specs, plus a deterministic engine that proves your
+coding agent actually built them, at a fraction of the token cost.
 
 **The quality gate for AI-generated code.** specjutsu stops your coding agent from
 shipping work it can't prove: every spec scenario gets a test, every test must fail
 before the code exists, and the pull request is refused until both hold. It's one
 open-source binary and one GitHub Action, with no LLM in the loop: every check is
 deterministic, so CI gives the same answer every time.
+
+## Verification, not vibes
+
+specjutsu does in the binary and in CI what other spec-driven tools hand to the model.
+
+- **Proof, not promises.** Every spec scenario is traced to a test. A scenario with
+  no test, or a test pointing at a scenario that no longer exists, blocks the merge.
+- **Red first, for real.** CI runs your new tests against the old code. If they
+  already pass there, they didn't drive the change, and the gate says so.
+- **Fewer tokens.** If a program can decide it, the binary does it and hands your
+  agent a few lines, not whole folders and raw test logs. `sj next` gives the agent
+  one task's scenarios, files and test commands; a green test run prints one line;
+  a red one prints only the failing tests and their scenarios. Every command takes
+  `--json`.
+
+## One Action, every pull request
 
 ```yaml
 # .github/workflows/specjutsu.yml
@@ -37,14 +57,16 @@ tests, lost assertions, and dependencies that don't exist. See
 
 Under the Action is `sj`, a CLI that covers the whole loop: authoring (`sj spec`),
 the agent's working loop (`sj status`, `next`, `verify`), the proof layer
-(`sj trace`, `sj test`, `sj gate`), a Claude Code adapter with ten skills, and
-`sj migrate`. Its spec format is OpenSpec's, so existing `openspec/` folders work
-unchanged, and it replaces the OpenSpec, Spec Kit and Superpowers stack.
+(`sj trace`, `sj test`, `sj gate`), adapters for Claude Code, Codex, Cursor, Cline
+and `AGENTS.md` with ten skills, and `sj migrate`. Its spec format is OpenSpec's, so
+existing `openspec/` folders work unchanged, and it replaces the OpenSpec, Spec Kit
+and Superpowers stack with one binary.
 
-**Best in class for spec-driven development.** specjutsu aims to be the best tool for
-spec-driven development (SDD), and it is the only one that proves the work. OpenSpec, Spec
-Kit, Kiro, Superpowers and BMAD stop at writing the spec, or ask a model whether the code
-matches it. specjutsu checks it deterministically:
+## How specjutsu compares
+
+OpenSpec, Spec Kit, Kiro, Superpowers and BMAD stop at writing the spec, or ask a model
+whether the code matches it. specjutsu is the only spec-driven tool that proves the work,
+and it checks it deterministically:
 
 | | OpenSpec | Spec Kit | Kiro | Superpowers | **specjutsu** |
 | --- | --- | --- | --- | --- | --- |
@@ -54,22 +76,24 @@ matches it. specjutsu checks it deterministically:
 | Test-tampering checks | No | No | No | No | **Yes, `sj audit`** |
 | Bug fix proven not to break nearby behaviour | No | LLM | LLM | No | **Yes, `[keep]` scenarios** |
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
+| Runtime needed | Node | Python + uv | IDE | None | **None: single binary** |
 
 specjutsu is not ahead everywhere yet: OpenSpec parity (more agents, custom workflow
-schemas, multi-repo spec stores) is planned for v0.6 and v0.7, and specs inferred
-from existing tests and property scenarios go further. See
-[How specjutsu compares](docs/competitive-analysis.md) for the full comparison, its
-sources, and the change that closes each gap.
+schemas, multi-repo spec stores) is planned for v0.6 and v0.7, a public token
+benchmark for v0.5, and specs inferred from existing tests and property scenarios go
+further. See [How specjutsu compares](docs/competitive-analysis.md) for the full
+comparison, its sources, and the change that closes each gap.
 
-**Website:** [nabour-labs.github.io/specjutsu](https://nabour-labs.github.io/specjutsu/) ·
-**[User manual](https://nabour-labs.github.io/specjutsu/manual.html)**: install, your first
-change, CI setup, agent setup and the command reference.
+## Status
 
-**Status:** pre-alpha, v0.4.0. `sj trace`, `sj test` and `sj gate` work with
-Rust, vitest, Jest, Playwright and pytest, and any runner that writes JUnit XML.
-Adapters install into Claude Code, Codex, Cursor, Cline and any agent that reads
-`AGENTS.md`. See the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
-and [analysis](docs/analysis.md).
+**Pre-alpha, v0.4.0. Beta is next**: it opens once specjutsu has fully replaced
+OpenSpec and Superpowers in our own production monorepo. `sj trace`, `sj test` and
+`sj gate` work with Rust, vitest, Jest, Playwright and pytest, and any runner that
+writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline and any
+agent that reads `AGENTS.md`. See the [user manual](https://nabour-labs.github.io/specjutsu/manual.html)
+for install, your first change, CI setup, agent setup and the command reference, and
+the [design doc](docs/specjutsu%20%E2%80%94%20Project%20Kickoff%20%26%20Design.md)
+and [analysis](docs/analysis.md) for the thinking behind it.
 
 ## Install
 
@@ -911,7 +935,10 @@ uncommitted. Review them with `git diff`, and undo them with
 | v0.1 | `sj trace` on OpenSpec + `cargo test`; non-blocking CI report |
 | v0.2 | `sj gate` with red-on-base |
 | v0.3 | vitest, Jest, Playwright, pytest and JUnit suites; `specjutsu.toml`; `sj ids`, `sj spec`, `status`, `next`, `verify`; Claude Code adapter and skills; Spec Kit import; `sj migrate` |
-| v0.5 | More agent adapters, token benchmark, public launch |
+| v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
+| v0.5 (beta) | Bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; public token benchmark against the tools specjutsu replaces; beta launch |
+| v0.6 | OpenSpec parity: Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters and shared `.agents/skills/` |
+| v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing
 
