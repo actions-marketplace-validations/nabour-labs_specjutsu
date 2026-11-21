@@ -19,6 +19,20 @@ All notable changes are recorded here. The format follows
   spec folder no longer reports every scenario as added and green on base.
 
 ### Added
+- Gemini CLI adapter, `sj init --agents gemini`: a `BeforeTool` pre-edit hook
+  for `write_file` and `replace` in `.gemini/settings.json`, and `AGENTS.md`
+  added to `context.fileName` (a missing setting becomes
+  `["GEMINI.md", "AGENTS.md"]`). `auto` picks it for `.gemini/` or `GEMINI.md`.
+- Antigravity adapter, `sj init --agents antigravity`: a `PreToolUse` pre-edit
+  hook in `.agents/hooks.json` and the `AGENTS.md` block. `auto` picks it for
+  `.agents/rules/` or `.agent/rules/`.
+- Codex, Gemini CLI and Antigravity get the `sj-*` skills in `.agents/skills/`,
+  beside `.claude/skills/`. `sj update` keeps both copies in step, and removing
+  the last of the three removes them, keeping your own skills.
+- `--global` on `sj init`, `sj update` and `sj init --remove-agents` installs,
+  refreshes or removes only the skills, in `~/.claude/skills/` and
+  `~/.agents/skills/`. `sj doctor` prints `skills: project`, `global` or
+  `project, global`.
 - `sj migrate --from openspec` removes OpenSpec's Antigravity workflows,
   `.agents/workflows/opsx-*.md`, when the frontmatter holds only a
   `description` and the body runs the `openspec` CLI. Other workflows stay.
