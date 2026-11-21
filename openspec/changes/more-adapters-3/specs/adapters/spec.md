@@ -37,3 +37,20 @@ The `windsurf` adapter SHALL add a `pre_write_code` entry to `.windsurf/hooks.js
 - **WHEN** `sj hook windsurf pre-edit` and `sj hook kiro pre-edit` each receive input that is not valid JSON
 - **THEN** each exits 0 and prints a warning on stderr naming the problem
 
+
+## MODIFIED Requirements
+
+### Requirement: Several agents install in one command
+`sj init --agents <list>` SHALL accept a comma-separated list of `claude`, `codex`, `cursor`, `cline`, `copilot`, `gemini`, `windsurf`, `kiro`, `antigravity` and `agents-md`, and SHALL install each one with the same rules as the Claude Code adapter: create missing files, never remove or reorder content it did not write. An unknown name SHALL be a usage error listing the supported names, and nothing SHALL be written. Every agent but `claude` SHALL imply `agents-md`. `sj init --remove-agents <list>` SHALL remove each one and restore every other byte.
+
+#### Scenario: ADAPT-011 Installing two agents writes AGENTS.md once
+- **WHEN** `sj init --agents codex,cursor` runs in a repository whose `AGENTS.md` has 30 lines of project rules
+- **THEN** `AGENTS.md` holds exactly one specjutsu block after the 30 unchanged lines, and the Codex and Cursor hook files are written
+
+#### Scenario: ADAPT-012 An unknown agent writes nothing
+- **WHEN** `sj init --agents claude,zed` runs
+- **THEN** it exits 2 with an error that starts `unknown agent zed (supported: claude, codex, cursor, cline, `, names `copilot`, `windsurf`, `kiro` and `antigravity`, ends `agents-md, auto)`, and no file changes
+
+#### Scenario: ADAPT-013 Install then remove restores AGENTS.md and the hook files
+- **WHEN** `sj init --agents codex,cursor,cline` and then `sj init --remove-agents codex,cursor,cline` run in a repository with an existing `AGENTS.md`, `.codex/config.toml` and `.cursor/hooks.json`
+- **THEN** those three files are byte-identical to before the install, and no other file was created or left behind

@@ -44,10 +44,8 @@ fn gate_045_a_merged_unarchived_change_is_not_modified_again() {
     let r = run(&opts(&repo)).unwrap();
     assert_eq!(r.changes.get("AUTH-001"), None, "{:?}", r.changes);
     assert!(r.pass, "{:?}", r.failures);
-}
 
-#[test]
-fn gate_046_keep_a_new_change_modifying_a_scenario_is_still_modified() {
+    // A new change modifying a scenario in `specs/` is still modified.
     let repo = Repo::with_lib(ADD_OK);
     repo.write("openspec/specs/auth/spec.md", OLD);
     repo.write("tests/auth.rs", ADD_TEST);
@@ -56,7 +54,6 @@ fn gate_046_keep_a_new_change_modifying_a_scenario_is_still_modified() {
     repo.write("openspec/changes/remember/proposal.md", "## Why\n\nTest.\n");
     repo.write("openspec/changes/remember/specs/auth/spec.md", &modified());
     repo.commit("spec(remember)");
-
     let r = run(&opts(&repo)).unwrap();
     assert_eq!(r.changes.get("AUTH-001"), Some(&Change::Modified));
 }

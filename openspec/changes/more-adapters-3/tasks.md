@@ -7,6 +7,7 @@ Builds on `more-adapters-2` (stacked on its branch). Each task group lands as tw
 - [x] 1.1 Add `copilot`, `windsurf`, `kiro` to the agent list and `auto` detection; install and removal round trip for all five agents of the second wave (ADAPT-023, ADAPT-024).
 - [x] 1.2 [P] Copilot: `.github/hooks/specjutsu.json`, protocol, default-branch notice (ADAPT-026, ADAPT-027).
 - [x] 1.3 [P] Shared exit-code protocol for Windsurf and Kiro, with fail-open on bad input (ADAPT-028, ADAPT-029, ADAPT-031).
+- [x] 1.4 The unknown-agent error names the new agents; ADAPT-011 and ADAPT-013 stay green (ADAPT-012, ADAPT-011, ADAPT-013).
 
 ## 2. Checks and docs
 

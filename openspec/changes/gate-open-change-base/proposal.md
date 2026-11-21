@@ -14,7 +14,7 @@ Kind: bug
 
 ## Unchanged Behaviour
 
-- A pull request that adds an open change modifying a scenario in `specs/` still classifies it modified.
+- A pull request that adds an open change modifying a scenario in `specs/` still classifies it modified. GATE-045 checks this too, rather than a separate `[keep]` scenario: the pinned `sj` 0.3.0 that gates CI doesn't know `[keep]` yet.
 
 ## Impact
 
