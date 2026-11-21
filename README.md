@@ -86,7 +86,7 @@ comparison, its sources, and the change that closes each gap.
 
 ## Status
 
-**Pre-alpha, v0.4.0. Beta is next**: it opens once specjutsu has fully replaced
+**Pre-alpha, v0.5.0. Beta is next**: it opens once specjutsu has fully replaced
 OpenSpec and Superpowers in our own production monorepo. `sj trace`, `sj test` and
 `sj gate` work with Rust, vitest, Jest, Playwright and pytest, and any runner that
 writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline and any
@@ -103,7 +103,7 @@ from [crates.io](https://crates.io/crates/specjutsu) or from the git tag:
 
 ```bash
 cargo install specjutsu
-cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.4.0 specjutsu
+cargo install --git https://github.com/nabour-labs/specjutsu --tag v0.5.0 specjutsu
 ```
 
 To update, install again with `--force`. To get a fix that is merged but not yet
@@ -116,7 +116,7 @@ cargo install --list | grep -A1 specjutsu   # the installed build and its source
 ```
 
 `sj --version` prints the commit after the version for a build from a git
-checkout, such as `sj 0.4.0 (f62a48b)`, and only the version for a crates.io
+checkout, such as `sj 0.5.0 (f62a48b)`, and only the version for a crates.io
 install. Open agent sessions use the new binary on their next hook call.
 
 ### Shell completions
