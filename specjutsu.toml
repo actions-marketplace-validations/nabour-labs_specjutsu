@@ -12,3 +12,4 @@ tests = ["**/*.rs"]
 
 [ids.prefixes]
 adapters = "ADAPT"
+distribution = "DIST"

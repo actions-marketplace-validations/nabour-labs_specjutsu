@@ -30,6 +30,10 @@ After editing anything in `skills/` or `adapters/claude/`, run
 `./scripts/sync-adapter-assets.sh`: the `sj-adapters` crate embeds a copy so it can be
 published, and `cargo test` fails while the copy is stale.
 
+The tests for `scripts/install.ps1` run it with `pwsh`, which every GitHub-hosted runner
+has. To run them locally, install PowerShell 7 (`brew install powershell` on macOS);
+without it those two tests fail with `pwsh not found`.
+
 ## Issues and pull requests
 
 Anyone can [open an issue](https://github.com/nabour-labs/specjutsu/issues/new/choose):
