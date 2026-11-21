@@ -181,6 +181,18 @@ install sj-aarch64-apple-darwin/sj ~/.local/bin/
 cargo install specjutsu
 
 sj --version</pre>
+      <h3>Shell completions</h3>
+      <p><code>sj completions &lt;shell&gt;</code> prints a completion script for <code>bash</code>, <code>zsh</code>, <code>fish</code>, <code>powershell</code> or <code>elvish</code>, built from the binary's own commands and flags. It writes no file: save the output where your shell looks, and regenerate it after upgrading.</p>
+<pre class="code"><span class="c-m"># bash</span>
+sj completions bash &gt; ~/.local/share/bash-completion/completions/sj
+<span class="c-m"># zsh: then add fpath=(~/.zfunc $fpath) before compinit in ~/.zshrc</span>
+mkdir -p ~/.zfunc &amp;&amp; sj completions zsh &gt; ~/.zfunc/_sj
+<span class="c-m"># fish</span>
+sj completions fish &gt; ~/.config/fish/completions/sj.fish
+<span class="c-m"># elvish: then add `use sj` to ~/.config/elvish/rc.elv</span>
+sj completions elvish &gt; ~/.config/elvish/lib/sj.elv
+<span class="c-m"># PowerShell: add this line to $PROFILE</span>
+sj completions powershell | Out-String | Invoke-Expression</pre>
     </section>
 
     <section id="setup">
@@ -338,7 +350,8 @@ gate: pass — 1 scenario proven (1 red:assert)</pre>
         <li>
           <h3>Archive</h3>
           <p>After merging, fold the delta into current specs:</p>
-<pre class="code">sj spec archive add-token-expiry   <span class="c-m"># → changes/archive/YYYY-MM-DD-add-token-expiry/</span></pre>
+<pre class="code">sj spec archive add-token-expiry   <span class="c-m"># → changes/archive/YYYY-MM-DD-add-token-expiry/</span>
+sj spec archive --all-done         <span class="c-m"># every change whose tasks are all done, as one operation</span></pre>
         </li>
       </ol>
     </section>
@@ -348,11 +361,12 @@ gate: pass — 1 scenario proven (1 red:assert)</pre>
       <p>specjutsu never calls an LLM. Your agent runs <code>sj</code> like any other command and gets a few lines back.</p>
 <pre class="code">sj init --agents claude          <span class="c-m"># install</span>
 sj update                        <span class="c-m"># regenerate; hand-edited files are kept</span>
+sj update --dry-run              <span class="c-m"># preview each write, keep and remove; change nothing</span>
 sj init --remove-agents claude   <span class="c-m"># remove everything it added</span></pre>
       <p>The Claude Code adapter writes three things and touches nothing else:</p>
       <ul>
         <li><strong>A block in <code>CLAUDE.md</code></strong> between <code>&lt;!-- specjutsu:begin --&gt;</code> and <code>&lt;!-- specjutsu:end --&gt;</code>, under 1,200 bytes.</li>
-        <li><strong>Nine skills</strong> under <code>.claude/skills/sj-*/</code>: explore, propose, clarify, principles, apply, debug, review, verify and finish.</li>
+        <li><strong>Ten skills</strong> under <code>.claude/skills/sj-*/</code>: explore, propose, clarify, principles, apply, debug, review, verify, finish and onboard. New to specjutsu? Ask your agent to onboard you: <code>sj-onboard</code> runs one toy change through the whole loop in a scratch change, <code>sj-onboard-demo</code>, then deletes it without archiving, so your specs are unchanged. It won't start on a dirty working tree.</li>
         <li><strong>Two hooks</strong> in <code>.claude/settings.json</code>, added after yours. The file is edited as text, so your formatting, permissions and other hooks stay byte for byte.</li>
       </ul>
       <div class="tbl"><table>
@@ -489,7 +503,11 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj update</h3>
         <p>Regenerate installed agent adapters. A file you edited by hand is kept and reported, and the command exits 1.</p>
-        <dl><dt>--force</dt><dd>Replace hand-edited files too.</dd></dl>
+        <dl><dt>--force</dt><dd>Replace hand-edited files too.</dd><dt>--dry-run</dt><dd>Print one <code>write</code>, <code>keep</code> or <code>remove</code> line per file and change nothing; <code>adapters up to date</code> when there is nothing to do. Exits 0.</dd><dt>--json</dt><dd>With <code>--dry-run</code>: <code>{"files": [{"path", "action"}]}</code>.</dd></dl>
+      </div>
+      <div class="cmd">
+        <h3>sj completions &lt;shell&gt;</h3>
+        <p>Print a completion script for <code>bash</code>, <code>zsh</code>, <code>fish</code>, <code>powershell</code> or <code>elvish</code> to stdout. Any other shell exits 2. See <a href="#install">Install</a> for where to save it.</p>
       </div>
       <div class="cmd">
         <h3>sj ids</h3>
@@ -521,9 +539,9 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
         <p>Scenarios no task names, tasks naming unknown IDs, and <code>[NEEDS CLARIFICATION]</code> markers.</p>
       </div>
       <div class="cmd">
-        <h3>sj spec archive &lt;change&gt;</h3>
-        <p>Merge the deltas into <code>specs/</code> (same bytes as <code>openspec archive</code>) and move the change to <code>changes/archive/YYYY-MM-DD-&lt;change&gt;/</code>.</p>
-        <dl><dt>--force</dt><dd>Archive despite validation errors and open tasks.</dd></dl>
+        <h3>sj spec archive &lt;change&gt;…</h3>
+        <p>Merge the deltas into <code>specs/</code> (same bytes as <code>openspec archive</code>) and move the change to <code>changes/archive/YYYY-MM-DD-&lt;change&gt;/</code>. Several names archive together, in name order: if any one is refused, nothing is written and every problem is listed. Two changes that modify, remove or rename the same requirement are refused.</p>
+        <dl><dt>--all-done</dt><dd>Archive every open change with at least one task and all of them done; <code>nothing to archive</code> when there are none.</dd><dt>--force</dt><dd>Archive despite validation errors and open tasks. Conflicts between changes are refused anyway.</dd></dl>
       </div>
 
       <h3>Agent loop</h3>
@@ -584,6 +602,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
           <tr><td>Superpowers systematic-debugging, code review</td><td><code>sj-debug</code>, <code>sj-review</code></td></tr>
           <tr><td>Superpowers verification-before-completion</td><td><code>sj-verify</code> → <code>sj verify</code></td></tr>
           <tr><td><code>/opsx:archive</code>, <code>/opsx:sync</code>, finishing-a-branch</td><td><code>sj-finish</code> → <code>sj spec archive</code></td></tr>
+          <tr><td><code>/opsx:onboard</code></td><td><code>sj-onboard</code></td></tr>
         </tbody>
       </table></div>
       <h3>What changes for you</h3>

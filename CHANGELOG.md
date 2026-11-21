@@ -59,8 +59,21 @@ All notable changes are recorded here. The format follows
 - `sj drift --base <ref>` reports `code-drift` (code a scenario's tests run changed
   while its spec and tests did not) and `stale-test` (a scenario's spec changed
   while its tests did not). A map from an older commit is translated to the base.
+- `sj spec archive` takes several change names, or `--all-done` for every
+  change whose tasks are all done. They archive as one operation: if any one is
+  refused, nothing is written. Two changes that edit the same requirement are
+  refused, even with `--force`.
+- `sj update --dry-run` prints what an update would write, keep or remove, and
+  changes nothing. `--json` prints the same plan as JSON.
+- `sj completions <shell>` prints a completion script for bash, zsh, fish,
+  PowerShell or elvish.
+- The `sj-onboard` skill walks a new user through one toy change end to end in a
+  scratch change, `sj-onboard-demo`, then removes it. `skills/COVERAGE.md` maps
+  OpenSpec's `onboard` to it.
 
 ### Changed
+- `sj update` removes generated `sj-*` skills this version no longer ships,
+  unless you edited them.
 - `sj gate` also runs the audit's test checks and fails on their failures, for
   example a test that gained `#[ignore]` or a new test that asserts nothing.
 - `sj gate` reports spec drift as warnings, as failures with `[drift] fail = true`,
