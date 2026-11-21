@@ -1,5 +1,5 @@
-//! GATE-026, GATE-030..035 and GATE-038 CLI scenarios from specjutsu/changes/polyglot-gate: the
-//! gate across suites.
+//! GATE-026, GATE-030..035 and GATE-038 (polyglot-gate) and GATE-046..047
+//! (fix-base-run-no-report) CLI scenarios: the gate across suites.
 //!
 //! A fake `pnpm` on PATH stands in for vitest and Playwright (Unix only). Its vitest run fails
 //! without a report unless `pnpm install` ran in the package first, fails to load the test file
@@ -58,16 +58,24 @@ fn write(root: &Path, rel: &str, content: &str) {
 /// A repository on `main` with the config, a buggy `auth.ts` and installed head dependencies,
 /// switched to branch `feature`.
 fn repo() -> Repo {
+    repo_with(CONFIG, BUGGY, false)
+}
+
+/// Like `repo`, with the given config and base `auth.ts`. With `deps_on_base`, the installed
+/// marker is committed, so a base worktree has dependencies without `setup`.
+fn repo_with(config: &str, auth: &str, deps_on_base: bool) -> Repo {
     let repo = Repo {
         dir: tempfile::tempdir().unwrap(),
     };
     repo.git(&["init", "-q", "-b", "main"]);
     let r = repo.path();
-    write(r, "specjutsu.toml", CONFIG);
-    write(r, ".gitignore", "node_modules/\n");
+    write(r, "specjutsu.toml", config);
+    if !deps_on_base {
+        write(r, ".gitignore", "node_modules/\n");
+    }
     write(r, "pnpm-lock.yaml", "");
     write(r, "openspec/specs/auth/spec.md", BASE_SPEC);
-    write(r, "apps/api/src/auth.ts", BUGGY);
+    write(r, "apps/api/src/auth.ts", auth);
     write(r, "apps/app/src/chat.ts", "export const send = () => {}\n");
     // The head checkout has its dependencies; a base worktree only gets them from `setup`.
     write(r, "apps/api/node_modules/.installed", "");
@@ -334,4 +342,42 @@ fn gate_038_files_on_the_non_source_list_pass_without_an_exemption() {
         .stdout(predicate::str::starts_with(
             "gate: pass — no changed scenarios to prove\n",
         ));
+}
+
+/// CONFIG without the vitest suite's `setup`.
+fn config_without_setup() -> String {
+    CONFIG.replace("setup = \"pnpm install --frozen-lockfile\"\n", "")
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_046_a_base_run_without_installed_dependencies_exits_2() {
+    // Base already rejects expired tokens, so the test would pass there: it must not count as red.
+    let repo = repo_with(&config_without_setup(), FIXED, false);
+    add_auth_004(&repo, TEST, &format!("{FIXED}// tidy\n"));
+    let bin = tempfile::tempdir().unwrap();
+    let (mut cmd, _) = gate(&repo, &bin);
+    cmd.assert()
+        .code(2)
+        .stdout(predicate::str::contains("red:compile").not())
+        .stderr(predicate::str::contains("apps/api:vitest"))
+        .stderr(predicate::str::contains("Cannot find module 'vitest'"))
+        .stderr(predicate::str::contains("setup"));
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_047_keep_a_base_report_with_a_failed_test_file_is_still_red_compile() {
+    let repo = repo_with(&config_without_setup(), BUGGY, true);
+    add_auth_004(
+        &repo,
+        "import { refreshToken } from './auth'\n\
+         it(\"AUTH-004 rejects expired token\", () => { expect(refreshToken('old')).toBe(null) })\n",
+        "export const refreshToken = (t) => rejectExpired(t)\n",
+    );
+    let bin = tempfile::tempdir().unwrap();
+    let (mut cmd, _) = gate(&repo, &bin);
+    cmd.assert().success().stdout(predicate::str::starts_with(
+        "gate: pass — 1 scenario proven (1 red:compile)\n",
+    ));
 }
