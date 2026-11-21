@@ -907,7 +907,10 @@ for the agent. `--from` is repeatable: `openspec`, `speckit` or `superpowers`.
 
   It removes OpenSpec's skills and `/opsx` commands from every agent folder,
   such as `.claude/` and `.agents/`. A file is removed only when its metadata
-  says OpenSpec generated it, so your own skills stay.
+  says OpenSpec generated it, so your own skills stay. Antigravity's
+  `.agents/workflows/opsx-*.md` carry no such metadata, so one goes only when
+  its frontmatter holds just a `description` and its body runs the `openspec`
+  CLI; every other workflow stays.
 - **speckit** runs `sj import speckit --write` first. Only once that succeeds
   does it remove `.specify/`, the imported `specs/NNN-*/` folders and the agent
   files Spec Kit's manifests list. An import target that already exists stops
@@ -920,7 +923,9 @@ for the agent. `--from` is repeatable: `openspec`, `speckit` or `superpowers`.
 Every run then:
 
 - writes `specjutsu.toml` with `sj adopt` if it's missing
-- installs the Claude Code adapter
+- installs the Claude Code adapter, plus every adapter `sj init --agents auto`
+  would install for the agent files the project has (`AGENTS.md`, `.codex/`,
+  `.cursor/`, `.clinerules/`)
 - prints `sj doctor` and `sj spec validate`
 
 It exits 0 when both are clean, and 1 with the problems listed otherwise. It

@@ -19,6 +19,12 @@ All notable changes are recorded here. The format follows
   spec folder no longer reports every scenario as added and green on base.
 
 ### Added
+- `sj migrate --from openspec` removes OpenSpec's Antigravity workflows,
+  `.agents/workflows/opsx-*.md`, when the frontmatter holds only a
+  `description` and the body runs the `openspec` CLI. Other workflows stay.
+- `sj migrate` installs every adapter `sj init --agents auto` would install for
+  the agent files the project has, alongside the Claude adapter, and the
+  preview lists their files.
 - `sj spec archive` takes several change names, or `--all-done` for every
   change whose tasks are all done. They archive as one operation: if any one is
   refused, nothing is written. Two changes that edit the same requirement are
