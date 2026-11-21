@@ -67,3 +67,24 @@ fn conf_010_adopt_never_overwrites_silently() {
     );
     adopt(dir.path(), &["--force"]).success();
 }
+
+#[test]
+fn conf_034_adopt_creates_the_spec_folders() {
+    let cargo = "[package]\nname = \"x\"\nversion = \"0.1.0\"\nedition = \"2021\"\n";
+    let dry = tempfile::tempdir().unwrap();
+    std::fs::write(dry.path().join("Cargo.toml"), cargo).unwrap();
+    adopt(dry.path(), &["--dry-run"]).success();
+    assert!(!dry.path().join("specjutsu").exists());
+
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("Cargo.toml"), cargo).unwrap();
+    adopt(dir.path(), &[]).success();
+    assert!(dir.path().join("specjutsu/specs").is_dir());
+    assert!(dir.path().join("specjutsu/changes").is_dir());
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["doctor", "--root"])
+        .arg(dir.path())
+        .assert()
+        .stdout(predicate::str::contains("missing spec root").not());
+}

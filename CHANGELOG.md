@@ -25,6 +25,8 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- `sj adopt` creates `<spec_root>/specs/` and `<spec_root>/changes/`, so `sj doctor`
+  passes right after adopting.
 - `sj gate` reads base spec files in the same order as head, so an open change's
   copy of a scenario wins on both sides. A change merged without being archived
   no longer makes every later pull request fail `green-on-base` on its
@@ -33,6 +35,10 @@ All notable changes are recorded here. The format follows
   spec folder no longer reports every scenario as added and green on base.
 
 ### Added
+- The setup skill `skills/specjutsu/SKILL.md`, for agents that don't have `sj` yet:
+  install with `install.sh` or `install.ps1`, `sj adopt` or `sj init`,
+  `sj init --agents auto`, `sj doctor`.
+  `npx skills add nabour-labs/specjutsu --skill specjutsu`.
 - Gemini CLI adapter, `sj init --agents gemini`: a `BeforeTool` pre-edit hook
   for `write_file` and `replace` in `.gemini/settings.json`, and `AGENTS.md`
   added to `context.fileName` (a missing setting becomes
