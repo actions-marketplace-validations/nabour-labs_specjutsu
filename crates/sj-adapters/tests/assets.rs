@@ -27,6 +27,8 @@ fn embedded_assets_match_the_repository_sources() {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().join("SKILL.md").is_file())
         .map(|e| e.file_name().to_string_lossy().into_owned())
+        // Only the `sj-*` skills are embedded; the setup skill `specjutsu` is not.
+        .filter(|n| n.starts_with("sj-"))
         .collect();
     names.sort();
     for name in &names {
