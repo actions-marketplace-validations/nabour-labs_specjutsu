@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- One-line installers: `curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh`
+  on macOS and Linux, `irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex` on
+  Windows. Both verify the download against `SHA256SUMS`; `SJ_VERSION` pins a release.
+- Homebrew: `brew install nabour-labs/tap/specjutsu`, updated by every release.
+- `cargo binstall specjutsu` downloads the release binary instead of compiling.
+- Releases build `aarch64-pc-windows-msvc`.
+
+## [0.5.0] - 2026-11-21
+
 ### Changed
 - **Breaking:** the default spec root is now `specjutsu/`. `sj init` and `sj adopt`
   write `spec_root = "specjutsu"` and create `specjutsu/specs/` and
@@ -25,12 +35,9 @@ All notable changes are recorded here. The format follows
   spec folder no longer reports every scenario as added and green on base.
 
 ### Added
-- `install.sh`: a one-line installer for macOS and Linux
-  (`curl -fsSL https://raw.githubusercontent.com/nabour-labs/specjutsu/main/install.sh | sh`).
-  It picks the release for the machine, checks it against `SHA256SUMS`, and installs
-  `sj` into `~/.local/bin` (`SJ_INSTALL_DIR`, `SJ_VERSION`).
 - The setup skill `skills/specjutsu/SKILL.md`, for agents that don't have `sj` yet:
-  install, `sj adopt` or `sj init`, `sj init --agents auto`, `sj doctor`.
+  install with `install.sh` or `install.ps1`, `sj adopt` or `sj init`,
+  `sj init --agents auto`, `sj doctor`.
   `npx skills add nabour-labs/specjutsu --skill specjutsu`.
 - Gemini CLI adapter, `sj init --agents gemini`: a `BeforeTool` pre-edit hook
   for `write_file` and `replace` in `.gemini/settings.json`, and `AGENTS.md`
@@ -295,7 +302,8 @@ All notable changes are recorded here. The format follows
 - `sj gate --since <commit>`: check every `feat(ID)` commit has an earlier `test(ID): red`.
 - `cargo test` runner with libtest result parsing.
 
-[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nabour-labs/specjutsu/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nabour-labs/specjutsu/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nabour-labs/specjutsu/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nabour-labs/specjutsu/compare/v0.2.0...v0.3.0

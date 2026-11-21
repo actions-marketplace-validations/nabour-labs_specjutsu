@@ -4,7 +4,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "scripts/install.sh", "scripts/install.ps1", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # The one-line installers are served from the site: …/specjutsu/install.sh and install.ps1.
+      - run: cp scripts/install.sh scripts/install.ps1 site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

@@ -26,18 +26,25 @@ Show the user the command and ask before running it: it downloads a binary.
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nabour-labs/specjutsu/main/install.sh | sh
+curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh
 ```
 
-`install.sh` picks the release for the machine, checks it against the release's
-`SHA256SUMS`, and installs `sj` into `~/.local/bin` (set `SJ_INSTALL_DIR` to change that,
-`SJ_VERSION` to pin a release). If it says to add the folder to your `PATH`, do that for
-this shell (`export PATH="$HOME/.local/bin:$PATH"`) and tell the user to add it to their
-shell profile.
+Windows (PowerShell):
 
-Windows, other platforms, or no `curl`: with a Rust toolchain, run
-`cargo install specjutsu`; otherwise point the user at the zip on
-https://github.com/nabour-labs/specjutsu/releases. Run `sj --version` again before going on.
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex"
+```
+
+`install.sh` and `install.ps1` pick the release for the machine, check it against the
+release's `SHA256SUMS`, and install `sj` into `~/.local/bin` (Windows:
+`%LOCALAPPDATA%\Programs\sj`). `SJ_INSTALL_DIR` changes the folder and `SJ_VERSION` pins
+a release. If `install.sh` says to add the folder to your `PATH`, do that for this shell
+(`export PATH="$HOME/.local/bin:$PATH"`) and tell the user to add it to their shell
+profile; it never edits profiles itself.
+
+If the user prefers a package manager: `brew install nabour-labs/tap/specjutsu`, or
+`cargo binstall specjutsu`. On a platform with no release, build from source with
+`cargo install specjutsu`. Run `sj --version` again before going on.
 
 ## 3. Set up the project
 

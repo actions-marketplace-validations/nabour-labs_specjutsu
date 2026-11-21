@@ -46,3 +46,10 @@ package managers (Homebrew, npm wrapper); changing what `sj init --agents` insta
 - *Must work on Windows, macOS and Linux:* `install.sh` covers macOS and Linux only.
   Windows is served by the release zip and `cargo install specjutsu`, which the setup
   skill names; a PowerShell installer is left for later.
+
+## Superseded before merge
+
+The root `install.sh` and its `install` capability (INST-001..005) were dropped when
+`install-channels` landed on `main` first with `scripts/install.sh` (DIST-001..005), which
+also covers `wget`, Windows (`install.ps1`), Homebrew and binstall. The setup skill points at
+those installers; the INST IDs were never merged and are not reused.

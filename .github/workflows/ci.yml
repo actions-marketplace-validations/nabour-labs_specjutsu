@@ -12,7 +12,7 @@ env:
   CARGO_TERM_COLOR: always
   # The released sj that checks this repo. Never the binary built from the PR, so a change
   # can't approve itself. Bump deliberately after each release.
-  SJ_VERSION: 0.3.0
+  SJ_VERSION: 0.5.0
 
 defaults:
   run:
