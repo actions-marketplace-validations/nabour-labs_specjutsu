@@ -87,3 +87,22 @@ fn gate_021_since_runs_the_history_check() {
         .success()
         .stdout("gate: pass — history: 1 scenario red before green\n");
 }
+
+#[test]
+fn gate_044_moving_openspec_to_specjutsu_changes_no_scenario() {
+    let repo = Repo::with_lib(ADD_OK);
+    repo.write(
+        "openspec/specs/math/spec.md",
+        "# math Specification\n\n## Purpose\nDo math.\n\n## Requirements\n\n### Requirement: Add\nThe system SHALL add.\n\n#### Scenario: MATH-001 Add\n- **WHEN** called\n- **THEN** it works\n",
+    );
+    repo.write("tests/add.rs", ADD_TEST);
+    repo.commit("math");
+    repo.branch("feature");
+    repo.git(&["mv", "openspec", "specjutsu"]);
+    repo.commit("chore: move openspec/ to specjutsu/");
+    sj(&repo)
+        .args(["--base", "main"])
+        .assert()
+        .success()
+        .stdout("gate: pass — no changed scenarios to prove\n");
+}

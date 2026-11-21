@@ -104,10 +104,10 @@ fn conf_011_doctor_lists_every_problem_and_passes_a_clean_setup() {
         .stdout(predicate::str::starts_with("doctor: 3 problems\n"))
         .stdout(predicate::str::contains("no runner: packages/ui"))
         .stdout(predicate::str::contains(
-            "missing spec root: openspec/specs",
+            "missing spec root: specjutsu/specs",
         ))
         .stdout(predicate::str::contains(
-            "missing spec root: openspec/changes",
+            "missing spec root: specjutsu/changes",
         ));
 }
 
