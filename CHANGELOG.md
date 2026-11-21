@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `sj --version` prints the short git commit after the version when `sj` was
+  built from a git checkout or with `cargo install --git`, such as
+  `sj 0.4.0 (f62a48b)`. A crates.io install prints only the version, as before.
+
 ## [0.4.0] - 2026-11-20
 
 ### Added

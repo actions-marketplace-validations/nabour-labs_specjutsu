@@ -85,9 +85,9 @@ cargo install --git https://github.com/nabour-labs/specjutsu --branch main specj
 cargo install --list | grep -A1 specjutsu   # the installed build and its source
 ```
 
-`sj --version` shows only the version number, which a build from `main` shares
-with the last release. Open agent sessions use the new binary on their next hook
-call.
+`sj --version` prints the commit after the version for a build from a git
+checkout, such as `sj 0.4.0 (f62a48b)`, and only the version for a crates.io
+install. Open agent sessions use the new binary on their next hook call.
 
 ## Quickstart
 
