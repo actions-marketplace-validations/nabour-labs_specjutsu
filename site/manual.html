@@ -139,7 +139,7 @@
 
     <section id="status">
       <h2>What works today</h2>
-      <p>specjutsu is pre-alpha and built in the open. This manual marks every feature with its state, so you know what you can rely on.</p>
+      <p>specjutsu is pre-alpha and built in the open; the beta opens with v0.5. This manual marks every feature with its state, so you know what you can rely on.</p>
       <div class="tbl"><table>
         <thead><tr><th>Feature</th><th>State</th><th>Notes</th></tr></thead>
         <tbody>
@@ -152,7 +152,9 @@
           <tr><td><code>sj status</code>, <code>next</code>, <code>task done</code>, <code>verify</code></td><td><span class="badge live">v0.3.0</span></td><td>The agent's working loop.</td></tr>
           <tr><td>Claude Code adapter, nine <code>sj-*</code> skills</td><td><span class="badge live">v0.3.0</span></td><td>CLAUDE.md block, skills, session-start and pre-edit TDD hooks.</td></tr>
           <tr><td><code>sj import speckit</code>, <code>sj migrate</code></td><td><span class="badge live">v0.3.0</span></td><td>Replace OpenSpec, Spec Kit or Superpowers in one step.</td></tr>
-          <tr><td>Cursor, Antigravity, Codex, Copilot adapters</td><td><span class="badge plan">v0.5</span></td><td>The skills work in any agent today; adapters install them.</td></tr>
+          <tr><td>Codex, Cursor, Cline and <code>AGENTS.md</code> adapters</td><td><span class="badge live">v0.4.0</span></td><td><code>sj init --agents auto</code>; Codex and Cursor get the pre-edit TDD hook.</td></tr>
+          <tr><td><code>sj spec show</code>, <code>sj view</code>, <code>sj instructions</code>, <code>sj templates</code></td><td><span class="badge live">v0.4.0</span></td><td>Read specs and changes in the terminal; next-step instructions for agents.</td></tr>
+          <tr><td>Copilot, Gemini CLI, Windsurf, Kiro, Antigravity adapters</td><td><span class="badge plan">v0.6</span></td><td>The skills work in any agent today; adapters install them.</td></tr>
           <tr><td>Token benchmark</td><td><span class="badge plan">v0.5</span></td><td>Public comparison against the tools specjutsu replaces.</td></tr>
         </tbody>
       </table></div>
