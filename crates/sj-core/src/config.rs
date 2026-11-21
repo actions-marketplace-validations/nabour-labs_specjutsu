@@ -16,7 +16,20 @@ pub const FILE: &str = "specjutsu.toml";
 pub const SCHEMA: u32 = 1;
 
 /// The spec root used when the file is missing or does not set one.
-pub const DEFAULT_SPEC_ROOT: &str = "openspec";
+pub const DEFAULT_SPEC_ROOT: &str = "specjutsu";
+
+/// The spec root of projects created before `specjutsu` became the default.
+pub const LEGACY_SPEC_ROOT: &str = "openspec";
+
+/// The spec root for `root` when `spec_root` is not set: `specjutsu`, unless the repository has
+/// an `openspec/` folder and no `specjutsu/` folder.
+pub fn default_spec_root(root: &Path) -> String {
+    if !root.join(DEFAULT_SPEC_ROOT).is_dir() && root.join(LEGACY_SPEC_ROOT).is_dir() {
+        LEGACY_SPEC_ROOT.into()
+    } else {
+        DEFAULT_SPEC_ROOT.into()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -254,14 +267,24 @@ pub fn is_language_tag(tag: &str) -> bool {
 pub fn load(root: &Path) -> Result<Config> {
     let path = root.join(FILE);
     match std::fs::read_to_string(&path) {
-        Ok(text) => Config::parse(&text),
+        Ok(text) => {
+            let mut config = Config::parse(&text)?;
+            let set = toml::from_str::<toml::Table>(&text)
+                .map(|t| t.contains_key("spec_root"))
+                .unwrap_or(true);
+            if !set {
+                config.spec_root = default_spec_root(root);
+            }
+            Ok(config)
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default_for(root)),
         Err(e) => Err(e).with_context(|| format!("{FILE}: cannot read {}", path.display())),
     }
 }
 
 impl Config {
-    /// The configuration of a repository that has no project file: spec root `openspec`, mode
+    /// The configuration of a repository that has no project file: spec root from
+    /// [`default_spec_root`], mode
     /// `guided`, and one root package with a `cargo` suite when a root `Cargo.toml` exists.
     pub fn default_for(root: &Path) -> Config {
         let packages = if root.join("Cargo.toml").is_file() {
@@ -275,7 +298,7 @@ impl Config {
         };
         Config {
             schema: SCHEMA,
-            spec_root: DEFAULT_SPEC_ROOT.into(),
+            spec_root: default_spec_root(root),
             mode: Mode::default(),
             non_source: Vec::new(),
             assert_helpers: Vec::new(),

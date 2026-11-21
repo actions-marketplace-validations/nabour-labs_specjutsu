@@ -32,10 +32,10 @@ fn conf_006_init_in_an_empty_repository() {
     let written = std::fs::read_to_string(repo.path().join("specjutsu.toml")).unwrap();
     assert_eq!(
         written,
-        "schema = 1\nspec_root = \"openspec\"\nmode = \"guided\"\n"
+        "schema = 1\nspec_root = \"specjutsu\"\nmode = \"guided\"\n"
     );
-    assert!(repo.path().join("openspec/specs").is_dir());
-    assert!(repo.path().join("openspec/changes").is_dir());
+    assert!(repo.path().join("specjutsu/specs").is_dir());
+    assert!(repo.path().join("specjutsu/changes").is_dir());
 }
 
 #[test]
@@ -44,6 +44,8 @@ fn conf_006_init_in_a_rust_repository_keeps_the_cargo_suite() {
     repo.write("Cargo.toml", "[workspace]\n");
     init(&repo, &[]).success();
     let c = sj_core_config(&repo);
+    assert!(c.contains("spec_root = \"specjutsu\"\n"), "{c}");
+    assert!(repo.path().join("specjutsu/specs").is_dir());
     assert!(c.contains("[[package]]\npath = \".\""), "{c}");
     assert!(c.contains("runner = \"cargo\""), "{c}");
 }

@@ -10,7 +10,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use sj_adapters::claude::{self, Change};
+use sj_adapters::agents;
+use sj_adapters::claude::Change;
 use sj_adapters::superpowers;
 
 use crate::authoring::validate::{self, Report};
@@ -60,6 +61,8 @@ pub struct Plan {
     remove_dirs: Vec<PathBuf>,
     prune: Vec<PathBuf>,
     settings: Option<(PathBuf, String)>,
+    /// The adapters installed last: Claude plus the agents the project has files for.
+    agents: Vec<String>,
 }
 
 fn rel(p: &Path, root: &Path) -> String {
@@ -97,6 +100,25 @@ fn field<'a>(front: &[&'a str], key: &str) -> Option<&'a str> {
 fn is_openspec_skill(text: &str) -> bool {
     let front = frontmatter(text);
     field(&front, "author") == Some("openspec") && field(&front, "generatedBy").is_some()
+}
+
+/// An Antigravity workflow OpenSpec generated: frontmatter holding only `description`, and a
+/// body that runs the `openspec` CLI.
+fn is_openspec_workflow(text: &str) -> bool {
+    let front = frontmatter(text);
+    let keys: Vec<&str> = front
+        .iter()
+        .filter(|l| !l.starts_with([' ', '\t']) && !l.trim().is_empty())
+        .filter_map(|l| l.split_once(':').map(|(k, _)| k.trim()))
+        .collect();
+    if keys != ["description"] {
+        return false;
+    }
+    let body = text.splitn(3, "---").nth(2).unwrap_or("");
+    body.contains("`openspec ")
+        || body
+            .lines()
+            .any(|l| l.trim_start().starts_with("openspec "))
 }
 
 /// A command OpenSpec generated: `name: "OPSX: <Workflow>"`.
@@ -188,6 +210,7 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
         remove_dirs: Vec::new(),
         prune: Vec::new(),
         settings: None,
+        agents: Vec::new(),
     };
     let principles_path = spec_root.join("principles.md");
     // The principles text as it will be before the OpenSpec step: on disk, or imported.
@@ -295,6 +318,18 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
                     p.remove_files.push(file);
                 }
             }
+            for file in sorted_entries(&agent.join("workflows")) {
+                let opsx = file
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("opsx-") && n.ends_with(".md"));
+                if opsx && std::fs::read_to_string(&file).is_ok_and(|t| is_openspec_workflow(&t)) {
+                    p.lines
+                        .push(format!("remove {} (OpenSpec workflow)", rel(&file, root)));
+                    p.prune.extend(parents(&file, root));
+                    p.remove_files.push(file);
+                }
+            }
         }
     }
 
@@ -357,8 +392,12 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
         }
     }
 
-    for c in claude::plan_install(root, false)? {
-        p.lines.push(match c {
+    // Claude always, plus the agents the project has files for; no `AGENTS.md` fallback.
+    let mut wanted = vec!["claude".to_string()];
+    wanted.extend(agents::detect(root).into_iter().map(str::to_string));
+    p.agents = agents::resolve(root, &wanted).0;
+    for step in agents::plan(root, &p.agents, false)? {
+        p.lines.push(match step.change {
             Change::Created(f) => format!("create {f} (adapter)"),
             Change::Updated(f) => format!("change {f} (adapter)"),
             Change::Removed(f) => format!("remove {f} (adapter)"),
@@ -429,7 +468,8 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     if let Some((path, text)) = &plan.settings {
         write(path, text)?;
     }
-    claude::install(root, false)?;
+    // Planned again now: the Superpowers step above may have changed `.claude/settings.json`.
+    sj_adapters::plan::apply(agents::plan(root, &plan.agents, false)?)?;
     Ok(())
 }
 

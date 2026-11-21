@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 readme = "../../README.md"
-keywords = ["spec", "tdd", "ai-agents", "openspec", "testing"]
+keywords = ["spec", "tdd", "ai-agents", "spec-driven", "testing"]
 categories = ["command-line-utilities", "development-tools::testing"]
 
 [[bin]]

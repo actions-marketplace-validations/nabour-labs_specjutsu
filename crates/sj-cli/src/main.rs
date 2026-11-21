@@ -19,7 +19,7 @@ enum Command {
         /// Repository root (defaults to the current directory).
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+        /// Spec root relative to the repository root (overrides specjutsu.toml; default specjutsu, or openspec when only that folder exists).
         #[arg(long)]
         spec_root: Option<PathBuf>,
         /// Print JSON instead of the compact report.
@@ -288,7 +288,7 @@ enum Command {
 struct SpecArgs {
     #[arg(long, default_value = ".")]
     root: PathBuf,
-    /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+    /// Spec root relative to the repository root (overrides specjutsu.toml; default specjutsu, or openspec when only that folder exists).
     #[arg(long)]
     spec_root: Option<PathBuf>,
 }
@@ -498,9 +498,9 @@ fn run() -> Result<ExitCode> {
             if agents.is_empty() {
                 return init_cmd(&root, force);
             }
-            check_agents(&agents)?;
+            sj_adapters::agents::check(&agents)?;
             let auto = agents.iter().any(|a| a == "auto");
-            let (agents, found) = resolve_agents(&root, &agents);
+            let (agents, found) = sj_adapters::agents::resolve(&root, &agents);
             if auto {
                 let note = if found { "" } else { " (no agent files found)" };
                 println!("agents: {}{note}", agents.join(", "));
@@ -527,12 +527,12 @@ fn run() -> Result<ExitCode> {
             if global {
                 return global_update_cmd(force, dry_run, json);
             }
-            let installed = installed_agents(&root);
+            let installed = sj_adapters::agents::installed(&root);
             if dry_run {
                 let steps = if installed.is_empty() {
                     Vec::new()
                 } else {
-                    plan_agents(&root, &installed, force)?
+                    sj_adapters::agents::plan(&root, &installed, force)?
                 };
                 if json {
                     let files: Vec<_> = steps
@@ -959,138 +959,6 @@ fn check_edit(root: &Path, path: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Every name `--agents` accepts.
-const AGENTS: [&str; 8] = [
-    "claude",
-    "codex",
-    "cursor",
-    "cline",
-    "gemini",
-    "antigravity",
-    "agents-md",
-    "auto",
-];
-
-/// A usage error naming the first unknown agent; checked before anything is written.
-fn check_agents(agents: &[String]) -> Result<()> {
-    for a in agents {
-        if !AGENTS.contains(&a.as_str()) {
-            anyhow::bail!("unknown agent {a} (supported: {})", AGENTS.join(", "));
-        }
-    }
-    Ok(())
-}
-
-/// The agents whose files the repository already has, in `AGENTS` order.
-fn detect_agents(root: &Path) -> Vec<&'static str> {
-    let has = |p: &str| root.join(p).exists();
-    let mut out = Vec::new();
-    if has(".claude") || has("CLAUDE.md") {
-        out.push("claude");
-    }
-    if has(".codex") {
-        out.push("codex");
-    }
-    if has(".cursor") {
-        out.push("cursor");
-    }
-    if has(".clinerules") {
-        out.push("cline");
-    }
-    if has(".gemini") || has("GEMINI.md") {
-        out.push("gemini");
-    }
-    if has(".agents/rules") || has(".agent/rules") {
-        out.push("antigravity");
-    }
-    if has("AGENTS.md") {
-        out.push("agents-md");
-    }
-    out
-}
-
-/// The list with `auto` expanded, `agents-md` added for the agents that read AGENTS.md, and
-/// duplicates dropped, in `AGENTS` order. The flag is false when `auto` found no agent files
-/// and fell back to `agents-md`.
-fn resolve_agents(root: &Path, agents: &[String]) -> (Vec<String>, bool) {
-    let mut wanted: Vec<&str> = agents.iter().map(String::as_str).collect();
-    let mut found = true;
-    if wanted.contains(&"auto") {
-        let detected = detect_agents(root);
-        found = !detected.is_empty();
-        wanted.extend(if found { detected } else { vec!["agents-md"] });
-    }
-    if wanted
-        .iter()
-        .any(|a| matches!(*a, "codex" | "cursor" | "cline" | "gemini" | "antigravity"))
-    {
-        wanted.push("agents-md");
-    }
-    let out = AGENTS
-        .iter()
-        .filter(|a| **a != "auto" && wanted.contains(a))
-        .map(|a| a.to_string())
-        .collect();
-    (out, found)
-}
-
-/// The adapters already installed in `root`, which `sj update` refreshes.
-fn installed_agents(root: &Path) -> Vec<String> {
-    use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
-    let mut out = Vec::new();
-    if claude::is_installed(root) {
-        out.push("claude".to_string());
-    }
-    if codex::is_installed(root) {
-        out.push("codex".to_string());
-    }
-    if cursor::is_installed(root) {
-        out.push("cursor".to_string());
-    }
-    if gemini::is_installed(root) {
-        out.push("gemini".to_string());
-    }
-    if antigravity::is_installed(root) {
-        out.push("antigravity".to_string());
-    }
-    if agents_md::is_installed(root) {
-        out.push("agents-md".to_string());
-    }
-    out
-}
-
-/// Install or refresh each named adapter and print what changed. `agents` is resolved:
-/// no `auto`, and `agents-md` listed where it is implied.
-/// Every file installing or updating `agents` would write, keep or remove.
-fn plan_agents(
-    root: &Path,
-    agents: &[String],
-    force: bool,
-) -> Result<Vec<sj_adapters::plan::Step>> {
-    use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
-    let mut steps = Vec::new();
-    for a in agents {
-        match a.as_str() {
-            "claude" => steps.extend(claude::plan(root, force)?),
-            "codex" => steps.extend(codex::plan(root)?),
-            "cursor" => steps.extend(cursor::plan(root)?),
-            "gemini" => steps.extend(gemini::plan(root)?),
-            "antigravity" => steps.extend(antigravity::plan(root)?),
-            // Cline's hooks run only in its CLI, so it gets the shared instructions only.
-            "cline" => {}
-            "agents-md" => steps.extend(agents_md::plan(root)?),
-            other => anyhow::bail!("unknown agent {other}"),
-        }
-    }
-    if agents
-        .iter()
-        .any(|a| sj_adapters::shared_skills::READERS.contains(&a.as_str()))
-    {
-        steps.extend(sj_adapters::shared_skills::plan(root, force)?);
-    }
-    Ok(steps)
-}
-
 /// The home folder for `--global`, or an error saying how to set it.
 fn home_dir() -> Result<PathBuf> {
     sj_adapters::global::home()
@@ -1128,16 +996,16 @@ fn global_init_cmd(
     use sj_adapters::global;
     let home = home_dir()?;
     if !remove.is_empty() {
-        check_agents(remove)?;
-        let (remove, _) = resolve_agents(root, remove);
+        sj_adapters::agents::check(remove)?;
+        let (remove, _) = sj_adapters::agents::resolve(root, remove);
         print_home_changes(&global::remove(&home, &remove)?, "no skills to remove");
         return Ok(ExitCode::SUCCESS);
     }
     if agents.is_empty() {
         anyhow::bail!("--global needs --agents or --remove-agents");
     }
-    check_agents(agents)?;
-    let (agents, _) = resolve_agents(root, agents);
+    sj_adapters::agents::check(agents)?;
+    let (agents, _) = sj_adapters::agents::resolve(root, agents);
     let changes = sj_adapters::plan::apply(global::plan(&home, &agents, force)?)?;
     print_home_changes(&changes, "skills up to date");
     Ok(ExitCode::SUCCESS)
@@ -1184,9 +1052,11 @@ fn global_update_cmd(force: bool, dry_run: bool, json: bool) -> Result<ExitCode>
     })
 }
 
+/// Install or refresh each named adapter and print what changed. `agents` is resolved:
+/// no `auto`, and `agents-md` listed where it is implied.
 fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
     use sj_adapters::claude::Change;
-    let changes = sj_adapters::plan::apply(plan_agents(root, agents, force)?)?;
+    let changes = sj_adapters::plan::apply(sj_adapters::agents::plan(root, agents, force)?)?;
     if changes.is_empty() {
         println!("adapters up to date");
     }
@@ -1205,9 +1075,9 @@ fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Resu
 /// an agent that reads it is removed and no Codex or Cursor hook is left that needs it.
 fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
     use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
-    check_agents(agents)?;
+    sj_adapters::agents::check(agents)?;
     let agents: Vec<String> = if agents.iter().any(|a| a == "auto") {
-        installed_agents(root)
+        sj_adapters::agents::installed(root)
     } else {
         agents.to_vec()
     };

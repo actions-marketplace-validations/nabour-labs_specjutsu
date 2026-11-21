@@ -30,6 +30,18 @@ After editing anything in `skills/` or `adapters/claude/`, run
 `./scripts/sync-adapter-assets.sh`: the `sj-adapters` crate embeds a copy so it can be
 published, and `cargo test` fails while the copy is stale.
 
+## Issues and pull requests
+
+Anyone can [open an issue](https://github.com/nabour-labs/specjutsu/issues/new/choose):
+bug reports, feature requests and questions are all welcome. Report security
+problems privately, as described in [SECURITY.md](SECURITY.md).
+
+To contribute code, fork the repository, push a branch to your fork and open a pull
+request against `main`. CI runs on your PR once a maintainer approves the first run
+for new contributors. `main` only changes through pull requests, and only the
+maintainer can merge them (see [GOVERNANCE.md](GOVERNANCE.md)). The `gate` check must
+pass first.
+
 ## Good first PRs
 
 - A test-runner adapter (`runner-adapter` label).

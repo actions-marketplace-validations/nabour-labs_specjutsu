@@ -1,4 +1,4 @@
-//! Scenario extraction from OpenSpec-format Markdown.
+//! Scenario extraction from spec Markdown.
 
 use std::path::{Path, PathBuf};
 

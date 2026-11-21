@@ -1,0 +1,38 @@
+name: Bug report
+description: Something in sj behaves differently from what its spec or docs say.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran and what it printed. Trim long logs.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If a scenario ID covers this (e.g. GATE-004), name it.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. sj init
+        2. ...
+  - type: input
+    id: version
+    attributes:
+      label: sj version
+      description: Output of `sj --version`.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, agent and test runner
+      placeholder: macOS 15, Claude Code, cargo test

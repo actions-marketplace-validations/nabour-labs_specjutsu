@@ -661,8 +661,10 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     let mut base_texts: BTreeSet<String> = BTreeSet::new();
     // Texts of base scenarios without an ID: gaining one is not a change (GATE-036).
     let mut base_unidentified: BTreeSet<String> = BTreeSet::new();
-    for path in git.ls_tree(&mb)? {
-        if spec::is_spec_path(&path, &spec_root) {
+    let base_paths = git.ls_tree(&mb)?;
+    let base_root = base_spec_root(&git, &mb, &spec_root, &base_paths);
+    for path in base_paths {
+        if spec::is_spec_path(&path, &base_root) {
             let content = git.show(&mb, &path)?;
             base_fps.extend(spec::fingerprints(&content));
             for (s, t) in spec::scenario_texts(Path::new(&path), &content) {
@@ -718,7 +720,7 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     let report = trace::build_report(&scenarios, &scan.tests);
 
     // GATE-023: unchanged scenarios that gain their first test are in scope.
-    let base_mapped = base_mapped_ids(&git, root, config, &mb, &spec_root)?;
+    let base_mapped = base_mapped_ids(&git, root, config, &mb, &base_root)?;
     for m in &report.mapped {
         if let Some(c) = changes.get_mut(&m.id) {
             if *c == Change::Unchanged && !base_mapped.contains(&m.id) {
@@ -726,7 +728,12 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
             }
         }
     }
-    let changed_files = git.changed_files(&mb)?;
+    let mut changed_files = git.changed_files(&mb)?;
+    // GATE-044: files leaving the base spec root are spec files, not source.
+    if base_root != spec_root {
+        let old = format!("{}/", base_root.trim_end_matches('/'));
+        changed_files.retain(|f| !f.starts_with(&old));
+    }
 
     // Exemptions: proposals of touched change folders, then commit trailers.
     let mut exemptions = Vec::new();
@@ -1065,6 +1072,32 @@ struct SuiteJob {
 }
 
 /// Scenario IDs that already had a linked test at `rev`, read from git objects.
+/// The spec root base scenarios are read from (GATE-044): the head's when it holds specs at
+/// base, otherwise the base commit's own setting or default, so moving the folder changes nothing.
+fn base_spec_root(git: &Git, rev: &str, head: &str, paths: &[String]) -> String {
+    if paths.iter().any(|p| spec::is_spec_path(p, head)) {
+        return head.to_string();
+    }
+    let set = git
+        .show(rev, crate::config::FILE)
+        .ok()
+        .and_then(|text| toml::from_str::<toml::Table>(&text).ok())
+        .and_then(|t| t.get("spec_root")?.as_str().map(str::to_string));
+    if let Some(root) = set {
+        return root;
+    }
+    let has = |dir: &str| paths.iter().any(|p| p.starts_with(&format!("{dir}/")));
+    let (default, legacy) = (
+        crate::config::DEFAULT_SPEC_ROOT,
+        crate::config::LEGACY_SPEC_ROOT,
+    );
+    if !has(default) && has(legacy) {
+        legacy.to_string()
+    } else {
+        default.to_string()
+    }
+}
+
 fn base_mapped_ids(
     git: &Git,
     root: &Path,

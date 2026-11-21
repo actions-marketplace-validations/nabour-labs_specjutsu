@@ -58,9 +58,9 @@ tests, lost assertions, and dependencies that don't exist. See
 Under the Action is `sj`, a CLI that covers the whole loop: authoring (`sj spec`),
 the agent's working loop (`sj status`, `next`, `verify`), the proof layer
 (`sj trace`, `sj test`, `sj gate`), adapters for Claude Code, Codex, Cursor, Cline
-and `AGENTS.md` with ten skills, and `sj migrate`. Its spec format is OpenSpec's, so
-existing `openspec/` folders work unchanged, and it replaces the OpenSpec, Spec Kit
-and Superpowers stack with one binary.
+and `AGENTS.md` with ten skills, and `sj migrate`. Specs live in `specjutsu/`;
+projects coming from OpenSpec keep their `openspec/` folder unchanged, and it replaces
+the OpenSpec, Spec Kit and Superpowers stack with one binary.
 
 ## How specjutsu compares
 
@@ -143,13 +143,13 @@ your `$PROFILE`.
 ## Quickstart
 
 ```bash
-sj trace            # map scenario IDs in openspec/ to tests; list gaps
+sj trace            # map scenario IDs in specjutsu/ to tests; list gaps
 sj trace --json     # machine-readable
 sj gate --base origin/main   # CI: changed scenarios tested, red on base, green on head
 sj test             # run the tests; print failures only; record the run
 sj test GATE-004    # run only the tests mapped to one scenario (or pass a package name)
 sj ledger           # per scenario: latest result, red-before-green proven or not
-sj init             # new project: write specjutsu.toml, create openspec/specs and changes
+sj init             # new project: write specjutsu.toml, create specjutsu/specs and changes
 sj adopt --dry-run  # existing project: detect packages and runners, print the config
 sj doctor           # check the config, runner executables and spec folders
 sj ids              # list scenarios without IDs and the IDs they would get
@@ -444,7 +444,8 @@ A restored map from a commit that isn't an ancestor of the base is not used, and
 
 `specjutsu.toml` at the repository root says where the specs are and which
 packages and test suites the project has. Without one, every command uses
-`openspec/` and, when there is a root `Cargo.toml`, one Cargo suite at the root.
+`specjutsu/` (or `openspec/`, when only that folder exists) and, when there is a root
+`Cargo.toml`, one Cargo suite at the root.
 
 Nobody should write it by hand. `sj init` writes it for a new project. `sj adopt`
 reads an existing one's manifests (Cargo, pnpm, npm and yarn workspaces,
@@ -454,7 +455,7 @@ service, `sj adopt --dry-run` prints:
 
 ```toml
 schema = 1
-spec_root = "openspec"
+spec_root = "specjutsu"
 mode = "guided"
 
 [[package]]
@@ -511,8 +512,8 @@ without one and the ID it would get, and exits 1 when there are any.
 ```
 $ sj ids --write
 2 scenarios without IDs
-USERAUTH-001 Valid registration (openspec/specs/user-auth/spec.md:6)
-USERAUTH-002 Password too short (openspec/specs/user-auth/spec.md:10)
+USERAUTH-001 Valid registration (specjutsu/specs/user-auth/spec.md:6)
+USERAUTH-002 Password too short (specjutsu/specs/user-auth/spec.md:10)
 wrote 2 IDs to 1 file
 ```
 
@@ -543,9 +544,8 @@ red-on-base. `sj gate --json` lists every scenario that isn't unchanged under
 
 ## Writing and archiving changes
 
-`sj spec` does what `openspec new`, `validate` and `archive` do, plus Spec Kit's
-*analyze* and *clarify* passes. The format is OpenSpec's, so existing `openspec/`
-folders work unchanged.
+`sj spec` creates, validates, checks and archives changes, including the *analyze*
+and *clarify* passes. Existing `openspec/` folders work unchanged.
 
 - **`sj spec new <change>`** creates `changes/<change>/` with `proposal.md`,
   `design.md`, `tasks.md` and an empty `specs/`. The name must be kebab-case. It
@@ -860,7 +860,7 @@ sj import speckit           # print the plan: targets, counts and gaps; writes n
 sj import speckit --write   # convert (exits 2 if a target exists; --force overwrites)
 ```
 
-Each `specs/NNN-<name>/` feature becomes OpenSpec layout under the spec root:
+Each `specs/NNN-<name>/` feature becomes the specjutsu layout under the spec root:
 
 - **A finished feature** (no unchecked task) becomes `specs/<name>/spec.md` plus
   an archived change, `changes/archive/<Created date>-<name>/`.
@@ -907,7 +907,10 @@ for the agent. `--from` is repeatable: `openspec`, `speckit` or `superpowers`.
 
   It removes OpenSpec's skills and `/opsx` commands from every agent folder,
   such as `.claude/` and `.agents/`. A file is removed only when its metadata
-  says OpenSpec generated it, so your own skills stay.
+  says OpenSpec generated it, so your own skills stay. Antigravity's
+  `.agents/workflows/opsx-*.md` carry no such metadata, so one goes only when
+  its frontmatter holds just a `description` and its body runs the `openspec`
+  CLI; every other workflow stays.
 - **speckit** runs `sj import speckit --write` first. Only once that succeeds
   does it remove `.specify/`, the imported `specs/NNN-*/` folders and the agent
   files Spec Kit's manifests list. An import target that already exists stops
@@ -920,7 +923,9 @@ for the agent. `--from` is repeatable: `openspec`, `speckit` or `superpowers`.
 Every run then:
 
 - writes `specjutsu.toml` with `sj adopt` if it's missing
-- installs the Claude Code adapter
+- installs the Claude Code adapter, plus every adapter `sj init --agents auto`
+  would install for the agent files the project has (`AGENTS.md`, `.codex/`,
+  `.cursor/`, `.clinerules/`)
 - prints `sj doctor` and `sj spec validate`
 
 It exits 0 when both are clean, and 1 with the problems listed otherwise. It

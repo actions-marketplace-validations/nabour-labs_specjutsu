@@ -77,7 +77,7 @@ tests = ["apps/app/e2e/**"]
     let runners: Vec<_> = c.packages[0].suites.iter().map(|s| s.runner).collect();
     assert_eq!(runners, [Runner::Vitest, Runner::Playwright]);
     // Omitted top-level keys take their defaults.
-    assert_eq!(c.spec_root, "openspec");
+    assert_eq!(c.spec_root, "specjutsu");
     assert_eq!(c.mode, Mode::Guided);
 }
 
@@ -85,7 +85,7 @@ tests = ["apps/app/e2e/**"]
 fn conf_002_missing_project_file_falls_back_to_defaults() {
     let dir = tempfile::tempdir().unwrap();
     let c = config::load(dir.path()).unwrap();
-    assert_eq!(c.spec_root, "openspec");
+    assert_eq!(c.spec_root, "specjutsu");
     assert_eq!(c.mode, Mode::Guided);
     assert!(c.packages.is_empty());
 
@@ -182,6 +182,7 @@ fn conf_006_the_written_file_parses_back_to_the_same_config() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\n").unwrap();
     let d = Config::default_for(dir.path());
+    assert!(d.to_toml().contains("spec_root = \"specjutsu\"\n"));
     assert_eq!(Config::parse(&d.to_toml()).unwrap(), d);
 
     let quoted = Config {
@@ -196,7 +197,7 @@ fn conf_006_a_config_without_packages_is_three_lines() {
     let dir = tempfile::tempdir().unwrap();
     assert_eq!(
         Config::default_for(dir.path()).to_toml(),
-        "schema = 1\nspec_root = \"openspec\"\nmode = \"guided\"\n"
+        "schema = 1\nspec_root = \"specjutsu\"\nmode = \"guided\"\n"
     );
 }
 
@@ -311,4 +312,21 @@ fn ids_004_an_invalid_prefix_is_rejected() {
     }
     let e = err_text("schema = 1\n\n[ids]\nprefix = {}\n");
     assert!(e.contains("prefix"), "{e}");
+}
+
+#[test]
+fn conf_032_an_openspec_folder_is_used_until_a_specjutsu_folder_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("specjutsu.toml"), "schema = 1\n").unwrap();
+    std::fs::create_dir_all(dir.path().join("openspec/changes/old-change")).unwrap();
+    assert_eq!(config::load(dir.path()).unwrap().spec_root, "openspec");
+    std::fs::create_dir_all(dir.path().join("specjutsu/changes/new-change")).unwrap();
+    assert_eq!(config::load(dir.path()).unwrap().spec_root, "specjutsu");
+    // An explicit setting always wins.
+    std::fs::write(
+        dir.path().join("specjutsu.toml"),
+        "schema = 1\nspec_root = \"openspec\"\n",
+    )
+    .unwrap();
+    assert_eq!(config::load(dir.path()).unwrap().spec_root, "openspec");
 }

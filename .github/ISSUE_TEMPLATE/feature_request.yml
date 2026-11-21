@@ -1,0 +1,35 @@
+name: Feature request
+description: A new behaviour, adapter or command for sj.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: How sj should behave. Scenario-style (given / when / then) is welcome but not required.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - core (spec, gate, ledger, verify)
+        - test-runner adapter
+        - agent adapter
+        - skills
+        - docs / site
+        - other
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to open a PR for this myself.
