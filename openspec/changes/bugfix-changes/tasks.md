@@ -13,4 +13,4 @@
 - [x] 3.2 [P] Bugfix checks in `sj spec check` (SPEC-041, SPEC-042)
 
 ## 4. Docs and skills
-- [ ] 4.1 `sj-debug` skill writes keep scenarios; README section (no-scenario: docs)
+- [x] 4.1 `sj-debug` skill writes keep scenarios; README section (no-scenario: docs)

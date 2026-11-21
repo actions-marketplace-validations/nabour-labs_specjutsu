@@ -124,10 +124,7 @@ fn spec_041_a_bugfix_with_no_keep_scenario_is_warned_about() {
         .stdout(predicate::str::contains(
             "warn    bug change has no [keep] scenario; add one for behaviour that must not change",
         ));
-}
-
-#[test]
-fn spec_041_a_bugfix_with_both_checks_clean() {
+    // With a keep scenario next to the reproduction, the warning goes away.
     let dir = project(
         &[
             "PAY-012 Refunds round half up",
