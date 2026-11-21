@@ -47,11 +47,12 @@ matches it. specjutsu checks it deterministically:
 | Test must fail before the code | No | No | No | By prompt | **Enforced, then proven in CI** |
 | PR blocked until proof holds | No | No | No | No | **Yes, GitHub Action** |
 | Test-tampering checks | No | No | No | No | **Yes, `sj audit`** |
+| Bug fix proven not to break nearby behaviour | No | LLM | LLM | No | **Yes, `[keep]` scenarios** |
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
 
 specjutsu is not ahead everywhere yet: OpenSpec parity (more agents, custom workflow
-schemas, multi-repo spec stores) is planned for v0.6 and v0.7, and bugfix specs,
-specs inferred from existing tests and property scenarios go further. See
+schemas, multi-repo spec stores) is planned for v0.6 and v0.7, and specs inferred
+from existing tests and property scenarios go further. See
 [How specjutsu compares](docs/competitive-analysis.md) for the full comparison, its
 sources, and the change that closes each gap.
 
