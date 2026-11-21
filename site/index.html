@@ -55,8 +55,8 @@
       <a class="btn" href="https://github.com/marketplace/actions/specjutsu-gate">GitHub Marketplace</a>
     </div>
     <div class="install">
-      <code id="install-cmd"><span class="p">$ </span>cargo install specjutsu</code>
-      <button class="copy" type="button" data-copy="cargo install specjutsu">Copy</button>
+      <code id="install-cmd"><span class="p">$ </span>curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh</code>
+      <button class="copy" type="button" data-copy="curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh">Copy</button>
     </div>
     <p class="tagline"><em>One tool from spec to proof.</em> Bring your OpenSpec folders; specjutsu takes it from there.</p>
   </div>
@@ -298,20 +298,20 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
   <div class="wrap">
     <p class="eyebrow">Quickstart</p>
     <h2>From install to a blocking gate<br>in a few minutes.</h2>
-    <p class="section-lede">Prebuilt binaries for macOS, Linux and Windows are on the <a href="https://github.com/nabour-labs/specjutsu/releases">releases page</a>, or build from source.</p>
+    <p class="section-lede">One command on macOS, Linux and Windows, or Homebrew and Cargo. Every install is checked against the release's <code>SHA256SUMS</code>.</p>
     <div class="qs">
       <div class="qs-card qs-install">
         <h3><span class="num">1</span>Install</h3>
-        <p>One binary, no runtime. Pick your platform from the release, or build it.</p>
-<pre class="code"><span class="c-m"># prebuilt binary (macOS arm64 shown)</span>
-gh release download v0.5.0 \
-  -R nabour-labs/specjutsu \
-  -p 'sj-aarch64-apple-darwin.tar.gz'
-tar -xzf sj-aarch64-apple-darwin.tar.gz
-install sj-aarch64-apple-darwin/sj ~/.local/bin/
+        <p>One binary, no runtime. The installer picks your platform and verifies the download.</p>
+<pre class="code"><span class="c-m"># macOS and Linux</span>
+curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh
 
-<span class="c-m"># or with Cargo (needs Rust)</span>
-cargo install specjutsu
+<span class="c-m"># Windows (PowerShell)</span>
+irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex
+
+<span class="c-m"># or Homebrew, or Cargo</span>
+brew install nabour-labs/tap/specjutsu
+cargo binstall specjutsu
 
 <span class="c-m"># check it</span>
 sj --version</pre>
