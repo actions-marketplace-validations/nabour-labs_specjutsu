@@ -15,7 +15,7 @@ pub const END: &str = "<!-- specjutsu:end -->";
 pub const BLOCK_BODY: &str = include_str!("../assets/claude/CLAUDE.block.md");
 
 /// The skills, as (name, source text).
-pub const SKILLS: [(&str, &str); 9] = [
+pub const SKILLS: [(&str, &str); 10] = [
     (
         "sj-explore",
         include_str!("../assets/skills/sj-explore/SKILL.md"),
@@ -51,6 +51,10 @@ pub const SKILLS: [(&str, &str); 9] = [
     (
         "sj-finish",
         include_str!("../assets/skills/sj-finish/SKILL.md"),
+    ),
+    (
+        "sj-onboard",
+        include_str!("../assets/skills/sj-onboard/SKILL.md"),
     ),
 ];
 

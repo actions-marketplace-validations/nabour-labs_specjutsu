@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use regex::Regex;
 
 /// The skills specjutsu ships, in working order.
-pub const SKILLS: [&str; 9] = [
+pub const SKILLS: [&str; 10] = [
     "sj-explore",
     "sj-propose",
     "sj-clarify",
@@ -20,6 +20,7 @@ pub const SKILLS: [&str; 9] = [
     "sj-review",
     "sj-verify",
     "sj-finish",
+    "sj-onboard",
 ];
 
 /// Most bytes in a skill's body, after the frontmatter.
@@ -42,7 +43,9 @@ pub const SUPERPOWERS: [&str; 12] = [
 ];
 
 /// OpenSpec workflow commands the set replaces.
-pub const OPENSPEC: [&str; 6] = ["explore", "propose", "apply", "archive", "sync", "update"];
+pub const OPENSPEC: [&str; 7] = [
+    "explore", "propose", "apply", "archive", "sync", "update", "onboard",
+];
 
 /// Spec Kit commands the set replaces.
 pub const SPEC_KIT: [&str; 8] = [
@@ -68,6 +71,60 @@ const REQUIRED: [(&str, &[&str]); 6] = [
     ),
     ("sj-clarify", &["sj spec check"]),
 ];
+
+/// The scratch change `sj-onboard` creates and removes (SKILL-005..007).
+const DEMO: &str = "sj-onboard-demo";
+
+/// Commands `sj-onboard` must name, in this order (SKILL-005).
+const ONBOARD_LOOP: [&str; 4] = ["sj spec new", "sj test", "sj task done", "sj verify"];
+
+/// The onboarding walk-through: the full loop, cleanup without archiving, and a clean start.
+fn check_onboard(text: &str, out: &mut Vec<Problem>) {
+    let name = "sj-onboard";
+    let mut found: Vec<(&str, usize)> = Vec::new();
+    for c in ONBOARD_LOOP {
+        let Some(at) = text.find(c) else {
+            out.push(problem(name, format!("does not name `{c}`")));
+            continue;
+        };
+        // The first earlier step this one is named ahead of.
+        if let Some((prev, _)) = found.iter().find(|(_, p)| at < *p) {
+            out.push(problem(name, format!("names `{c}` before `{prev}`")));
+        }
+        found.push((c, at));
+    }
+    if !text.contains(DEMO) {
+        out.push(problem(
+            name,
+            format!("does not name the scratch change {DEMO}"),
+        ));
+    }
+    let lower = text.to_ascii_lowercase();
+    let folder = format!("changes/{DEMO}/");
+    if !(lower.contains("delete")
+        && text.contains(&folder)
+        && lower.contains("demo test")
+        && lower.contains("demo code"))
+    {
+        out.push(problem(
+            name,
+            format!("does not delete {folder}, the demo test and the demo code"),
+        ));
+    }
+    if text.contains("sj spec archive") {
+        out.push(problem(name, "runs `sj spec archive`"));
+    }
+    if !(text.contains("git status")
+        && lower.contains("uncommitted")
+        && lower.contains("stop")
+        && text.contains(&folder))
+    {
+        out.push(problem(
+            name,
+            format!("does not stop on uncommitted changes or an existing {DEMO}"),
+        ));
+    }
+}
 
 /// Skills that must apply the principles file (SKILL-004).
 const PRINCIPLED: [&str; 2] = ["sj-propose", "sj-review"];
@@ -190,6 +247,9 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
                 out.push(problem(name, format!("does not name `{c}`")));
             }
         }
+    }
+    if name == "sj-onboard" {
+        check_onboard(&text, out);
     }
     if PRINCIPLED.contains(&name) {
         if !text.contains("principles.md") {

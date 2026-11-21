@@ -25,6 +25,7 @@ about Superpowers itself and have no counterpart.
 | OpenSpec | archive | sj-finish |
 | OpenSpec | sync | sj-finish |
 | OpenSpec | update | sj-propose |
+| OpenSpec | onboard | sj-onboard |
 | Spec Kit | constitution | sj-principles |
 | Spec Kit | specify | sj-propose |
 | Spec Kit | clarify | sj-clarify |
