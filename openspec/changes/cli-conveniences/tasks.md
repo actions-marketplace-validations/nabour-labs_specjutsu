@@ -23,4 +23,4 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 5. Docs
 
-- [ ] 5.1 README and manual: bulk archive, `update --dry-run`, completions setup per shell, `sj-onboard`; CHANGELOG entry (no-scenario: docs).
+- [x] 5.1 README and manual: bulk archive, `update --dry-run`, completions setup per shell, `sj-onboard`; CHANGELOG entry (no-scenario: docs).
