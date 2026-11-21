@@ -47,8 +47,13 @@ fn adapt_012_unknown_agent_writes_nothing() {
         .assert()
         .code(2)
         .stderr(predicate::str::is_match(
-            r"unknown agent zed \(supported: claude, codex, cursor, cline, [a-z, -]*\bantigravity\b[a-z, -]*agents-md, auto\)",
-        ).unwrap());
+            r"unknown agent zed \(supported: claude, codex, cursor, cline, [a-z, -]*agents-md, auto\)",
+        ).unwrap())
+        .stderr(predicate::function(|err: &str| {
+            ["copilot", "windsurf", "kiro", "antigravity"]
+                .iter()
+                .all(|a| err.contains(&format!(" {a},")))
+        }));
 
     assert_eq!(snapshot(root), before);
 }

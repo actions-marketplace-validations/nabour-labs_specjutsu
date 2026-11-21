@@ -114,7 +114,7 @@ enum Command {
         /// Replace an existing specjutsu.toml.
         #[arg(long)]
         force: bool,
-        /// Install agent adapters (comma-separated: claude, codex, cursor, cline, gemini, antigravity, agents-md, auto).
+        /// Install agent adapters (comma-separated: claude, codex, cursor, cline, copilot, gemini, windsurf, kiro, antigravity, agents-md, auto).
         #[arg(long, value_delimiter = ',')]
         agents: Vec<String>,
         /// Remove agent adapters (comma-separated, as for --agents).
@@ -126,10 +126,11 @@ enum Command {
         global: bool,
     },
     /// Hook entrypoint for agent tools: `sj hook claude session-start|pre-edit`,
-    /// `sj hook codex|cursor|gemini|antigravity pre-edit`, or
+    /// `sj hook codex|cursor|copilot|gemini|windsurf|kiro|antigravity pre-edit`, or
     /// `sj hook check-edit <path>` (exit 0 allows, 2 blocks) for any other tool.
     Hook {
-        /// The agent tool (claude, codex, cursor, gemini, antigravity), or check-edit.
+        /// The agent tool (claude, codex, cursor, copilot, gemini, windsurf, kiro, antigravity),
+        /// or check-edit.
         agent: String,
         /// The hook event (session-start or pre-edit), or the path for check-edit.
         event: String,
@@ -509,7 +510,11 @@ fn run() -> Result<ExitCode> {
                 // Its exit code is always success; errors come back as `Err`.
                 let _ = init_cmd(&root, force)?;
             }
-            agents_cmd(&root, &agents, false, false)
+            let code = agents_cmd(&root, &agents, false, false)?;
+            if agents.iter().any(|a| a == "copilot") {
+                println!("{}", sj_adapters::copilot::NOTICE);
+            }
+            Ok(code)
         }
         Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
         Command::Completions { shell } => {
@@ -802,7 +807,26 @@ fn hook_cmd(agent: &str, event: &str, root: Option<PathBuf>) -> ExitCode {
         return cursor_pre_edit(&root);
     }
     if agent == "codex" && event == "pre-edit" {
-        return codex_pre_edit(&root);
+        return patch_pre_edit(
+            &root,
+            sj_adapters::codex::targets,
+            sj_adapters::codex::deny,
+            true,
+        );
+    }
+    if agent == "copilot" && event == "pre-edit" {
+        return patch_pre_edit(
+            &root,
+            sj_adapters::copilot::targets,
+            sj_adapters::copilot::deny,
+            false,
+        );
+    }
+    if agent == "windsurf" && event == "pre-edit" {
+        return exit_code_pre_edit(&root, sj_adapters::windsurf::target);
+    }
+    if agent == "kiro" && event == "pre-edit" {
+        return exit_code_pre_edit(&root, sj_adapters::kiro::target);
     }
     if agent == "antigravity" && event == "pre-edit" {
         return decision_pre_edit(&root, sj_adapters::antigravity::target);
@@ -899,16 +923,21 @@ fn decision_pre_edit(root: &Path, target: fn(&str) -> Result<String>) -> ExitCod
     ExitCode::SUCCESS
 }
 
-/// `sj hook codex pre-edit`: deny the patch when any file it touches is blocked, naming
-/// that file; print nothing to allow. Unreadable input and internal errors allow, with a
-/// warning on stderr.
-fn codex_pre_edit(root: &Path) -> ExitCode {
-    use sj_adapters::codex;
+/// `sj hook codex|copilot pre-edit`: print `deny` when any file the call touches is
+/// blocked; print nothing to allow. Each reason names its file when `name_files` is set or
+/// the call touches several files. Always exits 0. Unreadable input and
+/// internal errors allow, with a warning on stderr.
+fn patch_pre_edit(
+    root: &Path,
+    targets: fn(&str) -> Result<Vec<String>>,
+    deny: fn(&[String]) -> String,
+    name_files: bool,
+) -> ExitCode {
     use sj_core::hook::{self, Decision};
     let mut input = String::new();
     let paths = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
         .map_err(anyhow::Error::from)
-        .and_then(|_| codex::targets(&input));
+        .and_then(|_| targets(&input));
     let paths = match paths {
         Ok(p) => p,
         Err(e) => {
@@ -926,15 +955,35 @@ fn codex_pre_edit(root: &Path) -> ExitCode {
                 }
             }
             Ok(Decision::Block(reasons)) => {
-                blocked.extend(reasons.into_iter().map(|r| format!("{path}: {r}")));
+                if name_files || paths.len() > 1 {
+                    blocked.extend(reasons.into_iter().map(|r| format!("{path}: {r}")));
+                } else {
+                    blocked.extend(reasons);
+                }
             }
             Err(e) => eprintln!("specjutsu: hook error: {path}: {e:#}"),
         }
     }
     if !blocked.is_empty() {
-        print!("{}", codex::deny(&blocked));
+        print!("{}", deny(&blocked));
     }
     ExitCode::SUCCESS
+}
+
+/// `sj hook windsurf|kiro pre-edit`: the path read by `target`, then the answer of
+/// `sj hook check-edit`. Unreadable input allows, with a warning on stderr.
+fn exit_code_pre_edit(root: &Path, target: fn(&str) -> Result<String>) -> ExitCode {
+    let mut input = String::new();
+    let path = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+        .map_err(anyhow::Error::from)
+        .and_then(|_| target(&input));
+    match path {
+        Ok(path) => check_edit(root, &path),
+        Err(e) => {
+            eprintln!("specjutsu: hook error: {e:#}");
+            ExitCode::SUCCESS
+        }
+    }
 }
 
 /// `sj hook check-edit <path>`: exit 0 to allow, 2 to block, reasons on stderr. Like the
@@ -1074,7 +1123,9 @@ fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Resu
 /// Remove each named adapter. The AGENTS.md block goes when `agents-md` is named, or when
 /// an agent that reads it is removed and no Codex or Cursor hook is left that needs it.
 fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
-    use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
+    use sj_adapters::{
+        agents_md, antigravity, claude, codex, copilot, cursor, gemini, kiro, windsurf,
+    };
     sj_adapters::agents::check(agents)?;
     let agents: Vec<String> = if agents.iter().any(|a| a == "auto") {
         sj_adapters::agents::installed(root)
@@ -1087,7 +1138,10 @@ fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
             "claude" => changes.extend(claude::remove(root)?),
             "codex" => changes.extend(codex::remove(root)?),
             "cursor" => changes.extend(cursor::remove(root)?),
+            "copilot" => changes.extend(copilot::remove(root)?),
             "gemini" => changes.extend(gemini::remove(root)?),
+            "windsurf" => changes.extend(windsurf::remove(root)?),
+            "kiro" => changes.extend(kiro::remove(root)?),
             "antigravity" => changes.extend(antigravity::remove(root)?),
             _ => {}
         }
@@ -1095,12 +1149,22 @@ fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
     let readers = agents.iter().any(|a| {
         matches!(
             a.as_str(),
-            "codex" | "cursor" | "cline" | "gemini" | "antigravity"
+            "codex"
+                | "cursor"
+                | "cline"
+                | "copilot"
+                | "gemini"
+                | "windsurf"
+                | "kiro"
+                | "antigravity"
         )
     });
     let still_needed = codex::is_installed(root)
         || cursor::is_installed(root)
+        || copilot::is_installed(root)
         || gemini::is_installed(root)
+        || windsurf::is_installed(root)
+        || kiro::is_installed(root)
         || antigravity::is_installed(root);
     if agents.iter().any(|a| a == "agents-md") || (readers && !still_needed) {
         changes.extend(agents_md::remove(root)?);
