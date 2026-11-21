@@ -124,9 +124,17 @@ fn adapt_029_kiro_hook_blocks_with_exit_code_2() {
         &std::fs::read_to_string(root.join(".kiro/hooks/specjutsu.json")).unwrap(),
     )
     .unwrap();
-    let entry = &v["hooks"]["PreToolUse"][0];
-    assert_eq!(entry["matcher"], "write");
-    assert_eq!(entry["command"], "sj hook kiro pre-edit");
+    // Kiro's documented hook file schema.
+    assert_eq!(v["version"], "v1");
+    assert_eq!(
+        v["hooks"][0],
+        serde_json::json!({
+            "name": "specjutsu-pre-edit",
+            "trigger": "PreToolUse",
+            "matcher": "write",
+            "action": {"type": "command", "command": "sj hook kiro pre-edit"},
+        })
+    );
 }
 
 #[test]
