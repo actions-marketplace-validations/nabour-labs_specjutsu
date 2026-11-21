@@ -19,7 +19,7 @@ enum Command {
         /// Repository root (defaults to the current directory).
         #[arg(long, default_value = ".")]
         root: PathBuf,
-        /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+        /// Spec root relative to the repository root (overrides specjutsu.toml; default specjutsu, or openspec when only that folder exists).
         #[arg(long)]
         spec_root: Option<PathBuf>,
         /// Print JSON instead of the compact report.
@@ -281,7 +281,7 @@ enum Command {
 struct SpecArgs {
     #[arg(long, default_value = ".")]
     root: PathBuf,
-    /// Spec root relative to the repository root (overrides specjutsu.toml; default openspec).
+    /// Spec root relative to the repository root (overrides specjutsu.toml; default specjutsu, or openspec when only that folder exists).
     #[arg(long)]
     spec_root: Option<PathBuf>,
 }

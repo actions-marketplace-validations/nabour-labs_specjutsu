@@ -1,4 +1,4 @@
-//! `sj import speckit`: convert Spec Kit features (`specs/NNN-<name>/`) into the OpenSpec layout.
+//! `sj import speckit`: convert Spec Kit features (`specs/NNN-<name>/`) into the specjutsu layout.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

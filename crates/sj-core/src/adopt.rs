@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde_json::Value as Json;
 
-use crate::config::{Config, Package, Runner, Suite, DEFAULT_SPEC_ROOT, SCHEMA};
+use crate::config::{default_spec_root, Config, Package, Runner, Suite, SCHEMA};
 
 /// Default vitest/jest test files.
 const JS_TESTS: &str = "**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}";
@@ -91,7 +91,7 @@ pub fn detect(root: &Path) -> Result<Detected> {
     Ok(Detected {
         config: Config {
             schema: SCHEMA,
-            spec_root: DEFAULT_SPEC_ROOT.into(),
+            spec_root: default_spec_root(root),
             mode: Default::default(),
             non_source: Vec::new(),
             id_prefixes: Default::default(),
