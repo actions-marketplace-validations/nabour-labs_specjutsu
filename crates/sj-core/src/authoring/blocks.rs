@@ -142,6 +142,8 @@ pub fn blocks_in(lines: &[&str], mask: &[bool], range: Range<usize>) -> Vec<Bloc
 pub struct Scenario {
     pub id: Option<String>,
     pub name: String,
+    /// The `[word]` between the ID and the name, if any (`keep` is the only valid one).
+    pub marker: Option<String>,
     pub line: usize,
     pub has_when: bool,
     pub has_then: bool,
@@ -175,9 +177,14 @@ pub fn scenarios_in(lines: &[&str], mask: &[bool], range: Range<usize>) -> Vec<S
                     ),
                     None => (None, title),
                 };
+                let (marker, name) = match crate::spec::split_marker(&name) {
+                    (Some(m), rest) => (Some(m.to_string()), rest.to_string()),
+                    (None, _) => (None, name),
+                };
                 current = Some(Scenario {
                     id,
                     name,
+                    marker,
                     line: i + 1,
                     has_when: false,
                     has_then: false,

@@ -16,6 +16,25 @@ pub struct Scenario {
     pub name: String,
     pub file: PathBuf,
     pub line: usize,
+    /// The heading carries `[keep]`: behaviour the change must not alter (GATE-039).
+    pub keep: bool,
+}
+
+/// The marker allowed between a scenario's ID and its name.
+pub const KEEP: &str = "keep";
+
+/// Split a leading `[word] ` marker off a scenario name: `[keep] Refunds` → (`Some("keep")`,
+/// `Refunds`). A name with no marker comes back whole.
+pub fn split_marker(name: &str) -> (Option<&str>, &str) {
+    static MARKER: OnceLock<Regex> = OnceLock::new();
+    let re = MARKER.get_or_init(|| Regex::new(r"^\[([A-Za-z][A-Za-z-]*)\]\s+(.*)$").unwrap());
+    match re.captures(name) {
+        Some(c) => (
+            Some(c.get(1).unwrap().as_str()),
+            c.get(2).unwrap().as_str(),
+        ),
+        None => (None, name),
+    }
 }
 
 /// A scenario heading with where it sits in the file's bytes.
@@ -95,12 +114,17 @@ pub fn locate_scenarios(file: &Path, content: &str) -> Vec<Located> {
             ),
             None => (None, title),
         };
+        let (keep, name) = match split_marker(&name) {
+            (Some(KEEP), rest) => (true, rest.to_string()),
+            _ => (false, name),
+        };
         out.push(Located {
             scenario: Scenario {
                 id,
                 name,
                 file: file.to_path_buf(),
                 line: i + 1,
+                keep,
             },
             title_offset: line_start + title_match.start(),
             requirement: current_req.clone(),
@@ -171,7 +195,13 @@ pub fn scenario_texts(file: &Path, content: &str) -> Vec<(Scenario, String)> {
     parse_scenarios(file, content)
         .into_iter()
         .map(|s| {
-            let mut parts = vec![collapse(&s.name)];
+            // The marker is part of the text: adding or dropping `[keep]` modifies a scenario.
+            let shown = if s.keep {
+                format!("[{KEEP}] {}", s.name)
+            } else {
+                s.name.clone()
+            };
+            let mut parts = vec![collapse(&shown)];
             for line in lines.iter().skip(s.line) {
                 let t = line.trim_start();
                 if t.starts_with('#') || t.starts_with("```") || t.starts_with("~~~") {
