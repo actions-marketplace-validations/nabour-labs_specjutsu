@@ -86,7 +86,7 @@ comparison, its sources, and the change that closes each gap.
 
 ## Status
 
-**Pre-alpha, v0.4.0. Beta is next**: it opens once specjutsu has fully replaced
+**Pre-alpha, v0.5.0. Beta is next**: it opens once specjutsu has fully replaced
 OpenSpec and Superpowers in our own production monorepo. `sj trace`, `sj test` and
 `sj gate` work with Rust, vitest, Jest, Playwright and pytest, and any runner that
 writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline, Copilot,
@@ -111,7 +111,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://nabour-labs.github.io/specjut
 
 Both download the latest release for your platform, check it against the release's
 `SHA256SUMS` and install `sj` into `~/.local/bin` (Windows: `%LOCALAPPDATA%\Programs\sj`,
-added to your user `PATH`). Set `SJ_VERSION=0.4.0` to pin a release or `SJ_INSTALL_DIR`
+added to your user `PATH`). Set `SJ_VERSION=0.5.0` to pin a release or `SJ_INSTALL_DIR`
 to choose the folder. Or use a package manager:
 
 ```bash
@@ -136,7 +136,7 @@ cargo install --list | grep -A1 specjutsu   # the installed build and its source
 ```
 
 `sj --version` prints the commit after the version for a build from a git
-checkout, such as `sj 0.4.0 (f62a48b)`, and only the version for a crates.io
+checkout, such as `sj 0.5.0 (f62a48b)`, and only the version for a crates.io
 install. Open agent sessions use the new binary on their next hook call.
 
 ### Shell completions
