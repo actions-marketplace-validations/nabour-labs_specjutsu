@@ -143,6 +143,9 @@ enum Command {
         /// Print the files the update would write, keep or remove, and change nothing.
         #[arg(long)]
         dry_run: bool,
+        /// With --dry-run: print the plan as `{"files": [{"path", "action"}]}`.
+        #[arg(long, requires = "dry_run")]
+        json: bool,
     },
     /// Detect an existing project's packages and runners and write specjutsu.toml.
     Adopt {
@@ -471,20 +474,38 @@ fn run() -> Result<ExitCode> {
             root,
             force,
             dry_run,
+            json,
         } => {
             let installed = installed_agents(&root);
-            if installed.is_empty() {
-                println!("no adapters installed");
-                return Ok(ExitCode::SUCCESS);
-            }
             if dry_run {
-                let steps = plan_agents(&root, &installed, force)?;
+                let steps = if installed.is_empty() {
+                    Vec::new()
+                } else {
+                    plan_agents(&root, &installed, force)?
+                };
+                if json {
+                    let files: Vec<_> = steps
+                        .iter()
+                        .map(|s| serde_json::json!({"path": s.path(), "action": s.action()}))
+                        .collect();
+                    let v = serde_json::json!({ "files": files });
+                    println!("{}", serde_json::to_string_pretty(&v)?);
+                    return Ok(ExitCode::SUCCESS);
+                }
+                if installed.is_empty() {
+                    println!("no adapters installed");
+                    return Ok(ExitCode::SUCCESS);
+                }
                 if steps.is_empty() {
                     println!("adapters up to date");
                 }
                 for s in &steps {
                     println!("{} {}", s.action(), s.path());
                 }
+                return Ok(ExitCode::SUCCESS);
+            }
+            if installed.is_empty() {
+                println!("no adapters installed");
                 return Ok(ExitCode::SUCCESS);
             }
             agents_cmd(&root, &installed, force, true)
