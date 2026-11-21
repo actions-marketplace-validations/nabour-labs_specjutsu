@@ -11,7 +11,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 ## 2. Update preview
 
 - [x] 2.1 [P] Split `sj-adapters` update into `plan()` and `apply()`; `--dry-run` with write, keep and remove lines (ADAPT-036..038).
-- [ ] 2.2 `--dry-run --json` (ADAPT-039).
+- [x] 2.2 `--dry-run --json` (ADAPT-039).
 
 ## 3. Completions
 
