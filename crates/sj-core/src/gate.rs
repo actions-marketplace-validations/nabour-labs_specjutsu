@@ -65,6 +65,10 @@ pub enum Red {
     NotRun,
     #[serde(rename = "unverifiable")]
     Unverifiable,
+    /// A `[keep]` scenario whose tests pass on base and at head (GATE-039). Only ever a
+    /// [`Proven`] kind; base runs report a keep test's pass as [`Red::Green`].
+    #[serde(rename = "green:keep")]
+    Keep,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -136,6 +140,8 @@ pub struct Input {
     pub head_build_failed: Vec<String>,
     /// Why a target test is unverifiable on base (`red_on_base = "skip"`), keyed like `base`.
     pub reasons: BTreeMap<(String, String), String>,
+    /// IDs of `[keep]` scenarios at head: their tests must pass on base, not fail (GATE-039).
+    pub keep: BTreeSet<String>,
 }
 
 /// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
@@ -188,6 +194,8 @@ pub struct Row {
     pub evidence: String,
     pub tests: Vec<String>,
     pub failed: bool,
+    /// A `[keep]` scenario (GATE-043).
+    pub keep: bool,
 }
 
 /// Failures of the exemption rules: unknown kinds, missing reasons, and a spike merging to main.
@@ -292,6 +300,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         .map(|(id, _)| id)
         .collect();
     for id in &targets {
+        let keep = input.keep.contains(*id);
         let Some(m) = input.trace.mapped.iter().find(|m| &&m.id == id) else {
             r.failures.push(format!("untested {id}"));
             r.rows.push(Row {
@@ -299,6 +308,7 @@ pub fn evaluate(input: &Input) -> GateReport {
                 evidence: "untested".to_string(),
                 tests: Vec::new(),
                 failed: true,
+                keep,
             });
             continue;
         };
@@ -316,7 +326,8 @@ pub fn evaluate(input: &Input) -> GateReport {
                 Some(Outcome::Passed) => {}
                 Some(Outcome::Failed) => {
                     ok = false;
-                    r.failures.push(format!("failing {what}"));
+                    let kind = if keep { "keep-broken" } else { "failing" };
+                    r.failures.push(format!("{kind} {what}"));
                 }
                 _ => {
                     ok = false;
@@ -328,6 +339,15 @@ pub fn evaluate(input: &Input) -> GateReport {
             }
             let key = (id.to_string(), t.name.clone());
             match input.base.get(&key) {
+                // GATE-039/040: a keep test must pass on base; failing there means the
+                // scenario describes new behaviour.
+                Some(Red::Green) if keep => {}
+                Some(Red::Assert | Red::Compile) if keep => {
+                    ok = false;
+                    r.failures.push(format!(
+                        "keep-red-on-base {what} (it fails on base, so it describes new behaviour; drop [keep] to prove it red-on-base)"
+                    ));
+                }
                 Some(red @ (Red::Assert | Red::Compile)) => {
                     if weakest != Some(Red::Compile) {
                         weakest = Some(*red);
@@ -351,11 +371,14 @@ pub fn evaluate(input: &Input) -> GateReport {
                         r.failures.push(msg);
                     }
                 }
-                Some(Red::NotRun) | None => {
+                Some(Red::NotRun | Red::Keep) | None => {
                     ok = false;
                     r.failures.push(format!("not-run-on-base {what}"));
                 }
             }
+        }
+        if ok && keep && !skip_red {
+            weakest = Some(Red::Keep);
         }
         if ok {
             if let Some(red) = weakest {
@@ -372,6 +395,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             .map(str::to_string);
         let evidence = match (&first_failure, weakest) {
             (Some(kind), _) => kind.clone(),
+            (None, Some(Red::Keep)) => "green:keep".to_string(),
             (None, Some(Red::Compile)) => "red:compile".to_string(),
             (None, Some(_)) => "red:assert".to_string(),
             (None, None) => "green (exempt)".to_string(),
@@ -381,6 +405,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             evidence,
             tests: m.tests.iter().map(|t| t.name.clone()).collect(),
             failed: !ok,
+            keep,
         });
     }
 
@@ -439,7 +464,11 @@ fn pass_summary(proven: &[Proven]) -> String {
     }
     let n = |k: Red| proven.iter().filter(|p| p.red == k).count();
     let mut kinds = Vec::new();
-    for (k, label) in [(Red::Assert, "red:assert"), (Red::Compile, "red:compile")] {
+    for (k, label) in [
+        (Red::Assert, "red:assert"),
+        (Red::Compile, "red:compile"),
+        (Red::Keep, "green:keep"),
+    ] {
         if n(k) > 0 {
             kinds.push(format!("{} {label}", n(k)));
         }
@@ -778,6 +807,18 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         .filter(|(_, c)| matches!(c, Change::Added | Change::Modified | Change::Implemented))
         .map(|(id, _)| id)
         .collect();
+    // GATE-039: keep scenarios at head. A change's delta comes after `specs/`, so its
+    // marker wins for an ID that appears in both.
+    let mut keep_by_id: BTreeMap<String, bool> = BTreeMap::new();
+    for s in spec::load_scenarios(&root.join(&opts.spec_root))? {
+        if let Some(id) = s.id {
+            keep_by_id.insert(id, s.keep);
+        }
+    }
+    let keep: BTreeSet<String> = keep_by_id
+        .into_iter()
+        .filter_map(|(id, k)| k.then_some(id))
+        .collect();
     let refactor = exemptions.iter().any(|e| e.kind == "refactor");
     let skip_red = refactor || exemptions.iter().any(|e| e.kind == "spike");
     let touches_impl = changed_files.iter().any(|f| classifier.is_impl(f));
@@ -946,6 +987,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_failing,
         head_build_failed,
         reasons,
+        keep,
     });
     // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
     let audit = crate::audit::run(&crate::audit::Options {

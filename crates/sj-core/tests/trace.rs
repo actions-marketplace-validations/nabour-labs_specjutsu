@@ -21,6 +21,7 @@ fn trace_001_parse_scenario_ids_from_headings() {
             name: "Reject expired token".into(),
             file: PathBuf::from("spec.md"),
             line: 3,
+            keep: false,
         }]
     );
 }
