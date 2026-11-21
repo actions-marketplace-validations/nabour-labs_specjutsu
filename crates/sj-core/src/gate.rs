@@ -661,8 +661,15 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     let mut base_texts: BTreeSet<String> = BTreeSet::new();
     // Texts of base scenarios without an ID: gaining one is not a change (GATE-036).
     let mut base_unidentified: BTreeSet<String> = BTreeSet::new();
-    let base_paths = git.ls_tree(&mb)?;
+    let mut base_paths = git.ls_tree(&mb)?;
     let base_root = base_spec_root(&git, &mb, &spec_root, &base_paths);
+    // Head's order: `specs/` first, then the open changes, so the last copy of a scenario,
+    // which `classify` keeps, is the open change's on both sides (GATE-045).
+    let specs_dir = match base_root.trim_end_matches('/') {
+        "" | "." => "specs/".to_string(),
+        r => format!("{r}/specs/"),
+    };
+    base_paths.sort_by_key(|p| (!p.starts_with(&specs_dir), p.clone()));
     for path in base_paths {
         if spec::is_spec_path(&path, &base_root) {
             let content = git.show(&mb, &path)?;

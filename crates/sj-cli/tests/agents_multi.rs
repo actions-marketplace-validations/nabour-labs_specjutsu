@@ -231,3 +231,100 @@ fn adapt_042_auto_detects_gemini_and_antigravity() {
     assert!(read(root, "AGENTS.md").contains(BEGIN));
     assert!(!root.join(".claude").exists());
 }
+
+#[test]
+fn adapt_023_auto_detects_the_new_agents() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    put(root, "specjutsu.toml", CONFIG);
+    put(
+        root,
+        ".gemini/settings.json",
+        "{\n  \"theme\": \"GitHub\"\n}\n",
+    );
+    std::fs::create_dir_all(root.join(".windsurf")).unwrap();
+    put(root, ".kiro/steering/product.md", "# Product\n");
+
+    sj(root)
+        .args(["init", "--agents", "auto"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "agents: gemini, windsurf, kiro, agents-md\n",
+        ));
+
+    assert!(read(root, ".gemini/settings.json").contains("sj hook gemini pre-edit"));
+    assert!(read(root, ".windsurf/hooks.json").contains("sj hook windsurf pre-edit"));
+    assert!(read(root, ".kiro/hooks/specjutsu.json").contains("sj hook kiro pre-edit"));
+    assert!(read(root, "AGENTS.md").contains(BEGIN));
+    assert!(!root.join(".github").exists());
+}
+
+#[test]
+fn adapt_023_auto_detects_copilot() {
+    for marker in [
+        ".github/copilot-instructions.md",
+        ".github/hooks/audit.json",
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        put(root, "specjutsu.toml", CONFIG);
+        put(root, marker, "{}\n");
+
+        sj(root)
+            .args(["init", "--agents", "auto"])
+            .assert()
+            .success()
+            .stdout(predicate::str::starts_with("agents: copilot, agents-md\n"));
+        assert!(
+            read(root, ".github/hooks/specjutsu.json").contains("sj hook copilot pre-edit"),
+            "{marker}"
+        );
+    }
+}
+
+#[test]
+fn adapt_024_install_then_remove_restores_the_new_agents_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    put(root, "specjutsu.toml", CONFIG);
+    put(
+        root,
+        ".gemini/settings.json",
+        "{\n  \"theme\": \"GitHub\"\n}\n",
+    );
+    put(
+        root,
+        ".windsurf/hooks.json",
+        "{\n  \"hooks\": {\n    \"post_write_code\": [\n      {\"command\": \"./format.sh\"}\n    ]\n  }\n}\n",
+    );
+    let before = snapshot(root);
+    let all = "copilot,gemini,windsurf,kiro,antigravity";
+
+    sj(root).args(["init", "--agents", all]).assert().success();
+    for (file, command) in [
+        (".github/hooks/specjutsu.json", "sj hook copilot pre-edit"),
+        (".gemini/settings.json", "sj hook gemini pre-edit"),
+        (".windsurf/hooks.json", "sj hook windsurf pre-edit"),
+        (".kiro/hooks/specjutsu.json", "sj hook kiro pre-edit"),
+        (".agents/hooks.json", "sj hook antigravity pre-edit"),
+    ] {
+        assert!(read(root, file).contains(command), "{file}");
+    }
+    assert!(read(root, ".windsurf/hooks.json").contains("./format.sh"));
+    for line in ["copilot: hook\n", "windsurf: hook\n", "kiro: hook\n"] {
+        sj(root)
+            .arg("doctor")
+            .assert()
+            .stdout(predicate::str::contains(line));
+    }
+
+    sj(root)
+        .args(["init", "--remove-agents", all])
+        .assert()
+        .success();
+    assert_eq!(snapshot(root), before);
+    for d in [".github/hooks", ".kiro/hooks", ".agents"] {
+        assert!(!root.join(d).exists(), "{d}");
+    }
+}
