@@ -114,18 +114,22 @@ enum Command {
         /// Replace an existing specjutsu.toml.
         #[arg(long)]
         force: bool,
-        /// Install agent adapters (comma-separated: claude, codex, cursor, cline, agents-md, auto).
+        /// Install agent adapters (comma-separated: claude, codex, cursor, cline, gemini, antigravity, agents-md, auto).
         #[arg(long, value_delimiter = ',')]
         agents: Vec<String>,
         /// Remove agent adapters (comma-separated, as for --agents).
         #[arg(long, value_delimiter = ',', conflicts_with = "agents")]
         remove_agents: Vec<String>,
+        /// Install or remove only the skills, in ~/.claude/skills and ~/.agents/skills, for
+        /// every project. Hooks and instruction blocks stay per repository.
+        #[arg(long)]
+        global: bool,
     },
     /// Hook entrypoint for agent tools: `sj hook claude session-start|pre-edit`,
-    /// `sj hook codex|cursor pre-edit`, or
+    /// `sj hook codex|cursor|gemini|antigravity pre-edit`, or
     /// `sj hook check-edit <path>` (exit 0 allows, 2 blocks) for any other tool.
     Hook {
-        /// The agent tool (claude, codex, cursor), or check-edit.
+        /// The agent tool (claude, codex, cursor, gemini, antigravity), or check-edit.
         agent: String,
         /// The hook event (session-start or pre-edit), or the path for check-edit.
         event: String,
@@ -146,6 +150,9 @@ enum Command {
         /// With --dry-run: print the plan as `{"files": [{"path", "action"}]}`.
         #[arg(long, requires = "dry_run")]
         json: bool,
+        /// Refresh the skills installed with `sj init --global` instead of the repository's.
+        #[arg(long)]
+        global: bool,
     },
     /// Detect an existing project's packages and runners and write specjutsu.toml.
     Adopt {
@@ -480,7 +487,11 @@ fn run() -> Result<ExitCode> {
             force,
             agents,
             remove_agents,
+            global,
         } => {
+            if global {
+                return global_init_cmd(&root, &agents, &remove_agents, force);
+            }
             if !remove_agents.is_empty() {
                 return remove_agents_cmd(&root, &remove_agents);
             }
@@ -511,7 +522,11 @@ fn run() -> Result<ExitCode> {
             force,
             dry_run,
             json,
+            global,
         } => {
+            if global {
+                return global_update_cmd(force, dry_run, json);
+            }
             let installed = installed_agents(&root);
             if dry_run {
                 let steps = if installed.is_empty() {
@@ -558,6 +573,16 @@ fn run() -> Result<ExitCode> {
             }
             for (agent, level) in sj_adapters::enforcement::levels(&root) {
                 println!("{agent}: {level}");
+            }
+            let mut skills = Vec::new();
+            if sj_adapters::global::has_skills(&root) {
+                skills.push("project");
+            }
+            if sj_adapters::global::home().is_some_and(|h| sj_adapters::global::has_skills(&h)) {
+                skills.push("global");
+            }
+            if !skills.is_empty() {
+                println!("skills: {}", skills.join(", "));
             }
             Ok(if problems.is_empty() {
                 ExitCode::SUCCESS
@@ -779,6 +804,12 @@ fn hook_cmd(agent: &str, event: &str, root: Option<PathBuf>) -> ExitCode {
     if agent == "codex" && event == "pre-edit" {
         return codex_pre_edit(&root);
     }
+    if agent == "antigravity" && event == "pre-edit" {
+        return decision_pre_edit(&root, sj_adapters::antigravity::target);
+    }
+    if agent == "gemini" && event == "pre-edit" {
+        return decision_pre_edit(&root, sj_adapters::gemini::target);
+    }
     if agent != "claude" {
         eprintln!("specjutsu: hook error: unknown agent `{agent}`");
         return ExitCode::SUCCESS;
@@ -836,6 +867,33 @@ fn cursor_pre_edit(root: &Path) -> ExitCode {
         Err(e) => {
             eprintln!("specjutsu: hook error: {e:#}");
             print!("{}", cursor::allow());
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// `sj hook antigravity|gemini pre-edit`: always one JSON decision on stdout, the edited path
+/// read by `target`. Unreadable input and internal errors allow, with a warning on stderr.
+fn decision_pre_edit(root: &Path, target: fn(&str) -> Result<String>) -> ExitCode {
+    use sj_adapters::antigravity;
+    use sj_core::hook::{self, Decision};
+    let mut input = String::new();
+    let decided = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+        .map_err(anyhow::Error::from)
+        .and_then(|_| target(&input))
+        .and_then(|path| hook::decide(root, &path));
+    match decided {
+        Ok(Decision::Block(reasons)) => print!("{}", antigravity::deny(&reasons)),
+        Ok(Decision::Warn(reasons)) => {
+            for r in reasons {
+                eprintln!("specjutsu: {r}");
+            }
+            print!("{}", antigravity::allow());
+        }
+        Ok(Decision::Allow) => print!("{}", antigravity::allow()),
+        Err(e) => {
+            eprintln!("specjutsu: hook error: {e:#}");
+            print!("{}", antigravity::allow());
         }
     }
     ExitCode::SUCCESS
@@ -902,7 +960,16 @@ fn check_edit(root: &Path, path: &str) -> ExitCode {
 }
 
 /// Every name `--agents` accepts.
-const AGENTS: [&str; 6] = ["claude", "codex", "cursor", "cline", "agents-md", "auto"];
+const AGENTS: [&str; 8] = [
+    "claude",
+    "codex",
+    "cursor",
+    "cline",
+    "gemini",
+    "antigravity",
+    "agents-md",
+    "auto",
+];
 
 /// A usage error naming the first unknown agent; checked before anything is written.
 fn check_agents(agents: &[String]) -> Result<()> {
@@ -930,6 +997,12 @@ fn detect_agents(root: &Path) -> Vec<&'static str> {
     if has(".clinerules") {
         out.push("cline");
     }
+    if has(".gemini") || has("GEMINI.md") {
+        out.push("gemini");
+    }
+    if has(".agents/rules") || has(".agent/rules") {
+        out.push("antigravity");
+    }
     if has("AGENTS.md") {
         out.push("agents-md");
     }
@@ -949,7 +1022,7 @@ fn resolve_agents(root: &Path, agents: &[String]) -> (Vec<String>, bool) {
     }
     if wanted
         .iter()
-        .any(|a| matches!(*a, "codex" | "cursor" | "cline"))
+        .any(|a| matches!(*a, "codex" | "cursor" | "cline" | "gemini" | "antigravity"))
     {
         wanted.push("agents-md");
     }
@@ -963,7 +1036,7 @@ fn resolve_agents(root: &Path, agents: &[String]) -> (Vec<String>, bool) {
 
 /// The adapters already installed in `root`, which `sj update` refreshes.
 fn installed_agents(root: &Path) -> Vec<String> {
-    use sj_adapters::{agents_md, claude, codex, cursor};
+    use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
     let mut out = Vec::new();
     if claude::is_installed(root) {
         out.push("claude".to_string());
@@ -973,6 +1046,12 @@ fn installed_agents(root: &Path) -> Vec<String> {
     }
     if cursor::is_installed(root) {
         out.push("cursor".to_string());
+    }
+    if gemini::is_installed(root) {
+        out.push("gemini".to_string());
+    }
+    if antigravity::is_installed(root) {
+        out.push("antigravity".to_string());
     }
     if agents_md::is_installed(root) {
         out.push("agents-md".to_string());
@@ -988,20 +1067,121 @@ fn plan_agents(
     agents: &[String],
     force: bool,
 ) -> Result<Vec<sj_adapters::plan::Step>> {
-    use sj_adapters::{agents_md, claude, codex, cursor};
+    use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
     let mut steps = Vec::new();
     for a in agents {
         match a.as_str() {
             "claude" => steps.extend(claude::plan(root, force)?),
             "codex" => steps.extend(codex::plan(root)?),
             "cursor" => steps.extend(cursor::plan(root)?),
+            "gemini" => steps.extend(gemini::plan(root)?),
+            "antigravity" => steps.extend(antigravity::plan(root)?),
             // Cline's hooks run only in its CLI, so it gets the shared instructions only.
             "cline" => {}
             "agents-md" => steps.extend(agents_md::plan(root)?),
             other => anyhow::bail!("unknown agent {other}"),
         }
     }
+    if agents
+        .iter()
+        .any(|a| sj_adapters::shared_skills::READERS.contains(&a.as_str()))
+    {
+        steps.extend(sj_adapters::shared_skills::plan(root, force)?);
+    }
     Ok(steps)
+}
+
+/// The home folder for `--global`, or an error saying how to set it.
+fn home_dir() -> Result<PathBuf> {
+    sj_adapters::global::home()
+        .ok_or_else(|| anyhow::anyhow!("--global needs HOME (or USERPROFILE) to be set"))
+}
+
+/// A path under the home folder as `--global` prints it.
+fn home_path(p: &str) -> String {
+    format!("~/{p}")
+}
+
+fn print_home_changes(changes: &[sj_adapters::claude::Change], none: &str) {
+    use sj_adapters::claude::Change;
+    if changes.is_empty() {
+        println!("{none}");
+    }
+    for c in changes {
+        let c = match c {
+            Change::Created(p) => Change::Created(home_path(p)),
+            Change::Updated(p) => Change::Updated(home_path(p)),
+            Change::Removed(p) => Change::Removed(home_path(p)),
+            Change::Kept(p) => Change::Kept(home_path(p)),
+        };
+        println!("{c}");
+    }
+}
+
+/// `sj init --agents|--remove-agents <list> --global`: skills only, in the home folders.
+fn global_init_cmd(
+    root: &Path,
+    agents: &[String],
+    remove: &[String],
+    force: bool,
+) -> Result<ExitCode> {
+    use sj_adapters::global;
+    let home = home_dir()?;
+    if !remove.is_empty() {
+        check_agents(remove)?;
+        let (remove, _) = resolve_agents(root, remove);
+        print_home_changes(&global::remove(&home, &remove)?, "no skills to remove");
+        return Ok(ExitCode::SUCCESS);
+    }
+    if agents.is_empty() {
+        anyhow::bail!("--global needs --agents or --remove-agents");
+    }
+    check_agents(agents)?;
+    let (agents, _) = resolve_agents(root, agents);
+    let changes = sj_adapters::plan::apply(global::plan(&home, &agents, force)?)?;
+    print_home_changes(&changes, "skills up to date");
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `sj update --global`: refresh the skill folders in the home folder that hold `sj-*`
+/// skills. Like `sj update`, a kept hand-edited skill exits 1.
+fn global_update_cmd(force: bool, dry_run: bool, json: bool) -> Result<ExitCode> {
+    use sj_adapters::claude::Change;
+    use sj_adapters::global;
+    let home = home_dir()?;
+    if !global::has_skills(&home) {
+        println!("no global skills installed");
+        return Ok(ExitCode::SUCCESS);
+    }
+    let steps = global::update_plan(&home, force)?;
+    if dry_run {
+        if json {
+            let files: Vec<_> = steps
+                .iter()
+                .map(|s| serde_json::json!({"path": home_path(s.path()), "action": s.action()}))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({ "files": files }))?
+            );
+        } else {
+            if steps.is_empty() {
+                println!("skills up to date");
+            }
+            for s in &steps {
+                println!("{} {}", s.action(), home_path(s.path()));
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let changes = sj_adapters::plan::apply(steps)?;
+    print_home_changes(&changes, "skills up to date");
+    let kept = changes.iter().any(|c| matches!(c, Change::Kept(_)));
+    Ok(if kept {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    })
 }
 
 fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Result<ExitCode> {
@@ -1024,7 +1204,7 @@ fn agents_cmd(root: &Path, agents: &[String], force: bool, update: bool) -> Resu
 /// Remove each named adapter. The AGENTS.md block goes when `agents-md` is named, or when
 /// an agent that reads it is removed and no Codex or Cursor hook is left that needs it.
 fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
-    use sj_adapters::{agents_md, claude, codex, cursor};
+    use sj_adapters::{agents_md, antigravity, claude, codex, cursor, gemini};
     check_agents(agents)?;
     let agents: Vec<String> = if agents.iter().any(|a| a == "auto") {
         installed_agents(root)
@@ -1037,15 +1217,28 @@ fn remove_agents_cmd(root: &Path, agents: &[String]) -> Result<ExitCode> {
             "claude" => changes.extend(claude::remove(root)?),
             "codex" => changes.extend(codex::remove(root)?),
             "cursor" => changes.extend(cursor::remove(root)?),
+            "gemini" => changes.extend(gemini::remove(root)?),
+            "antigravity" => changes.extend(antigravity::remove(root)?),
             _ => {}
         }
     }
-    let readers = agents
-        .iter()
-        .any(|a| matches!(a.as_str(), "codex" | "cursor" | "cline"));
-    let still_needed = codex::is_installed(root) || cursor::is_installed(root);
+    let readers = agents.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "codex" | "cursor" | "cline" | "gemini" | "antigravity"
+        )
+    });
+    let still_needed = codex::is_installed(root)
+        || cursor::is_installed(root)
+        || gemini::is_installed(root)
+        || antigravity::is_installed(root);
     if agents.iter().any(|a| a == "agents-md") || (readers && !still_needed) {
         changes.extend(agents_md::remove(root)?);
+    }
+    let skill_readers =
+        codex::is_installed(root) || gemini::is_installed(root) || antigravity::is_installed(root);
+    if !skill_readers && sj_adapters::shared_skills::is_installed(root) {
+        changes.extend(sj_adapters::shared_skills::remove(root)?);
     }
     if changes.is_empty() {
         println!("no adapter files to remove");
