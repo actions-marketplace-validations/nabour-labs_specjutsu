@@ -15,10 +15,19 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- `sj adopt` creates `<spec_root>/specs/` and `<spec_root>/changes/`, so `sj doctor`
+  passes right after adopting.
 - `sj gate` reads base scenarios from the base commit's own spec root. Moving the
   spec folder no longer reports every scenario as added and green on base.
 
 ### Added
+- `install.sh`: a one-line installer for macOS and Linux
+  (`curl -fsSL https://raw.githubusercontent.com/nabour-labs/specjutsu/main/install.sh | sh`).
+  It picks the release for the machine, checks it against `SHA256SUMS`, and installs
+  `sj` into `~/.local/bin` (`SJ_INSTALL_DIR`, `SJ_VERSION`).
+- The setup skill `skills/specjutsu/SKILL.md`, for agents that don't have `sj` yet:
+  install, `sj adopt` or `sj init`, `sj init --agents auto`, `sj doctor`.
+  `npx skills add nabour-labs/specjutsu --skill specjutsu`.
 - `sj migrate --from openspec` removes OpenSpec's Antigravity workflows,
   `.agents/workflows/opsx-*.md`, when the frontmatter holds only a
   `description` and the body runs the `openspec` CLI. Other workflows stay.
