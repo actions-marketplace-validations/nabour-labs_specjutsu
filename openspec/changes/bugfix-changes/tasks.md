@@ -9,8 +9,8 @@
 - [x] 2.3 `green:keep` in JSON and the `Kept behaviour` PR comment section (GATE-043)
 
 ## 3. Authoring
-- [ ] 3.1 `sj spec new --bug` scaffold and the `Kind: bug` line (SPEC-040)
-- [ ] 3.2 [P] Bugfix checks in `sj spec check` (SPEC-041, SPEC-042)
+- [x] 3.1 `sj spec new --bug` scaffold and the `Kind: bug` line (SPEC-040)
+- [x] 3.2 [P] Bugfix checks in `sj spec check` (SPEC-041, SPEC-042)
 
 ## 4. Docs and skills
 - [ ] 4.1 `sj-debug` skill writes keep scenarios; README section (no-scenario: docs)
