@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 /// specjutsu — make AI coding agents prove their work.
 #[derive(Parser)]
@@ -270,6 +270,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Print a shell completion script to stdout, e.g. `sj completions zsh > ~/.zfunc/_sj`.
+    Completions {
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
 }
 
 #[derive(clap::Args)]
@@ -357,6 +362,29 @@ enum ImportCommand {
         #[arg(long)]
         json: bool,
     },
+}
+
+/// Shells `sj completions` supports, in the order the error message lists them.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+    #[value(name = "powershell")]
+    PowerShell,
+    Elvish,
+}
+
+impl From<CompletionShell> for clap_complete::Shell {
+    fn from(s: CompletionShell) -> Self {
+        match s {
+            CompletionShell::Bash => Self::Bash,
+            CompletionShell::Zsh => Self::Zsh,
+            CompletionShell::Fish => Self::Fish,
+            CompletionShell::PowerShell => Self::PowerShell,
+            CompletionShell::Elvish => Self::Elvish,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -470,6 +498,11 @@ fn run() -> Result<ExitCode> {
             agents_cmd(&root, &agents, false, false)
         }
         Command::Hook { agent, event, root } => Ok(hook_cmd(&agent, &event, root)),
+        Command::Completions { shell } => {
+            let shell: clap_complete::Shell = shell.into();
+            clap_complete::generate(shell, &mut Cli::command(), "sj", &mut std::io::stdout());
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Update {
             root,
             force,

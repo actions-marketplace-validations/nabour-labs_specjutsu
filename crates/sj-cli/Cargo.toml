@@ -20,6 +20,7 @@ sj-core.workspace = true
 sj-adapters.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 
