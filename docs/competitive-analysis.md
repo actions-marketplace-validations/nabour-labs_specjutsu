@@ -59,9 +59,9 @@ describes itself as an agent enablement platform and is left out.
 
 ## Where specjutsu is behind, and the plan
 
-OpenSpec parity work (more agents, `show` and `view`, bulk archive, completions,
-onboarding, custom workflow schemas and multi-repo spec stores) is planned for v0.6 and
-v0.7. Beyond parity, these changes take ideas that other tools check with a model and
+Most OpenSpec parity work shipped by v0.5 (more agents, `show` and `view`, bulk archive,
+completions, onboarding). Custom workflow schemas and multi-repo spec stores are planned
+for v0.7. Beyond parity, these changes take ideas that other tools check with a model and
 check them deterministically instead. Each is a proposed change on the
 [`spec/beyond-parity-proposals`](https://github.com/nabour-labs/specjutsu/tree/spec/beyond-parity-proposals/openspec/changes)
 branch, and comes to main with its implementation.
@@ -70,7 +70,7 @@ branch, and comes to main with its implementation.
 | --- | --- | --- | --- |
 | Specs for code that already exists (OpenSpec's most-requested open issue) | cc-sdd, GSD, BMAD | A model reads the code | [`specs-from-tests`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/specs-from-tests/proposal.md): `sj spec infer` drafts a keep scenario for every untraced test |
 | Requirements that hold for all inputs | Kiro | Property tests, IDE-only, optional | [`property-scenarios`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/property-scenarios/proposal.md): `FOR ALL` scenarios need a property test, and the counterexample is kept as evidence |
-| A public, reproducible token benchmark | No one | — | Planned for v0.5 |
+| A public, reproducible token benchmark | No one | — | Planned for v0.6 |
 
 ## Not planned
 
