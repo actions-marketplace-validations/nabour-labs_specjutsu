@@ -78,10 +78,9 @@ and it checks it deterministically:
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
 | Runtime needed | Node | Python + uv | IDE | None | **None: single binary** |
 
-specjutsu is not ahead everywhere yet: OpenSpec parity (more agents, custom workflow
-schemas, multi-repo spec stores) is planned for v0.6 and v0.7, a public token
-benchmark for v0.5, and specs inferred from existing tests and property scenarios go
-further. See [How specjutsu compares](docs/competitive-analysis.md) for the full
+specjutsu is not ahead everywhere yet: a public token benchmark is planned for v0.6,
+the rest of OpenSpec parity (custom workflow schemas, multi-repo spec stores) for
+v0.7, and specs inferred from existing tests and property scenarios go further. See [How specjutsu compares](docs/competitive-analysis.md) for the full
 comparison, its sources, and the change that closes each gap.
 
 ## Status
@@ -1028,8 +1027,8 @@ uncommitted. Review them with `git diff`, and undo them with
 | v0.2 | `sj gate` with red-on-base |
 | v0.3 | vitest, Jest, Playwright, pytest and JUnit suites; `specjutsu.toml`; `sj ids`, `sj spec`, `status`, `next`, `verify`; Claude Code adapter and skills; Spec Kit import; `sj migrate` |
 | v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
-| v0.5 (beta) | Bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; public token benchmark against the tools specjutsu replaces; beta launch |
-| v0.6 | OpenSpec parity: Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills |
+| v0.5 | Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills; bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; `specjutsu/` as the default spec root |
+| v0.6 (beta) | One-line installers, Homebrew and `cargo binstall`; public token benchmark against the tools specjutsu replaces; beta launch |
 | v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing
