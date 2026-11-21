@@ -6,15 +6,21 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::{agents_md, antigravity, claude, codex, cursor, gemini, plan::Step, shared_skills};
+use crate::{
+    agents_md, antigravity, claude, codex, copilot, cursor, gemini, kiro, plan::Step,
+    shared_skills, windsurf,
+};
 
 /// Every name `--agents` accepts.
-pub const ALL: [&str; 8] = [
+pub const ALL: [&str; 11] = [
     "claude",
     "codex",
     "cursor",
     "cline",
+    "copilot",
     "gemini",
+    "windsurf",
+    "kiro",
     "antigravity",
     "agents-md",
     "auto",
@@ -46,8 +52,17 @@ pub fn detect(root: &Path) -> Vec<&'static str> {
     if has(".clinerules") {
         out.push("cline");
     }
+    if copilot::is_present(root) {
+        out.push("copilot");
+    }
     if has(".gemini") || has("GEMINI.md") {
         out.push("gemini");
+    }
+    if has(".windsurf") {
+        out.push("windsurf");
+    }
+    if has(".kiro") {
+        out.push("kiro");
     }
     if has(".agents/rules") || has(".agent/rules") {
         out.push("antigravity");
@@ -69,10 +84,19 @@ pub fn resolve(root: &Path, agents: &[String]) -> (Vec<String>, bool) {
         found = !detected.is_empty();
         wanted.extend(if found { detected } else { vec!["agents-md"] });
     }
-    if wanted
-        .iter()
-        .any(|a| matches!(*a, "codex" | "cursor" | "cline" | "gemini" | "antigravity"))
-    {
+    if wanted.iter().any(|a| {
+        matches!(
+            *a,
+            "codex"
+                | "cursor"
+                | "cline"
+                | "copilot"
+                | "gemini"
+                | "windsurf"
+                | "kiro"
+                | "antigravity"
+        )
+    }) {
         wanted.push("agents-md");
     }
     let out = ALL
@@ -95,8 +119,17 @@ pub fn installed(root: &Path) -> Vec<String> {
     if cursor::is_installed(root) {
         out.push("cursor".to_string());
     }
+    if copilot::is_installed(root) {
+        out.push("copilot".to_string());
+    }
     if gemini::is_installed(root) {
         out.push("gemini".to_string());
+    }
+    if windsurf::is_installed(root) {
+        out.push("windsurf".to_string());
+    }
+    if kiro::is_installed(root) {
+        out.push("kiro".to_string());
     }
     if antigravity::is_installed(root) {
         out.push("antigravity".to_string());
@@ -116,7 +149,10 @@ pub fn plan(root: &Path, agents: &[String], force: bool) -> Result<Vec<Step>> {
             "claude" => steps.extend(claude::plan(root, force)?),
             "codex" => steps.extend(codex::plan(root)?),
             "cursor" => steps.extend(cursor::plan(root)?),
+            "copilot" => steps.extend(copilot::plan(root)?),
             "gemini" => steps.extend(gemini::plan(root)?),
+            "windsurf" => steps.extend(windsurf::plan(root)?),
+            "kiro" => steps.extend(kiro::plan(root)?),
             "antigravity" => steps.extend(antigravity::plan(root)?),
             // Cline's hooks run only in its CLI, so it gets the shared instructions only.
             "cline" => {}
