@@ -109,6 +109,7 @@ fn skill_001_coverage_is_complete() {
     let dir = valid();
     let coverage = COVERAGE
         .replace("| Superpowers | brainstorming | sj-explore |\n", "")
+        .replace("| OpenSpec | onboard | sj-onboard |\n", "")
         .replace(
             "| OpenSpec | sync | sj-finish |",
             "| OpenSpec | sync | sj-finish |\n| OpenSpec | sync | sj-apply |",
@@ -121,6 +122,7 @@ fn skill_001_coverage_is_complete() {
     let got = messages(dir.path());
     for want in [
         "coverage: Superpowers brainstorming is not mapped",
+        "coverage: OpenSpec onboard is not mapped",
         "coverage: OpenSpec sync is mapped twice",
         "coverage: Spec Kit plan maps to unknown skill sj-plan",
     ] {
@@ -132,8 +134,13 @@ fn skill_001_coverage_is_complete() {
 fn skill_001_a_missing_skill_or_coverage_file_fails() {
     let dir = valid();
     std::fs::remove_dir_all(dir.path().join("sj-clarify")).unwrap();
+    std::fs::remove_dir_all(dir.path().join("sj-onboard")).unwrap();
     std::fs::remove_file(dir.path().join("COVERAGE.md")).unwrap();
     let got = messages(dir.path());
+    assert!(
+        got.iter().any(|m| m == "sj-onboard: missing SKILL.md"),
+        "{got:?}"
+    );
     assert!(
         got.iter().any(|m| m == "sj-clarify: missing SKILL.md"),
         "{got:?}"
@@ -262,6 +269,9 @@ fn skill_004_planning_and_review_reference_the_principles_file() {
 #[test]
 fn skill_001_this_repos_skills_check_clean() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    for s in SKILLS {
+        assert!(dir.join(s).join("SKILL.md").is_file(), "{s} is not shipped");
+    }
     assert_eq!(messages(&dir), Vec::<String>::new());
 }
 
