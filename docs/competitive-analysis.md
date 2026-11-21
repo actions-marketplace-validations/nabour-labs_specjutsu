@@ -58,13 +58,15 @@ describes itself as an agent enablement platform and is left out.
 OpenSpec parity work (more agents, `show` and `view`, bulk archive, completions,
 onboarding, custom workflow schemas and multi-repo spec stores) is planned for v0.6 and
 v0.7. Beyond parity, these changes take ideas that other tools check with a model and
-check them deterministically instead. Each is an open change in `openspec/changes/`.
+check them deterministically instead. Each is a proposed change on the
+[`spec/beyond-parity-proposals`](https://github.com/nabour-labs/specjutsu/tree/spec/beyond-parity-proposals/openspec/changes)
+branch, and comes to main with its implementation.
 
 | Gap | Who has it today | How they check it | specjutsu change |
 | --- | --- | --- | --- |
-| Bug fixes that record current, expected and unchanged behaviour | Kiro, Spec Kit bug flow | Model judgement | [`bugfix-changes`](../openspec/changes/bugfix-changes/proposal.md): `[keep]` scenarios that must pass on base and at head |
-| Specs for code that already exists (OpenSpec's most-requested open issue) | cc-sdd, GSD, BMAD | A model reads the code | [`specs-from-tests`](../openspec/changes/specs-from-tests/proposal.md): `sj spec infer` drafts a keep scenario for every untraced test |
-| Requirements that hold for all inputs | Kiro | Property tests, IDE-only, optional | [`property-scenarios`](../openspec/changes/property-scenarios/proposal.md): `FOR ALL` scenarios need a property test, and the counterexample is kept as evidence |
+| Bug fixes that record current, expected and unchanged behaviour | Kiro, Spec Kit bug flow | Model judgement | [`bugfix-changes`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/bugfix-changes/proposal.md): `[keep]` scenarios that must pass on base and at head |
+| Specs for code that already exists (OpenSpec's most-requested open issue) | cc-sdd, GSD, BMAD | A model reads the code | [`specs-from-tests`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/specs-from-tests/proposal.md): `sj spec infer` drafts a keep scenario for every untraced test |
+| Requirements that hold for all inputs | Kiro | Property tests, IDE-only, optional | [`property-scenarios`](https://github.com/nabour-labs/specjutsu/blob/spec/beyond-parity-proposals/openspec/changes/property-scenarios/proposal.md): `FOR ALL` scenarios need a property test, and the counterexample is kept as evidence |
 | A public, reproducible token benchmark | No one | — | Planned for v0.5 |
 
 ## Not planned
