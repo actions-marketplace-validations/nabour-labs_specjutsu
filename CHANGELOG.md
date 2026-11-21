@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** the default spec root is now `specjutsu/`. `sj init` and `sj adopt`
+  write `spec_root = "specjutsu"` and create `specjutsu/specs/` and
+  `specjutsu/changes/`. A project with an `openspec/` folder and no `specjutsu/`
+  folder keeps using `openspec/` with no edit; `sj adopt` and `sj migrate --from
+  openspec` keep that folder too. To switch, `git mv openspec specjutsu` and set
+  or remove `spec_root`.
+
+### Fixed
+- `sj gate` reads base scenarios from the base commit's own spec root. Moving the
+  spec folder no longer reports every scenario as added and green on base.
+
 ### Added
 - `sj spec archive` takes several change names, or `--all-done` for every
   change whose tasks are all done. They archive as one operation: if any one is
