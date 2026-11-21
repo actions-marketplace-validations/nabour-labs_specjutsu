@@ -19,7 +19,7 @@ Each task group lands as two commits: the failing tests first (`test(IDs): red`)
 
 ## 4. Onboarding skill
 
-- [ ] 4.1 [P] `skills/sj-onboard/SKILL.md`, the skill set and `COVERAGE.md` mapping OpenSpec `onboard` (SKILL-001, SKILL-005..007).
+- [x] 4.1 [P] `skills/sj-onboard/SKILL.md`, the skill set and `COVERAGE.md` mapping OpenSpec `onboard` (SKILL-001, SKILL-005..007).
 
 ## 5. Docs
 
