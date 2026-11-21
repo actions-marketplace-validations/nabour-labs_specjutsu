@@ -43,12 +43,12 @@ fn adapt_012_unknown_agent_writes_nothing() {
     let before = snapshot(root);
 
     sj(root)
-        .args(["init", "--agents", "claude,windsurf"])
+        .args(["init", "--agents", "claude,zed"])
         .assert()
         .code(2)
-        .stderr(predicate::str::contains(
-            "unknown agent windsurf (supported: claude, codex, cursor, cline, agents-md, auto)",
-        ));
+        .stderr(predicate::str::is_match(
+            r"unknown agent zed \(supported: claude, codex, cursor, cline, [a-z, -]*\bantigravity\b[a-z, -]*agents-md, auto\)",
+        ).unwrap());
 
     assert_eq!(snapshot(root), before);
 }
