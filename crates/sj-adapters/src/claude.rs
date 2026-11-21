@@ -141,7 +141,7 @@ fn array_text(entry: &str, ind: &str, s: &Style) -> String {
     }
 }
 
-fn hooks_text(event: &str, entry: &str, ind: &str, s: &Style) -> String {
+pub(crate) fn hooks_text(event: &str, entry: &str, ind: &str, s: &Style) -> String {
     if s.multiline {
         let inner = format!("{ind}{}", s.unit);
         format!(

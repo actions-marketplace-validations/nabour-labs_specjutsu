@@ -61,8 +61,9 @@ fn answer(root: &Path, input: &str) -> (serde_json::Value, String) {
     (v, String::from_utf8(out.stderr).unwrap())
 }
 
+/// Antigravity's documented schema: top-level keys are hook names, each holding events.
 const USER_HOOKS: &str = r#"{
-  "hooks": {
+  "audit": {
     "PreToolUse": [
       {"matcher": "run_command", "hooks": [{"type": "command", "command": "./audit.sh"}]}
     ]
@@ -85,9 +86,11 @@ fn adapt_030_antigravity_hook_blocks_source_edits_before_red() {
     let v: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(root.join(".agents/hooks.json")).unwrap())
             .unwrap();
-    let entries = v["hooks"]["PreToolUse"].as_array().unwrap();
     let user: serde_json::Value = serde_json::from_str(USER_HOOKS).unwrap();
-    assert_eq!(entries[0], user["hooks"]["PreToolUse"][0]);
+    assert_eq!(v["audit"], user["audit"]);
+    let entries = v["specjutsu"]["PreToolUse"]
+        .as_array()
+        .expect("a specjutsu hook");
     assert!(
         entries.iter().any(|e| e["matcher"]
             == "write_to_file|replace_file_content|multi_replace_file_content"

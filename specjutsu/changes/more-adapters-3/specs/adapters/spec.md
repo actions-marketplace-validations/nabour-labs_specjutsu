@@ -23,7 +23,7 @@ The `copilot` adapter SHALL write `.github/hooks/specjutsu.json` with `"version"
 - **THEN** it writes `.github/hooks/specjutsu.json` and prints `copilot: hooks take effect for the cloud agent once .github/hooks/ is on the default branch`
 
 ### Requirement: Windsurf and Kiro get an exit-code hook
-The `windsurf` adapter SHALL add a `pre_write_code` entry to `.windsurf/hooks.json`, and the `kiro` adapter SHALL write `.kiro/hooks/specjutsu.json` with a `PreToolUse` hook whose matcher is Kiro's `write` category (all built-in file-write tools), each running `sj hook <agent> pre-edit`. Windsurf's protocol SHALL take the path from `tool_info.file_path`. Kiro's SHALL take the first string among `tool_input.path` and `tool_input.file_path`. Both protocols SHALL answer by exit code: 0 to allow, and 2 to block with the reason on stderr. An input either protocol cannot parse, or one with no path, SHALL exit 0 with a warning on stderr.
+The `windsurf` adapter SHALL add a `pre_write_code` entry to `.windsurf/hooks.json`, and the `kiro` adapter SHALL write `.kiro/hooks/specjutsu.json` in Kiro's hook file schema, `{"version": "v1", "hooks": [...]}`, with one hook named `specjutsu-pre-edit` whose `trigger` is `PreToolUse`, whose `matcher` is Kiro's `write` category (all built-in file-write tools) and whose `action` is a `command`, each running `sj hook <agent> pre-edit`. Windsurf's protocol SHALL take the path from `tool_info.file_path`. Kiro's SHALL take the first string among `tool_input.path` and `tool_input.file_path`. Both protocols SHALL answer by exit code: 0 to allow, and 2 to block with the reason on stderr. An input either protocol cannot parse, or one with no path, SHALL exit 0 with a warning on stderr.
 
 #### Scenario: ADAPT-028 Windsurf's hook blocks with exit code 2
 - **WHEN** the active task names AUTH-005 with no red record, and Windsurf's input is `{"agent_action_name":"pre_write_code","tool_info":{"file_path":"apps/api/src/auth.ts"}}`
@@ -31,7 +31,7 @@ The `windsurf` adapter SHALL add a `pre_write_code` entry to `.windsurf/hooks.js
 
 #### Scenario: ADAPT-029 Kiro's hook blocks with exit code 2
 - **WHEN** the same state, and Kiro's input is `{"hook_event_name":"PreToolUse","tool_name":"fs_write","tool_input":{"path":"apps/api/src/auth.ts"}}`
-- **THEN** `sj hook kiro pre-edit` exits 2 with the same reason on stderr, and an input targeting `apps/api/src/auth.test.ts` exits 0
+- **THEN** `sj hook kiro pre-edit` exits 2 with the same reason on stderr, an input targeting `apps/api/src/auth.test.ts` exits 0, and `.kiro/hooks/specjutsu.json` holds `{"name": "specjutsu-pre-edit", "trigger": "PreToolUse", "matcher": "write", "action": {"type": "command", "command": "sj hook kiro pre-edit"}}` in its `hooks` list
 
 #### Scenario: ADAPT-031 An unreadable exit-code hook input never blocks
 - **WHEN** `sj hook windsurf pre-edit` and `sj hook kiro pre-edit` each receive input that is not valid JSON
@@ -39,6 +39,13 @@ The `windsurf` adapter SHALL add a `pre_write_code` entry to `.windsurf/hooks.js
 
 
 ## MODIFIED Requirements
+
+### Requirement: Antigravity gets a PreToolUse hook
+The `antigravity` adapter SHALL install `agents-md` and add a hook named `specjutsu` to `.agents/hooks.json`. Its top-level keys are hook names, each holding event keys, so the hook is `"specjutsu": {"PreToolUse": [...]}` with one entry matching `write_to_file|replace_file_content|multi_replace_file_content` and running `sj hook antigravity pre-edit`, keeping every hook already in that file. The protocol SHALL take the path from the first string among `toolCall.args.TargetFile`, `toolCall.args.file_path` and `toolCall.args.path`, print `{"decision":"deny","reason":"<reason>"}` to block and `{"decision":"allow"}` to allow, and exit 0 in both cases; an input it cannot parse, or one with no path, SHALL print `{"decision":"allow"}` and a warning on stderr. `sj doctor` SHALL print `antigravity: hook`.
+
+#### Scenario: ADAPT-030 Antigravity's hook blocks source edits before red
+- **WHEN** the active task names AUTH-005 with no red record, `.agents/hooks.json` already holds one user hook, `sj init --agents antigravity` runs, and Antigravity's input is `{"toolCall":{"name":"write_to_file","args":{"TargetFile":"apps/api/src/auth.ts"}}}`
+- **THEN** the user hook is unchanged, `.agents/hooks.json` holds a `specjutsu` hook beside it, `sj hook antigravity pre-edit` prints `{"decision":"deny","reason":"write a failing test for AUTH-005 first (sj test AUTH-005)"}` and exits 0, and `sj doctor` prints `antigravity: hook`
 
 ### Requirement: Several agents install in one command
 `sj init --agents <list>` SHALL accept a comma-separated list of `claude`, `codex`, `cursor`, `cline`, `copilot`, `gemini`, `windsurf`, `kiro`, `antigravity` and `agents-md`, and SHALL install each one with the same rules as the Claude Code adapter: create missing files, never remove or reorder content it did not write. An unknown name SHALL be a usage error listing the supported names, and nothing SHALL be written. Every agent but `claude` SHALL imply `agents-md`. `sj init --remove-agents <list>` SHALL remove each one and restore every other byte.
