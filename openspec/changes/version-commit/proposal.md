@@ -19,5 +19,5 @@ None.
 
 ## Impact
 
-- New `crates/sj-cli/build.rs` that asks `git` for the short HEAD and sets `SJ_BUILD_COMMIT`; the clap `version` reads it.
+- New `crates/sj-cli/build.rs` that asks `git` for the short HEAD and sets `SJ_VERSION`; the clap `version` reads it.
 - No new dependencies. No change to any other command's output.

@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 
 /// specjutsu — make AI coding agents prove their work.
 #[derive(Parser)]
-#[command(name = "sj", version, about)]
+#[command(name = "sj", version = env!("SJ_VERSION"), about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
