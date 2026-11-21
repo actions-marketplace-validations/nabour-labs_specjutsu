@@ -14,7 +14,7 @@ use crate::claude::{
 use crate::jsonedit::Node;
 
 /// Keys that may hold the edited file's path in `toolCall.args`, tried in order. The docs
-/// name `TargetFile` for `write_to_file`; the others are fallbacks (design.md, task 2.4).
+/// name `TargetFile` for `write_to_file`; the others are fallbacks (checked by `more-adapters-3` task 2.1).
 const PATH_KEYS: [&str; 3] = ["TargetFile", "file_path", "path"];
 
 /// The file the tool call edits.

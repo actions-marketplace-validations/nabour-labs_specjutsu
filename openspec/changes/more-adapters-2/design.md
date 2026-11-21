@@ -14,7 +14,7 @@ What each agent offers as of Nov 2026:
 
 Sources: GitHub's Copilot CLI hooks reference, kiro.dev hooks docs, antigravity.google hooks docs. Windsurf's hooks page now redirects to Devin docs, so its input shape comes from the older Windsurf docs.
 
-Path keys the docs don't name are read from a short list of likely keys, as Cursor's are in `more-adapters` (ADAPT-016): Copilot `file_path`, `path`; Kiro `path`, `file_path`; Antigravity `TargetFile`, `file_path`, `path`. Task 2.5 checks each against a real install before release.
+Path keys the docs don't name are read from a short list of likely keys, as Cursor's are in `more-adapters` (ADAPT-016): Copilot `file_path`, `path`; Kiro `path`, `file_path`; Antigravity `TargetFile`, `file_path`, `path`. `more-adapters-3` task 2.1 checks each against a real install before release.
 
 ## Goals / Non-Goals
 
@@ -56,4 +56,4 @@ Hooks and instruction blocks are a repository's rules and must be in the reposit
 
 - [Windsurf's hook docs moved to Devin Desktop, which uses `.devin/hooks.v1.json`] → `windsurf` keeps `.windsurf/hooks.json` for current Windsurf installs. A `devin` adapter is a later change.
 - [Antigravity hooks reported not firing in IDE 1.107.0 on Windows] → doctor still says `hook` because the hook is installed. The CI gate is the backstop, and the manual notes the report.
-- [Guessed path keys are wrong] → an unknown key means no path, which allows the edit with a warning (fail-open). Task 2.5 confirms the keys against a real install.
+- [Guessed path keys are wrong] → an unknown key means no path, which allows the edit with a warning (fail-open). `more-adapters-3` task 2.1 confirms the keys against a real install.

@@ -6,12 +6,13 @@ After `more-adapters`, specjutsu reaches Claude Code, Codex, Cursor, Cline and e
 
 ## What Changes
 
-- `sj init --agents` accepts `copilot`, `gemini`, `windsurf`, `kiro` and `antigravity`. Each implies `agents-md`, and `auto` detects them.
-- `gemini`, `copilot`, `windsurf` and `kiro` add a pre-edit hook that calls `sj hook <agent> pre-edit`, with the same decision as the Claude hook.
+- `sj init --agents` accepts `gemini` and `antigravity`. Each implies `agents-md`, and `auto` detects them.
+- `gemini` adds a `BeforeTool` hook in `.gemini/settings.json` that calls `sj hook gemini pre-edit`, and adds `AGENTS.md` to `context.fileName`.
 - `antigravity` adds a `PreToolUse` hook in `.agents/hooks.json` that blocks source edits before red, as the other hook agents do.
-- The `sj-*` skills are also written to the shared `.agents/skills/` folder when any installed agent reads it. Claude Code keeps `.claude/skills/`.
+- The `sj-*` skills are also written to the shared `.agents/skills/` folder when any installed agent reads it (Codex, Gemini CLI, Antigravity). Claude Code keeps `.claude/skills/`.
 - `sj init --global` installs the skills once into the user's home folders for every project. It never writes hooks, because hooks belong to a repository.
 - `sj doctor` reports the new agents' enforcement levels and where the skills are installed.
+- GitHub Copilot, Windsurf and Kiro follow in `more-adapters-3`, which also holds the check against real installs and the docs.
 
 ## Capabilities
 
@@ -19,18 +20,13 @@ After `more-adapters`, specjutsu reaches Claude Code, Codex, Cursor, Cline and e
 None.
 
 ### Modified Capabilities
-- `adapters`: new agents, their hook protocols, shared skills and global install. The Claude Code, Codex, Cursor and Cline requirements are unchanged.
+- `adapters`: Gemini CLI and Antigravity, their hook protocols, shared skills and global install. The unknown-agent scenario (ADAPT-012) no longer pins the full list of names. The Claude Code, Codex, Cursor and Cline requirements are otherwise unchanged.
 
 ## Impact
 
-- `sj-adapters`: protocols for Gemini CLI (JSON decision), Copilot (JSON on stdin), Windsurf and Kiro (exit code 2); config editors for `.gemini/settings.json` (reuse `jsonedit`), `.github/hooks/specjutsu.json`, `.windsurf/hooks.json` and `.kiro/hooks/specjutsu.json`.
-- `adapters/<agent>/` templates; skill templates rendered into `.agents/skills/`.
-- `sj-cli`: `--global` flag on `sj init`, `sj update` and `sj init --remove-agents`.
-- README and manual "Agent setup" support table.
+- `sj-adapters`: `antigravity`, `gemini`, `shared_skills` and `global` modules; Claude Code's skill planning is shared by `.claude/skills/` and `.agents/skills/`. Config editors for `.gemini/settings.json` and `.agents/hooks.json` reuse `jsonedit`.
+- `sj-cli`: the new agent names, `sj hook gemini|antigravity pre-edit`, and `--global` on `sj init`, `sj update` and `sj init --remove-agents`.
 
 ## Clarifications
 
-- Copilot's deny output and path field? → Register under the PascalCase `PreToolUse` key, which gives Claude-shaped input. Block with `{"permissionDecision":"deny","permissionDecisionReason":…}` and exit 0, and never exit non-zero, because Copilot denies on any non-zero exit. The path comes from `tool_input.file_path` or `path`, or from the paths in an `apply_patch` patch.
-- Windsurf's `pre_write_code` path field? → `tool_info.file_path`.
-- Kiro's file-write tool names for the matcher? → Match Kiro's `write` category, so the tool IDs aren't needed. The path comes from `tool_input.path` or `file_path`.
 - Does Antigravity's IDE run workspace hooks? → Yes, from `.agents/hooks.json`. It gets a hook now, and doctor reports `antigravity: hook`.

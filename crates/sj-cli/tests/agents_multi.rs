@@ -205,3 +205,29 @@ fn adapt_014_auto_with_no_agent_files_installs_agents_md() {
         ));
     assert!(read(root, "AGENTS.md").contains(BEGIN));
 }
+
+#[test]
+fn adapt_042_auto_detects_gemini_and_antigravity() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    put(root, "specjutsu.toml", CONFIG);
+    put(
+        root,
+        ".gemini/settings.json",
+        "{\n  \"theme\": \"GitHub\"\n}\n",
+    );
+    put(root, ".agents/rules/style.md", "Use tabs.\n");
+
+    sj(root)
+        .args(["init", "--agents", "auto"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "agents: gemini, antigravity, agents-md\n",
+        ));
+
+    assert!(read(root, ".gemini/settings.json").contains("sj hook gemini pre-edit"));
+    assert!(read(root, ".agents/hooks.json").contains("sj hook antigravity pre-edit"));
+    assert!(read(root, "AGENTS.md").contains(BEGIN));
+    assert!(!root.join(".claude").exists());
+}
