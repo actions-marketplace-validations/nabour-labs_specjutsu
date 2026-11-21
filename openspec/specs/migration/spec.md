@@ -49,15 +49,11 @@ After the tool-specific steps, the migration SHALL write `specjutsu.toml` with `
 - **THEN** `specjutsu.toml` lists the `backend` pytest suite and the `pwa` vitest suite, the adapter is installed, `sj doctor` and `sj spec validate` print no problems, and `sj gate --base main` on the migration commit passes
 
 ### Requirement: Migrating from OpenSpec removes its Antigravity workflows
-With `--from openspec`, the migration SHALL also remove each Antigravity workflow OpenSpec generated: `<agent>/workflows/opsx-<name>.md` whose frontmatter holds only a `description` and whose body runs the `openspec` CLI. Every other workflow SHALL be kept.
+With `--from openspec`, the migration SHALL also remove each Antigravity workflow OpenSpec generated: `<agent>/workflows/opsx-<name>.md` whose frontmatter holds only a `description` and whose body runs the `openspec` CLI. Every other workflow, including an `opsx-*` file that never runs `openspec`, SHALL be kept.
 
 #### Scenario: MIG-008 OpenSpec's Antigravity workflows are removed
-- **WHEN** a project has `.agents/workflows/opsx-propose.md` and `.agents/workflows/opsx-apply.md`, each with only a `description` in its frontmatter and a body that runs `openspec status`, and a project workflow `.agents/workflows/deploy.md`, and `sj migrate --from openspec --write` runs
-- **THEN** the preview lists `remove .agents/workflows/opsx-propose.md (OpenSpec workflow)` and the same for `opsx-apply.md`, both files are gone afterwards, and `deploy.md` is unchanged
-
-#### Scenario: MIG-009 [keep] An opsx workflow that never runs OpenSpec is kept
-- **WHEN** a project has `.agents/workflows/opsx-notes.md` with only a `description` in its frontmatter and a body that never runs the `openspec` CLI, and `sj migrate --from openspec --write` runs
-- **THEN** `opsx-notes.md` is unchanged and the preview does not list it
+- **WHEN** a project has `.agents/workflows/opsx-propose.md` and `.agents/workflows/opsx-apply.md`, each with only a `description` in its frontmatter and a body that runs `openspec status`, a project workflow `.agents/workflows/deploy.md`, and `.agents/workflows/opsx-notes.md` with only a `description` and a body that never runs the `openspec` CLI, and `sj migrate --from openspec --write` runs
+- **THEN** the preview lists `remove .agents/workflows/opsx-propose.md (OpenSpec workflow)` and the same for `opsx-apply.md`, both files are gone afterwards, and `deploy.md` and `opsx-notes.md` are unchanged and not listed
 
 ### Requirement: Migration installs adapters for the agents a project already uses
 Besides the Claude adapter, the migration SHALL install every adapter `sj init --agents auto` would install for the agent files the project has, and the preview SHALL list each of their files.

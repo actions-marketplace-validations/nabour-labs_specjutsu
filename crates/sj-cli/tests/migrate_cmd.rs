@@ -406,6 +406,8 @@ fn mig_008_openspecs_antigravity_workflows_are_removed() {
     );
     let deploy = "---\ndescription: \"Deploy the app\"\n---\n\nRun `pnpm deploy`.\n";
     repo.write(".agents/workflows/deploy.md", deploy);
+    let notes = "---\ndescription: \"Our notes on the OpenSpec workflow\"\n---\n\nRead `docs/notes.md` first.\n";
+    repo.write(".agents/workflows/opsx-notes.md", notes);
     repo.commit("antigravity project");
 
     migrate(repo.path(), &["--from", "openspec"])
@@ -416,7 +418,9 @@ fn mig_008_openspecs_antigravity_workflows_are_removed() {
         ))
         .stdout(predicate::str::contains(
             "remove .agents/workflows/opsx-apply.md (OpenSpec workflow)\n",
-        ));
+        ))
+        .stdout(predicate::str::contains("deploy.md").not())
+        .stdout(predicate::str::contains("opsx-notes.md").not());
     migrate(repo.path(), &["--from", "openspec", "--write"])
         .assert()
         .success();
@@ -427,25 +431,6 @@ fn mig_008_openspecs_antigravity_workflows_are_removed() {
         .exists());
     assert!(!repo.path().join(".agents/workflows/opsx-apply.md").exists());
     assert_eq!(read(&repo, ".agents/workflows/deploy.md"), deploy);
-}
-
-#[test]
-fn mig_009_an_opsx_workflow_that_never_runs_openspec_is_kept() {
-    let repo = support::Repo::with_lib("");
-    repo.write("openspec/specs/math/spec.md", SPEC);
-    repo.write("openspec/changes/.gitkeep", "");
-    let notes = "---\ndescription: \"Our notes on the OpenSpec workflow\"\n---\n\nRead `docs/notes.md` first.\n";
-    repo.write(".agents/workflows/opsx-notes.md", notes);
-    repo.commit("antigravity project");
-
-    migrate(repo.path(), &["--from", "openspec"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("opsx-notes.md").not());
-    migrate(repo.path(), &["--from", "openspec", "--write"])
-        .assert()
-        .success();
-
     assert_eq!(read(&repo, ".agents/workflows/opsx-notes.md"), notes);
 }
 
