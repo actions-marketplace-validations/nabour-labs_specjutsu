@@ -6,7 +6,19 @@ contributions to the same rule the tool enforces.
 ## Workflow
 
 specjutsu is built with itself. Install a released `sj` (or `cargo install --path
-crates/sj-cli`) so it's on your `PATH`; the Claude Code hooks in `.claude/` call it.
+crates/sj-cli`) so it's on your `PATH`; the agent hooks call it.
+
+The repository is set up for Claude Code, Cursor and Antigravity:
+
+| Agent | Instructions | Skills | Pre-edit hook |
+| --- | --- | --- | --- |
+| Claude Code | `CLAUDE.md` | `.claude/skills/` | `.claude/settings.json` |
+| Cursor | `AGENTS.md` | none; the block names the `sj` commands | `.cursor/hooks.json` |
+| Antigravity | `AGENTS.md` | `.agents/skills/` | `.agents/hooks.json` |
+
+These files are generated. Don't edit them; run `sj update` after changing a skill or
+adapter, and `sj doctor` to check they're in place. To use another agent, run
+`sj init --agents <name>` (see the README's agent table) and commit what it writes.
 
 1. **Spec it.** Behaviour changes start as a change: `sj spec new <change>` creates
    `specjutsu/changes/<change>/` and prints the next free ID per prefix. Every
