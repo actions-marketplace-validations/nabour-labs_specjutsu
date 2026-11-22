@@ -798,12 +798,14 @@ total  3  1500  54000  97%  ~13125 tokens saved
 ```
 
 The columns are runs, printed bytes, raw bytes and percent saved (rounded down).
-Tokens are estimated as (raw − printed) / 4; specjutsu never calls a model. The
-numbers are bytes, a proxy, not a benchmark. Unreadable lines are skipped with a
-warning on stderr, and with no records it prints `no gain records yet`.
+Tokens are estimated as (raw − printed) / 4, and printed > raw shows 0% and ~0
+tokens saved; specjutsu never calls a model. The numbers are bytes, a proxy, not
+a benchmark. Unreadable lines are skipped with a warning on stderr, and with no
+records it prints `no gain records yet`. `--json` reports the skipped lines as
+`skipped`, and with no records prints empty `commands` and zero totals instead.
 
 ```bash
-sj gain --json                          # {"commands": [...], "total": {...}}
+sj gain --json                          # {"commands": [...], "total": {...}, "skipped": 0}
 sj gain --since 2026-11-22T09:00:00Z    # only records at or after a time: one session
 sj gain --reset                         # delete the records: removed N gain records
 ```
