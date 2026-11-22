@@ -320,3 +320,15 @@ fn ids_parent_write_and_json_are_refused_with_prefixes() {
     }
     assert!(!dir.path().join("specjutsu.toml").exists());
 }
+
+#[test]
+fn ids_012_a_long_derived_prefix_gets_a_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/distribution/spec.md", USER_AUTH);
+    let out = sj(dir.path()).assert().code(1);
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    assert_eq!(
+        stdout.lines().last(),
+        Some("hint: distribution would use DISTRIBUTION; sj ids prefixes --write maps it to DIST")
+    );
+}
