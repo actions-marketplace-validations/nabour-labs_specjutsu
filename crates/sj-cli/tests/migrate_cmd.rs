@@ -613,3 +613,78 @@ fn mig_012_existing_config_without_a_table_gets_one() {
         "\n[ids.prefixes]\ndistribution = \"DIST\"\nmath = \"MATH\"\n",
     );
 }
+
+/// The `-` and `+` lines of `path`'s diff in `sj migrate --diff` output.
+fn diff_lines(out: &str, path: &str) -> (Vec<String>, Vec<String>) {
+    let mut lines = out.lines();
+    let from = format!("--- a/{path}");
+    assert!(
+        lines.any(|l| l == from),
+        "no diff header for {path} in:\n{out}"
+    );
+    assert_eq!(lines.next(), Some(format!("+++ b/{path}").as_str()), "{out}");
+    let (mut minus, mut plus) = (Vec::new(), Vec::new());
+    for l in lines.take_while(|l| !l.starts_with("--- a/")) {
+        if let Some(rest) = l.strip_prefix('-') {
+            minus.push(rest.to_string());
+        } else if let Some(rest) = l.strip_prefix('+') {
+            plus.push(rest.to_string());
+        }
+    }
+    (minus, plus)
+}
+
+#[test]
+fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
+    let repo = support::Repo::with_lib("");
+    repo.write(
+        ".claude/settings.json",
+        r#"{
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run lint"
+          }
+        ]
+      }
+    ]
+  }
+}
+"#,
+    );
+    repo.commit("superpowers project");
+    let out = migrate(repo.path(), &["--from", "superpowers", "--diff"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let out = String::from_utf8(out).unwrap();
+    let (minus, plus) = diff_lines(&out, ".claude/settings.json");
+    // `-` lines: only the Superpowers entry.
+    assert_eq!(
+        minus,
+        [
+            "  \"enabledPlugins\": {",
+            "    \"superpowers@superpowers-marketplace\": true",
+            "  },",
+        ],
+        "{out}"
+    );
+    // `+` lines: only the specjutsu hook entries.
+    assert!(!plus.is_empty(), "{out}");
+    let added = plus.join("\n");
+    assert!(added.contains("sj hook claude pre-edit"), "{out}");
+    assert!(added.contains("sj hook claude session-start"), "{out}");
+    assert!(!added.contains("superpowers"), "{out}");
+    assert!(!added.contains("npm run lint"), "{out}");
+    assert!(!minus.iter().any(|l| l.contains("npm run lint")), "{out}");
+    assert_eq!(status(&repo), "");
+}
