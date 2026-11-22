@@ -145,10 +145,20 @@ fn loop_026_no_gain_record_outside_git() {
 
 const VERIFY_RUNNER_BYTES: usize = 25_000;
 
-/// A project whose open change `add-svc` adds SVC-001, its runner writing 25,000 bytes. In git,
-/// `main` holds the project and the change sits on a `feature` branch.
+/// A project whose open change `add-svc` adds SVC-001 and SVC-002, each with a test, so verify
+/// starts the runner twice; each run writes 12,500 bytes, 25,000 in all. In git, `main` holds
+/// the project and the change sits on a `feature` branch.
 fn verify_fixture(git: bool) -> Repo {
-    let repo = fixture_with(git, VERIFY_RUNNER_BYTES);
+    let repo = fixture_with(git, VERIFY_RUNNER_BYTES / 2);
+    repo.write(
+        "svc/tests/a.test.js",
+        "it(\"SVC-001 works\", () => {})\nit(\"SVC-002 answers\", () => {})\n",
+    );
+    repo.write(
+        "svc/report.src.xml",
+        "<testsuite><testcase classname=\"svc\" name=\"SVC-001 works\"/>\
+         <testcase classname=\"svc\" name=\"SVC-002 answers\"/></testsuite>",
+    );
     if git {
         repo.commit("base");
         repo.branch("feature");
@@ -157,11 +167,12 @@ fn verify_fixture(git: bool) -> Repo {
     repo.write(
         "openspec/changes/add-svc/specs/all/spec.md",
         "## ADDED Requirements\n\n### Requirement: S\nThe system SHALL serve.\n\n\
-         #### Scenario: SVC-001 Service works\n- **WHEN** x\n- **THEN** y\n",
+         #### Scenario: SVC-001 Service works\n- **WHEN** x\n- **THEN** y\n\n\
+         #### Scenario: SVC-002 Service answers\n- **WHEN** x\n- **THEN** y\n",
     );
     repo.write(
         "openspec/changes/add-svc/tasks.md",
-        "- [ ] 1.1 Serve (SVC-001)\n",
+        "- [ ] 1.1 Serve (SVC-001, SVC-002)\n",
     );
     if git {
         repo.commit("change");
