@@ -438,3 +438,80 @@ fn skill_008_this_repos_setup_skill_checks_clean() {
     let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/skills/specjutsu");
     assert!(!assets.exists(), "the setup skill must not be embedded");
 }
+
+// spec: SKILL-010
+#[test]
+fn skill_010_a_missing_unnamed_or_oversized_reference_fails_the_check() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-debug/SKILL.md",
+        &skill_md(
+            "sj-debug",
+            &format!(
+                "{}\nTrace it back with `root-cause-tracing.md`, then add checks from \
+                 [defense in depth](defense-in-depth.md). Record it in design.md.\n",
+                body("sj-debug")
+            ),
+        ),
+    );
+    put(dir.path(), "sj-debug/notes.md", "# Notes\n");
+    put(
+        dir.path(),
+        "sj-debug/defense-in-depth.md",
+        &"x".repeat(9000),
+    );
+    let got = messages(dir.path());
+    for want in [
+        "sj-debug: names missing reference root-cause-tracing.md",
+        "sj-debug: reference notes.md is not named in SKILL.md",
+        "sj-debug: reference defense-in-depth.md is 9000 bytes (limit 8000)",
+    ] {
+        assert!(got.iter().any(|m| m == want), "{want}: {got:?}");
+    }
+    assert!(
+        !got.iter().any(|m| m.contains("design.md")),
+        "project files are not references: {got:?}"
+    );
+}
+
+// spec: SKILL-010
+#[test]
+fn skill_010_named_references_within_the_limit_check_clean() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-debug/SKILL.md",
+        &skill_md(
+            "sj-debug",
+            &format!("{}\nSee `root-cause-tracing.md`.\n", body("sj-debug")),
+        ),
+    );
+    put(dir.path(), "sj-debug/root-cause-tracing.md", "# Tracing\n");
+    assert_eq!(messages(dir.path()), Vec::<String>::new());
+}
+
+// spec: SKILL-002
+#[test]
+fn skill_002_a_foreign_command_in_a_reference_fails_the_check() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-debug/SKILL.md",
+        &skill_md(
+            "sj-debug",
+            &format!("{}\nSee `root-cause-tracing.md`.\n", body("sj-debug")),
+        ),
+    );
+    put(
+        dir.path(),
+        "sj-debug/root-cause-tracing.md",
+        "Then run `openspec status`.\n",
+    );
+    let got = messages(dir.path());
+    assert!(
+        got.iter().any(|m| m
+            == "sj-debug: root-cause-tracing.md names a foreign command (openspec status)"),
+        "{got:?}"
+    );
+}
