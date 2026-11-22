@@ -485,3 +485,55 @@ fn loop_007_verify_passes_a_finished_change() {
         .success()
         .stdout("verify: ok\n");
 }
+
+/// A change adding AUTH-005 `[keep]` and AUTH-006, both with passing tests and no red run.
+fn keep_repo() -> support::Repo {
+    let repo = support::Repo::with_lib("");
+    repo.branch("feature");
+    repo.add_change(
+        "fix-tokens",
+        &[("AUTH-005", "[keep] Refresh"), ("AUTH-006", "Reject")],
+    );
+    repo.write(
+        "openspec/changes/fix-tokens/tasks.md",
+        "- [ ] 1.1 Tokens (AUTH-005, AUTH-006)\n",
+    );
+    repo.write("src/lib.rs", "pub fn refresh() {}\n");
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_005_refresh() {}\n\n#[test]\nfn auth_006_reject() {}\n",
+    );
+    repo.commit("tokens");
+    repo
+}
+
+/// `sj verify`, then `sj task done 1.1` (guided, the default mode): their stdout.
+fn keep_outputs(repo: &support::Repo) -> (String, String) {
+    let verify = stdout(&mut sj(repo.path(), &["verify"]));
+    let done = stdout(&mut sj(repo.path(), &["task", "done", "fix-tokens", "1.1"]));
+    (verify, done)
+}
+
+#[test]
+fn loop_020_verify_and_task_done_accept_a_passing_keep_scenario() {
+    let repo = keep_repo();
+    let (verify, done) = keep_outputs(&repo);
+    assert!(!verify.contains("unproven AUTH-005"), "{verify}");
+    assert!(!verify.contains("failing"), "{verify}");
+    assert!(done.contains("task: done 1.1"), "{done}");
+    assert!(!done.contains("unproven AUTH-005"), "{done}");
+}
+
+#[test]
+fn loop_021_a_passing_scenario_without_a_red_run_is_still_unproven() {
+    let repo = keep_repo();
+    let (verify, done) = keep_outputs(&repo);
+    assert!(
+        verify.contains("unproven AUTH-006 (no red run recorded)"),
+        "{verify}"
+    );
+    assert!(
+        done.contains("unproven AUTH-006 (no red run recorded)"),
+        "{done}"
+    );
+}
