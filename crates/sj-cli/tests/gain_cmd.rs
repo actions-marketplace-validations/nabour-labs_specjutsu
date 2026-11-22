@@ -1,5 +1,5 @@
-//! LOOP-022, LOOP-023, LOOP-024 and LOOP-026 from specjutsu/changes/add-sj-gain: `sj test`,
-//! `sj verify` and `sj next` record their gain.
+//! LOOP-022 to LOOP-026 from specjutsu/changes/add-sj-gain: `sj test`, `sj verify`, `sj next`
+//! and `sj status` record their gain.
 //!
 //! The fixture uses the generic junit runner: its command copies a canned report and prints a
 //! payload file of a fixed size with the OS shell, so the runner's output size is exact on every
@@ -311,4 +311,60 @@ fn loop_024_sj_next_with_no_open_task_records_raw_zero() {
     assert_eq!(r["command"], "next");
     assert_eq!(r["printed"], out.stdout.len() as u64);
     assert_eq!(r["raw"], 0);
+}
+
+/// A project with two open changes, `add-a` and `add-b`, whose folders total exactly 8,000 and
+/// 5,000 bytes; a git repo if `git`.
+fn status_fixture(git: bool) -> Repo {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    if git {
+        repo.git(&["init", "-q", "-b", "main"]);
+    }
+    repo.write("openspec/specs/all/spec.md", SPEC);
+    for (name, bytes) in [("add-a", 8_000), ("add-b", 5_000)] {
+        let dir = format!("openspec/changes/{name}");
+        let tasks = "- [ ] 1.1 Work (SVC-001)\n";
+        repo.write(&format!("{dir}/tasks.md"), tasks);
+        repo.write(&format!("{dir}/proposal.md"), &"x".repeat(bytes - tasks.len()));
+    }
+    repo
+}
+
+fn sj_status(root: &Path) -> std::process::Output {
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["status", "--root"])
+        .arg(root)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn loop_025_sj_status_records_every_open_change_as_raw() {
+    let repo = status_fixture(true);
+    let out = sj_status(repo.path());
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let records = gain_records(repo.path());
+    assert_eq!(records.len(), 1, "{records:?}");
+    let r = &records[0];
+    assert_eq!(r["command"], "status");
+    assert!(!out.stdout.is_empty());
+    assert_eq!(r["printed"], out.stdout.len() as u64);
+    assert_eq!(r["raw"], 13_000);
+    assert!(out.stdout.len() < 13_000);
+}
+
+#[test]
+fn loop_026_no_gain_record_from_status_outside_git() {
+    let on = status_fixture(true);
+    let with = sj_status(on.path());
+    assert_eq!(gain_records(on.path()).len(), 1);
+
+    let outside = status_fixture(false);
+    let without = sj_status(outside.path());
+    assert!(!gain_path(outside.path()).exists());
+    assert_eq!(without.stdout, with.stdout);
+    assert_eq!(without.status.code(), with.status.code());
 }
