@@ -33,7 +33,7 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 
 ## 6. Final review fixes
 
-- [x] 6.1 `sj verify` honours the trace baseline like the gate (LOOP-022, LOOP-023)
+- [x] 6.1 `sj verify` honours the trace baseline like the gate (LOOP-032, LOOP-033)
 - [x] 6.2 [P] Unresolvable prefix clashes are refused (IDS-013)
 - [x] 6.3 [P] Undo records every file migrate writes, from the plan, with its prior content (MIG-018)
 

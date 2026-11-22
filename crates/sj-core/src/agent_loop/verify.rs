@@ -142,7 +142,7 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
         }
     }
 
-    // The gate's baseline rules (LOOP-022/023).
+    // The gate's baseline rules (LOOP-032, LOOP-033).
     let rules = gate::baseline_rules(
         &prep.baseline,
         &prep.baseline_added,

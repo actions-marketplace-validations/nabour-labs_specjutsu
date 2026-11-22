@@ -550,7 +550,7 @@ fn auth_base() -> support::Repo {
 }
 
 #[test]
-fn loop_022_a_baselined_orphan_is_not_a_verify_problem() {
+fn loop_032_a_baselined_orphan_is_not_a_verify_problem() {
     let repo = auth_base();
     repo.write(
         "tests/auth.rs",
@@ -572,7 +572,7 @@ fn loop_022_a_baselined_orphan_is_not_a_verify_problem() {
 }
 
 #[test]
-fn loop_023_a_baseline_entry_added_without_an_exemption_is_a_verify_problem() {
+fn loop_033_a_baseline_entry_added_without_an_exemption_is_a_verify_problem() {
     let repo = auth_base();
     repo.commit("base");
     repo.branch("feature");
