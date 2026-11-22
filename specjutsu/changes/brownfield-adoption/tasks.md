@@ -10,7 +10,7 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 
 ## 2. Gate and the baseline
 
-- [ ] 2.1 Read the baseline from the merge base; collapse known gaps and pass known orphans (GATE-050, GATE-051)
+- [x] 2.1 Read the baseline from the merge base; collapse known gaps and pass known orphans (GATE-050, GATE-051)
 - [ ] 2.2 Changed scenarios stay gated despite the baseline; stale entries only warn (GATE-052, GATE-055)
 - [ ] 2.3 Entries added at head need a config exemption (GATE-053, GATE-054)
 
