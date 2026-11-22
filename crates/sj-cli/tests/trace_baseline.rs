@@ -1,4 +1,4 @@
-//! TRACE-017..019 from specjutsu/changes/brownfield-adoption: `sj trace --write-baseline`, and
+//! TRACE-017..020 from specjutsu/changes/brownfield-adoption: `sj trace --write-baseline`, and
 //! `sj trace` reading the baseline.
 
 use std::path::Path;
@@ -152,4 +152,29 @@ fn trace_017_write_baseline_lists_every_gap_and_orphan() {
         baseline,
         "gap AUTH-002\ngap AUTH-005\norphan AUTH-009 tests/auth.rs auth_009_old\n"
     );
+}
+
+#[test]
+fn trace_020_a_gap_that_gained_a_test_is_stale() {
+    let dir = fixture(
+        SPEC,
+        "#[test]\nfn auth_002_log_in() {}\n#[test]\nfn auth_005_refresh() {}\n",
+    );
+    let r = dir.path();
+    write(r, "specjutsu/trace-baseline.txt", "gap AUTH-002\n");
+
+    let out = sj_trace(r, &["--strict"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l == "stale gap AUTH-002 (remove from trace-baseline.txt)"),
+        "{stdout}"
+    );
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+
+    let out = sj_trace(r, &["--write-baseline"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let baseline = std::fs::read_to_string(r.join("specjutsu/trace-baseline.txt")).unwrap();
+    assert!(!baseline.lines().any(|l| l == "gap AUTH-002"), "{baseline}");
 }
