@@ -606,17 +606,28 @@ fn skill_012_the_task_reviewer_works_from_evidence() {
     ] {
         assert!(has(&got, want), "{want}: {got:?}");
     }
-    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/sj-apply");
-    let text = std::fs::read_to_string(shipped.join("task-reviewer-prompt.md")).unwrap();
+    put(
+        dir.path(),
+        "sj-apply/task-reviewer-prompt.md",
+        &REVIEWER
+            .replace("APPROVED or CHANGES_REQUESTED", "yes or no")
+            .replace("Read the scenario text. ", ""),
+    );
+    let got = messages(dir.path());
     for want in [
-        "git diff",
-        "sj verify",
-        "APPROVED",
-        "CHANGES_REQUESTED",
-        "scenario",
+        "sj-apply: task-reviewer-prompt.md does not name APPROVED",
+        "sj-apply: task-reviewer-prompt.md does not name CHANGES_REQUESTED",
+        "sj-apply: task-reviewer-prompt.md does not name the scenario text",
     ] {
-        assert!(text.contains(want), "shipped reviewer prompt lacks {want}");
+        assert!(has(&got, want), "{want}: {got:?}");
     }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got = messages(&shipped);
+    assert!(
+        !got.iter()
+            .any(|m| m.starts_with("sj-apply: task-reviewer-prompt.md")),
+        "{got:?}"
+    );
 }
 
 // spec: SKILL-013
@@ -632,6 +643,16 @@ fn skill_013_the_implementer_reports_a_status_and_never_closes_the_task() {
     assert!(
         has(&got, "sj-apply: implementer-prompt.md runs sj task done"),
         "{got:?}"
+    );
+    put(
+        dir.path(),
+        "sj-apply/implementer-prompt.md",
+        &IMPLEMENTER.replace("DONE, DONE_WITH", "DONE_WITH"),
+    );
+    let got = messages(dir.path());
+    assert!(
+        has(&got, "sj-apply: implementer-prompt.md does not name DONE"),
+        "the `done` in `sj task done` is not the DONE status: {got:?}"
     );
     put(
         dir.path(),
