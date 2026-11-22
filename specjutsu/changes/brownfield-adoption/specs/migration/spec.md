@@ -25,7 +25,7 @@ With `--diff`, the preview SHALL print a unified diff (`--- a/<path>`, `+++ b/<p
 
 #### Scenario: MIG-013 --diff shows the settings.json change and writes nothing
 - **WHEN** `.claude/settings.json` holds a Superpowers `enabledPlugins` entry and one project PreToolUse hook running `npm run lint`, and `sj migrate --from superpowers --diff` runs
-- **THEN** the output holds a diff for `.claude/settings.json` whose `-` lines are only the Superpowers entry and whose `+` lines are only the specjutsu hook entries, the `npm run lint` hook is not on a `-` line, and `git status --porcelain` is empty afterwards
+- **THEN** the output holds a diff for `.claude/settings.json` in which every `-` line is part of the Superpowers entry or only JSON punctuation (brackets, braces and commas), every `+` line is part of a specjutsu hook entry or only JSON punctuation, no `-` or `+` line contains `npm run lint`, and `git status --porcelain` is empty afterwards
 
 #### Scenario: MIG-014 The preview says existing hooks are kept
 - **WHEN** `.claude/settings.json` holds one project PreToolUse hook, and `sj migrate --from superpowers` runs
