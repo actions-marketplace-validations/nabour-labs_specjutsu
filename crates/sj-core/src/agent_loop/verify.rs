@@ -15,8 +15,8 @@ use crate::run::{self, Outcome, Scope};
 /// One line of `sj verify` output.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Problem {
-    /// `untested`, `failing`, `build-failed`, `unproven`, `orphan`, `uncovered`, `unknown`,
-    /// `clarify` or `gate`.
+    /// `untested`, `failing`, `build-failed`, `unproven`, `orphan`, `baseline-added`,
+    /// `uncovered`, `unknown`, `clarify` or `gate`.
     pub kind: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -27,7 +27,8 @@ pub struct Problem {
 pub struct VerifyReport {
     pub ok: bool,
     pub problems: Vec<Problem>,
-    /// Problems writing the ledger; reported, never failing.
+    /// Problems writing the ledger, and baseline entries a `config` exemption adopts;
+    /// reported, never failing.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     /// Combined stdout and stderr of every runner process verify started.
@@ -141,7 +142,18 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
         }
     }
 
-    for o in &prep.report.orphans {
+    // The gate's baseline rules (LOOP-032, LOOP-033).
+    let rules = gate::baseline_rules(
+        &prep.baseline,
+        &prep.baseline_added,
+        &prep.exemptions,
+        &prep.report,
+    );
+    for f in rules.failures {
+        r.problems.push(problem("baseline-added", None, f));
+    }
+    r.warnings.extend(rules.warnings);
+    for o in &rules.orphans {
         r.problems.push(problem(
             "orphan",
             Some(&o.id),

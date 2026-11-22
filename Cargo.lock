@@ -917,6 +917,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "predicates",
+ "serde",
  "serde_json",
  "sj-adapters",
  "sj-core",

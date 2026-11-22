@@ -355,6 +355,22 @@ pub(crate) fn hooks_remove(text: &str, ours: fn(&Node) -> bool) -> Result<String
     Ok(t)
 }
 
+/// How many hook entries in `text` are not specjutsu's own: the ones `settings_install`
+/// keeps as they are. Zero when `text` is not valid JSON or has no `hooks` object.
+pub fn kept_hooks(text: &str) -> usize {
+    let Ok(root) = jsonedit::parse(text) else {
+        return 0;
+    };
+    root.get("hooks").map_or(0, |h| {
+        h.value
+            .members()
+            .iter()
+            .flat_map(|ev| ev.value.elements())
+            .filter(|e| !is_ours(e))
+            .count()
+    })
+}
+
 fn has_our_hooks(text: &str) -> bool {
     has_hooks(text, is_ours)
 }

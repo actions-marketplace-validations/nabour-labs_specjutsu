@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use anyhow::{bail, Result};
 use serde::Serialize;
 
 use crate::config::Runner;
@@ -46,6 +47,106 @@ impl Report {
     pub fn is_clean(&self) -> bool {
         self.gaps.is_empty() && self.orphans.is_empty()
     }
+}
+
+/// File name of the accepted-debt list, kept in the spec root.
+pub const BASELINE_FILE: &str = "trace-baseline.txt";
+
+/// One accepted gap or orphan in the baseline.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BaselineEntry {
+    Gap(String),
+    /// ID, test file relative to the repo root with forward slashes, test name.
+    Orphan(String, String, String),
+}
+
+/// The gaps and orphans a repository has accepted, sorted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Baseline {
+    pub entries: BTreeSet<BaselineEntry>,
+}
+
+impl Baseline {
+    pub fn from_report(report: &Report) -> Self {
+        let gaps = report.gaps.iter().filter_map(gap_entry);
+        let orphans = report.orphans.iter().map(orphan_entry);
+        Baseline {
+            entries: gaps.chain(orphans).collect(),
+        }
+    }
+
+    /// Read the format [`Baseline::render`] writes. Blank lines are skipped; an orphan's test
+    /// name is the rest of its line, since JS/TS test names contain spaces. Errors name the line;
+    /// the caller adds where the text came from.
+    pub fn parse(text: &str) -> Result<Self> {
+        let mut entries = BTreeSet::new();
+        for (i, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let entry = match line.splitn(4, ' ').collect::<Vec<_>>()[..] {
+                ["gap", id] => BaselineEntry::Gap(id.to_string()),
+                ["orphan", id, file, test] => {
+                    BaselineEntry::Orphan(id.to_string(), file.to_string(), test.to_string())
+                }
+                _ => bail!("line {}: unrecognised baseline entry `{line}`", i + 1),
+            };
+            entries.insert(entry);
+        }
+        Ok(Baseline { entries })
+    }
+
+    /// A gap is known when the entry [`Baseline::from_report`] would write for it is listed:
+    /// a set comparison, so order and duplicates in the file don't matter.
+    pub fn knows_gap(&self, gap: &Scenario) -> bool {
+        gap_entry(gap).is_some_and(|e| self.entries.contains(&e))
+    }
+
+    /// An orphan is known when the entry [`Baseline::from_report`] would write for it is listed.
+    pub fn knows_orphan(&self, orphan: &Orphan) -> bool {
+        self.entries.contains(&orphan_entry(orphan))
+    }
+
+    /// Entries the report no longer has as a gap or orphan, sorted.
+    pub fn stale(&self, report: &Report) -> Vec<&BaselineEntry> {
+        let current = Baseline::from_report(report).entries;
+        self.entries
+            .iter()
+            .filter(|e| !current.contains(e))
+            .collect()
+    }
+
+    /// One entry per line, with a trailing newline.
+    pub fn render(&self) -> String {
+        self.entries.iter().map(|e| format!("{e}\n")).collect()
+    }
+}
+
+/// An entry as its baseline line, without the newline.
+impl std::fmt::Display for BaselineEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BaselineEntry::Gap(id) => write!(f, "gap {id}"),
+            BaselineEntry::Orphan(id, file, test) => write!(f, "orphan {id} {file} {test}"),
+        }
+    }
+}
+
+fn gap_entry(gap: &Scenario) -> Option<BaselineEntry> {
+    gap.id.clone().map(BaselineEntry::Gap)
+}
+
+/// The test file is written with forward slashes so the baseline reads the same on every OS.
+fn orphan_entry(orphan: &Orphan) -> BaselineEntry {
+    let file = orphan
+        .test
+        .file
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    BaselineEntry::Orphan(orphan.id.clone(), file, orphan.test.name.clone())
 }
 
 /// Link tests to scenarios. A name-embedded ID counts as an orphan only when its prefix is one the

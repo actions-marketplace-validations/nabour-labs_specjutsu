@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use sj_adapters::agents;
 use sj_adapters::claude::Change;
 use sj_adapters::superpowers;
@@ -52,6 +53,8 @@ pub struct Plan {
     spec_root: PathBuf,
     adopt: Option<Config>,
     prefixes: BTreeMap<String, String>,
+    /// `specjutsu.toml` with the pinned prefixes spliced in, when the project has one.
+    config_text: Option<String>,
     import: Option<speckit::Plan>,
     assign_ids: bool,
     principles: Option<(PathBuf, String)>,
@@ -203,6 +206,7 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
         spec_root: spec_root.clone(),
         adopt: None,
         prefixes: config.id_prefixes.clone(),
+        config_text: None,
         import: None,
         assign_ids: false,
         principles: None,
@@ -270,8 +274,38 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
             bail!("--from openspec: {} does not exist", rel(&spec_root, root));
         }
         p.assign_ids = true;
+        // Short prefixes for capabilities without IDs, pinned before IDs are assigned (MIG-012).
+        let pinned = ids::unmapped_prefixes(&spec_root, &config.id_prefixes)?;
+        if !pinned.is_empty() {
+            p.prefixes.extend(pinned.clone());
+            if let Some(adopt) = &mut p.adopt {
+                adopt.id_prefixes.extend(pinned.clone());
+            } else {
+                let path = root.join(FILE);
+                let before = std::fs::read_to_string(&path)
+                    .with_context(|| format!("cannot read {}", path.display()))?;
+                let after = ids::add_prefix_lines(&before, &pinned);
+                if !matches!(Config::parse(&after), Ok(c) if c.id_prefixes == p.prefixes) {
+                    bail!(
+                        "{FILE}: adding the ID prefixes did not give the expected `[ids.prefixes]` table; \
+                         add these lines to it by hand:\n{}",
+                        pinned
+                            .iter()
+                            .map(|(cap, prefix)| format!("{cap} = \"{prefix}\""))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
+                }
+                let n = pinned.len();
+                p.lines.push(format!(
+                    "change {FILE} ({n} ID {})",
+                    if n == 1 { "prefix" } else { "prefixes" }
+                ));
+                p.config_text = Some(after);
+            }
+        }
         let mut per_file: BTreeMap<PathBuf, usize> = BTreeMap::new();
-        for a in ids::plan(&spec_root, &config.id_prefixes)? {
+        for a in ids::plan(&spec_root, &p.prefixes)? {
             *per_file.entry(a.file).or_default() += 1;
         }
         for (file, n) in per_file {
@@ -409,6 +443,16 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
     for step in agents::plan(root, &p.agents, false)? {
         p.lines.push(match step.change {
             Change::Created(f) => format!("create {f} (adapter)"),
+            Change::Updated(f) if f == ".claude/settings.json" => {
+                let text = std::fs::read_to_string(root.join(&f)).unwrap_or_default();
+                match sj_adapters::claude::kept_hooks(&text) {
+                    0 => format!("change {f} (adapter)"),
+                    n => format!(
+                        "change {f} (adapter) (merged: {} kept)",
+                        plural(n, "existing hook")
+                    ),
+                }
+            }
             Change::Updated(f) => format!("change {f} (adapter)"),
             Change::Removed(f) => format!("remove {f} (adapter)"),
             Change::Kept(f) => format!("keep   {f} (hand-edited; the adapter leaves it)"),
@@ -441,6 +485,324 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
             dirty.join("\n")
         );
     }
+    let git = Git::new(root);
+    let start = git
+        .run(&["rev-parse", "--verify", "--quiet", "HEAD"])
+        .ok()
+        .map(|s| s.trim().to_string());
+    let (top, manifest) = undo_paths(&git)?;
+    let prefix = git.run(&["rev-parse", "--show-prefix"])?.trim().to_string();
+    let paths: Vec<String> = targets(root, plan)?
+        .into_iter()
+        .map(|p| format!("{prefix}{p}"))
+        .collect();
+    // `hash-object --stdin-paths` reads one path per line.
+    if let Some(bad) = paths.iter().find(|p| p.contains(['\n', '\r'])) {
+        bail!("cannot migrate {bad:?}: its name holds a line break; rename it first (nothing was changed)");
+    }
+    // The prior content of every file the plan may change or remove, stored as blobs of its
+    // exact bytes on disk.
+    let before = hashes(&top, &paths, true)?;
+    // A failed write may have changed files already, so record them; its error comes first.
+    let written = write_plan(root, plan);
+    let recorded = record_undo(&top, &manifest, start, &paths, &before);
+    written.and(recorded)
+}
+
+/// Every file the plan may create, change or remove, relative to `root`, from the plan
+/// itself rather than `git status`, so gitignored files count.
+fn targets(root: &Path, plan: &Plan) -> Result<Vec<String>> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    if let Some(import) = &plan.import {
+        out.extend(import.outputs().map(|o| o.path.clone()));
+    }
+    if plan.adopt.is_some() || plan.config_text.is_some() {
+        out.push(root.join(FILE));
+    }
+    out.push(root.join(".gitignore"));
+    if plan.assign_ids {
+        out.extend(
+            ids::plan(&plan.spec_root, &plan.prefixes)?
+                .into_iter()
+                .map(|a| a.file),
+        );
+    }
+    if let Some((path, _)) = &plan.principles {
+        out.push(path.clone());
+    }
+    out.extend(plan.remove_files.iter().cloned());
+    for d in &plan.remove_dirs {
+        files_under(d, &mut out);
+    }
+    if let Some((path, _)) = &plan.settings {
+        out.push(path.clone());
+    }
+    for step in agents::plan(root, &plan.agents, false)? {
+        match step.change {
+            Change::Created(f) | Change::Updated(f) | Change::Removed(f) => out.push(root.join(f)),
+            Change::Kept(_) => {}
+        }
+    }
+    let mut out: Vec<String> = out.iter().map(|p| rel(p, root)).collect();
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+/// The undo manifest's name, inside the git directory.
+pub const UNDO_FILE: &str = "sj-migrate-undo.json";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Action {
+    Created,
+    Changed,
+    Removed,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UndoEntry {
+    path: String,
+    action: Action,
+    /// The content hash after the write; `None` for a removed file.
+    hash: Option<String>,
+    /// The blob of the content before the write; `None` for a created file.
+    blob: Option<String>,
+    /// Whether `blob` comes from the start commit's tree rather than the file's raw bytes,
+    /// so undo applies the working-tree conversions (eol, smudge) when it restores it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    filtered: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Undo {
+    /// The commit migrate started from; `None` in a repo without one.
+    commit: Option<String>,
+    files: Vec<UndoEntry>,
+}
+
+/// The repo's top level and the undo manifest's path.
+fn undo_paths(git: &Git) -> Result<(PathBuf, PathBuf)> {
+    let top = PathBuf::from(git.run(&["rev-parse", "--show-toplevel"])?.trim());
+    let dir = PathBuf::from(git.run(&["rev-parse", "--absolute-git-dir"])?.trim());
+    Ok((top, dir.join(UNDO_FILE)))
+}
+
+/// Git's hash of the exact bytes of each of `paths` (relative to the top level) as it is
+/// now; `None` when missing. `--no-filters` skips the clean conversions (CRLF to LF under
+/// `core.autocrlf`), so the hash, and the blob undo restores, match the bytes on disk.
+/// `store` also writes each file's blob to the object database. The paths go to git on
+/// stdin, so any number of them stays under the command-line limit.
+fn hashes(top: &Path, paths: &[String], store: bool) -> Result<Vec<Option<String>>> {
+    let present: Vec<&str> = paths
+        .iter()
+        .map(String::as_str)
+        .filter(|p| top.join(p).is_file())
+        .collect();
+    let mut found = BTreeMap::new();
+    if !present.is_empty() {
+        let mut args = vec!["hash-object"];
+        if store {
+            args.push("-w");
+        }
+        args.extend(["--no-filters", "--stdin-paths"]);
+        let input: String = present.iter().map(|p| format!("{p}\n")).collect();
+        let out = Git::new(top).run_stdin(&args, &input)?;
+        for (p, h) in present.iter().zip(out.lines()) {
+            found.insert(*p, h.to_string());
+        }
+    }
+    Ok(paths
+        .iter()
+        .map(|p| found.get(p.as_str()).cloned())
+        .collect())
+}
+
+/// Write the undo manifest for every path of `paths` the write created, changed or removed,
+/// given each one's blob from `before`. Paths `git status` lists that the plan didn't name
+/// are recorded too: the tree was clean before, so they are migrate's, and their prior
+/// content is the start commit's, restored through the working-tree filters as a checkout
+/// would write it.
+fn record_undo(
+    top: &Path,
+    manifest: &Path,
+    commit: Option<String>,
+    paths: &[String],
+    before: &[Option<String>],
+) -> Result<()> {
+    let git = Git::new(top);
+    let mut paths = paths.to_vec();
+    let mut before = before.to_vec();
+    // Which entries of `before` are start-commit blobs rather than raw bytes.
+    let mut filtered = vec![false; paths.len()];
+    let status = git.run(&["status", "--porcelain", "-z", "--untracked-files=all"])?;
+    let extra: Vec<String> = status
+        .split('\0')
+        .filter(|e| e.len() > 3)
+        .map(|e| e[3..].to_string())
+        .filter(|p| !paths.contains(p))
+        .collect();
+    let mut unhashable = Vec::new();
+    if !extra.is_empty() {
+        let head = match &commit {
+            Some(c) => head_blobs(&git, c)?,
+            None => BTreeMap::new(),
+        };
+        for p in extra {
+            if p.contains(['\n', '\r']) {
+                unhashable.push(p);
+                continue;
+            }
+            before.push(head.get(&p).cloned());
+            filtered.push(true);
+            paths.push(p);
+        }
+    }
+    let after = hashes(top, &paths, false)?;
+    let files: Vec<UndoEntry> = paths
+        .iter()
+        .zip(&before)
+        .zip(after)
+        .zip(filtered)
+        .filter_map(|(((path, blob), hash), filtered)| {
+            let action = match (blob, &hash) {
+                (None, Some(_)) => Action::Created,
+                (Some(_), None) => Action::Removed,
+                (Some(b), Some(h)) if b != h => Action::Changed,
+                _ => return None,
+            };
+            Some(UndoEntry {
+                path: path.clone(),
+                action,
+                hash,
+                blob: blob.clone(),
+                filtered,
+            })
+        })
+        .collect();
+    if !files.is_empty() {
+        let json = serde_json::to_string_pretty(&Undo { commit, files })?;
+        std::fs::write(manifest, json + "\n")
+            .with_context(|| format!("cannot write {}", manifest.display()))?;
+    }
+    if !unhashable.is_empty() {
+        bail!(
+            "undo can't record these files, whose names hold a line break; restore or remove them by hand (e.g. `git restore <file>` for a tracked file):\n{}",
+            unhashable.join("\n")
+        );
+    }
+    Ok(())
+}
+
+/// The blob of every file in `commit`'s tree, by path from the top level.
+fn head_blobs(git: &Git, commit: &str) -> Result<BTreeMap<String, String>> {
+    let tree = git.run(&["ls-tree", "-r", "-z", "--full-tree", commit])?;
+    Ok(tree
+        .split('\0')
+        .filter_map(|e| {
+            let (meta, path) = e.split_once('\t')?;
+            let mut f = meta.split(' ');
+            let (_mode, kind, id) = (f.next()?, f.next()?, f.next()?);
+            (kind == "blob").then(|| (path.to_string(), id.to_string()))
+        })
+        .collect())
+}
+
+/// What [`undo`] put back.
+pub struct Undone {
+    pub restored: usize,
+    pub deleted: usize,
+}
+
+/// Put back what the last `--write` touched, from its undo manifest. Refuses, changing
+/// nothing, when a recorded file no longer has the content migrate left.
+pub fn undo(root: &Path) -> Result<Undone> {
+    let git = Git::new(root);
+    if !git.is_repo() {
+        bail!("{} is not a git work tree", root.display());
+    }
+    let (top, manifest) = undo_paths(&git)?;
+    let Ok(text) = std::fs::read_to_string(&manifest) else {
+        bail!("nothing to undo: no {UNDO_FILE} in the git directory");
+    };
+    let undo: Undo = serde_json::from_str(&text)
+        .with_context(|| format!("{} is not a valid undo manifest", manifest.display()))?;
+    let paths: Vec<String> = undo.files.iter().map(|f| f.path.clone()).collect();
+    let edited: Vec<&str> = undo
+        .files
+        .iter()
+        .zip(hashes(&top, &paths, false)?)
+        .filter(|(f, now)| f.hash != *now)
+        .map(|(f, _)| f.path.as_str())
+        .collect();
+    if !edited.is_empty() {
+        bail!(
+            "these files changed since the migration (nothing was changed); restore them to \
+             the content migrate wrote (e.g. `git restore <file>` for a tracked file) and \
+             run `sj migrate --undo` again:\n{}",
+            edited.join("\n")
+        );
+    }
+    let mut old = Vec::new();
+    for f in undo.files.iter().filter(|f| f.action != Action::Created) {
+        let Some(blob) = &f.blob else {
+            bail!("the undo manifest records no prior content for {}", f.path);
+        };
+        // A blob of captured bytes comes back raw, byte for byte, CRLF or LF as it was. A
+        // blob from the start commit goes through the working-tree conversions (eol,
+        // smudge) for its path, the way the checkout wrote it.
+        let path_arg = format!("--path={}", f.path);
+        let args: Vec<&str> = if f.filtered {
+            vec!["cat-file", "--filters", &path_arg, blob]
+        } else {
+            vec!["cat-file", "blob", blob]
+        };
+        let out = std::process::Command::new("git")
+            .args(&args)
+            .current_dir(&top)
+            .output()
+            .context("running git (is it installed and on PATH?)")?;
+        if !out.status.success() {
+            bail!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        old.push((f, out.stdout));
+    }
+    let mut done = Undone {
+        restored: 0,
+        deleted: 0,
+    };
+    for (f, content) in old {
+        let path = top.join(&f.path);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create {}", dir.display()))?;
+        }
+        std::fs::write(&path, content)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+        done.restored += 1;
+    }
+    for f in undo.files.iter().filter(|f| f.action == Action::Created) {
+        let path = top.join(&f.path);
+        std::fs::remove_file(&path).with_context(|| format!("cannot remove {}", path.display()))?;
+        done.deleted += 1;
+        // Folders left empty by the created files go too; never one holding anything else.
+        for dir in path.ancestors().skip(1) {
+            if dir == top || std::fs::remove_dir(dir).is_err() {
+                break;
+            }
+        }
+    }
+    std::fs::remove_file(&manifest)
+        .with_context(|| format!("cannot remove {}", manifest.display()))?;
+    Ok(done)
+}
+
+/// The writes of [`apply`], without its clean-tree check.
+fn write_plan(root: &Path, plan: &Plan) -> Result<()> {
     if let Some(import) = &plan.import {
         let conflicts = import.conflicts();
         if !conflicts.is_empty() {
@@ -457,6 +819,9 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     }
     if let Some(config) = &plan.adopt {
         write(&root.join(FILE), &config.to_toml())?;
+    }
+    if let Some(text) = &plan.config_text {
+        write(&root.join(FILE), text)?;
     }
     config::ignore_ledger(root)?;
     if plan.assign_ids {
@@ -482,6 +847,58 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     // Planned again now: the Superpowers step above may have changed `.claude/settings.json`.
     sj_adapters::plan::apply(agents::plan(root, &plan.agents, false)?)?;
     Ok(())
+}
+
+/// The files a project's migration may read: every file but those `.gitignore` excludes and
+/// `.git/`, relative to `root`. Ignored files stay out of the copy [`diff`] plans on, since
+/// folders like `target/` can be huge; a plan that reads an ignored file (say a gitignored
+/// `.claude/settings.json`) may then preview differently from the real `--write`.
+fn project_files(root: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .require_git(false)
+        .filter_entry(|e| e.file_name() != ".git")
+        .build()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+        .filter_map(|e| e.path().strip_prefix(root).ok().map(Path::to_path_buf))
+        .collect();
+    out.sort();
+    out
+}
+
+/// A unified diff of every file the migration would create or change, without writing to
+/// `root`: the plan is carried out on a copy of the project and the copy compared with it.
+pub fn diff(root: &Path, tools: &[Tool], today: &str) -> Result<String> {
+    let tmp = tempfile::tempdir().context("creating a temporary copy of the project")?;
+    let copy = tmp.path();
+    for f in project_files(root) {
+        let dest = copy.join(&f);
+        if let Some(dir) = dest.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create {}", dir.display()))?;
+        }
+        std::fs::copy(root.join(&f), &dest)
+            .with_context(|| format!("cannot copy {}", f.display()))?;
+    }
+    write_plan(copy, &plan(copy, tools, today)?)?;
+    let mut out = String::new();
+    for f in project_files(copy) {
+        let new = std::fs::read(copy.join(&f))?;
+        let old = std::fs::read(root.join(&f)).unwrap_or_default();
+        if new == old {
+            continue;
+        }
+        let (Ok(old), Ok(new)) = (String::from_utf8(old), String::from_utf8(new)) else {
+            continue;
+        };
+        out.push_str(&crate::linediff::unified(
+            &rel(&f, Path::new("")),
+            &old,
+            &new,
+        ));
+    }
+    Ok(out)
 }
 
 /// The checks after a write, and what git sees.
@@ -517,4 +934,80 @@ pub fn finish(root: &Path, plan: &Plan) -> Result<Finish> {
         changed,
         removed,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    /// Files the write touched that the plan's list missed are still recorded, from
+    /// `git status`, with the start commit's content, and undo puts them back.
+    #[test]
+    fn undo_records_files_only_git_status_lists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        git(root, &["init", "-q"]);
+        // Git for Windows defaults to `core.autocrlf=true`, which would restore these LF files
+        // as CRLF, the way a checkout writes them. Line endings have their own test
+        // (`undo_restores_crlf_line_endings`).
+        git(root, &["config", "core.autocrlf", "false"]);
+        std::fs::write(root.join("kept.txt"), "old\n").unwrap();
+        std::fs::write(root.join("gone.txt"), "gone\n").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-qm", "start"]);
+        let g = Git::new(root);
+        let commit = g.run(&["rev-parse", "HEAD"]).unwrap().trim().to_string();
+        let (top, manifest) = undo_paths(&g).unwrap();
+
+        // A write the plan didn't list: one change, one removal, one new file.
+        std::fs::write(root.join("kept.txt"), "new\n").unwrap();
+        std::fs::remove_file(root.join("gone.txt")).unwrap();
+        std::fs::write(root.join("made.txt"), "made\n").unwrap();
+        record_undo(&top, &manifest, Some(commit), &[], &[]).unwrap();
+
+        let undo: Undo =
+            serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+        let actions: Vec<(&str, Action, bool)> = undo
+            .files
+            .iter()
+            .map(|f| (f.path.as_str(), f.action, f.blob.is_some()))
+            .collect();
+        assert_eq!(
+            actions,
+            [
+                ("gone.txt", Action::Removed, true),
+                ("kept.txt", Action::Changed, true),
+                ("made.txt", Action::Created, false),
+            ]
+        );
+
+        super::undo(root).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("kept.txt")).unwrap(),
+            "old\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("gone.txt")).unwrap(),
+            "gone\n"
+        );
+        assert!(!root.join("made.txt").exists());
+    }
 }
