@@ -19,9 +19,11 @@ output below is your requirements. Use the scenario's values exactly as written.
 2. **Write the failing test.** One test per scenario, linked by ID in its name
    (`fn auth_005_refreshes_token`) or a `// spec: AUTH-005` line. Assert the THEN with the
    scenario's concrete values, through the public interface, not through mocks of the code
-   under test.
+   under test. Put Rust tests in the crate's `tests/` directory, and other tests where the
+   suite's `tests` globs find them, so CI can run them against the base branch.
 3. **Record red.** Run `sj test <ID>`. It must fail because the behaviour is missing, not
-   because of a typo. If it passes, stop and report `NEEDS_CONTEXT`: either the behaviour
+   because of a typo. A compile error because the function doesn't exist yet counts as
+   red. If it passes, stop and report `NEEDS_CONTEXT`: either the behaviour
    exists or the test doesn't test the scenario. Commit: `test(<ID>): red`.
 4. **Make it pass.** Write the least code that makes the test pass. Run `sj test <ID>`. Then
    run the package's tests to check nothing else broke. Commit: `feat(<ID>): green`.

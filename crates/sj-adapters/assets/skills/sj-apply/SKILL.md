@@ -59,7 +59,8 @@ On `CHANGES_REQUESTED`, send the findings, as written, to the implementer. When 
 back, start another fresh subagent with `re-review-prompt.md`, the earlier findings and the
 new commit range. It checks only those findings and the new diff.
 
-Stop after 3 rounds without approval. Tell the user which findings are open and what each
+The first review is round 1. If the third review still says `CHANGES_REQUESTED`, stop
+after 3 rounds without approval. Tell the user which findings are open and what each
 side says. Don't close the task, and don't start the next one.
 
 If you think a finding is wrong, check it against the scenario and the code. Say why in the

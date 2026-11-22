@@ -332,6 +332,17 @@ fn norm(text: &str) -> String {
         .to_lowercase()
 }
 
+/// Whether `word` appears in `text` as a whole word, case-sensitive; `_` counts as part of a
+/// word, so `DONE` doesn't match inside `DONE_WITH_CONCERNS`.
+fn has_word(text: &str, word: &str) -> bool {
+    let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        let after = text[at + word.len()..].chars().next();
+        !before.is_some_and(is_word) && !after.is_some_and(is_word)
+    })
+}
+
 /// The sj-apply review loop and its prompts (SKILL-011..013).
 fn check_apply(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
     const NAME: &str = "sj-apply";
@@ -354,16 +365,18 @@ fn check_apply(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
     if !t.contains("3 rounds") {
         out.push(problem(NAME, "does not limit the fix loop to 3 rounds"));
     }
-    let read = |f: &str| -> Result<Option<String>> {
+    // Each prompt as written (for status tokens) and normalised (for phrases).
+    let read = |f: &str| -> Result<Option<(String, String)>> {
         let p = dir.join(NAME).join(f);
         if !p.is_file() {
             return Ok(None);
         }
         let raw =
             std::fs::read_to_string(&p).with_context(|| format!("cannot read {}", p.display()))?;
-        Ok(Some(norm(&raw)))
+        let n = norm(&raw);
+        Ok(Some((raw, n)))
     };
-    if let Some(r) = read("task-reviewer-prompt.md")? {
+    if let Some((raw, r)) = read("task-reviewer-prompt.md")? {
         const F: &str = "task-reviewer-prompt.md";
         if !r.contains("sj verify") {
             out.push(problem(NAME, format!("{F} does not name sj verify")));
@@ -374,32 +387,34 @@ fn check_apply(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
                 format!("{F} does not say to ignore the implementer's report"),
             ));
         }
-        for p in [
-            "git diff",
-            "approved",
-            "changes_requested",
-            "fail without the change",
-        ] {
-            if !r.contains(p) {
-                out.push(problem(NAME, format!("{F} does not name {p}")));
+        let wants = [
+            ("the scenario text", r.contains("scenario text")),
+            ("git diff", r.contains("git diff")),
+            ("APPROVED", has_word(&raw, "APPROVED")),
+            ("CHANGES_REQUESTED", has_word(&raw, "CHANGES_REQUESTED")),
+            (
+                "fail without the change",
+                r.contains("fail without the change"),
+            ),
+        ];
+        for (label, ok) in wants {
+            if !ok {
+                out.push(problem(NAME, format!("{F} does not name {label}")));
             }
         }
     }
-    if let Some(i) = read("implementer-prompt.md")? {
+    if let Some((raw, i)) = read("implementer-prompt.md")? {
         const F: &str = "implementer-prompt.md";
+        // The exception's wording is fixed by the change's design (decision 3).
         if i.replace("never run `sj task done`", "")
             .contains("sj task done")
         {
             out.push(problem(NAME, format!("{F} runs sj task done")));
         }
-        let statuses = i.replace("done_with_concerns", "");
-        let wants: [(&str, bool); 5] = [
-            ("sj test", i.contains("sj test")),
-            ("DONE", statuses.contains("done")),
-            ("DONE_WITH_CONCERNS", i.contains("done_with_concerns")),
-            ("BLOCKED", i.contains("blocked")),
-            ("NEEDS_CONTEXT", i.contains("needs_context")),
-        ];
+        let mut wants = vec![("sj test", i.contains("sj test"))];
+        for status in ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"] {
+            wants.push((status, has_word(&raw, status)));
+        }
         for (label, ok) in wants {
             if !ok {
                 out.push(problem(NAME, format!("{F} does not name {label}")));
