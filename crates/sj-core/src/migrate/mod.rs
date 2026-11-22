@@ -500,7 +500,8 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     if let Some(bad) = paths.iter().find(|p| p.contains(['\n', '\r'])) {
         bail!("cannot migrate {bad:?}: its name holds a line break; rename it first (nothing was changed)");
     }
-    // The prior content of every file the plan may change or remove, stored as blobs.
+    // The prior content of every file the plan may change or remove, stored as blobs of its
+    // exact bytes on disk.
     let before = hashes(&top, &paths, true)?;
     // A failed write may have changed files already, so record them; its error comes first.
     let written = write_plan(root, plan);
@@ -567,6 +568,10 @@ struct UndoEntry {
     hash: Option<String>,
     /// The blob of the content before the write; `None` for a created file.
     blob: Option<String>,
+    /// Whether `blob` comes from the start commit's tree rather than the file's raw bytes,
+    /// so undo applies the working-tree conversions (eol, smudge) when it restores it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    filtered: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -583,9 +588,11 @@ fn undo_paths(git: &Git) -> Result<(PathBuf, PathBuf)> {
     Ok((top, dir.join(UNDO_FILE)))
 }
 
-/// Git's hash of each of `paths` (relative to the top level) as it is now; `None` when
-/// missing. `store` also writes each file's blob to the object database. The paths go to
-/// git on stdin, so any number of them stays under the command-line limit.
+/// Git's hash of the exact bytes of each of `paths` (relative to the top level) as it is
+/// now; `None` when missing. `--no-filters` skips the clean conversions (CRLF to LF under
+/// `core.autocrlf`), so the hash, and the blob undo restores, match the bytes on disk.
+/// `store` also writes each file's blob to the object database. The paths go to git on
+/// stdin, so any number of them stays under the command-line limit.
 fn hashes(top: &Path, paths: &[String], store: bool) -> Result<Vec<Option<String>>> {
     let present: Vec<&str> = paths
         .iter()
@@ -598,7 +605,7 @@ fn hashes(top: &Path, paths: &[String], store: bool) -> Result<Vec<Option<String
         if store {
             args.push("-w");
         }
-        args.push("--stdin-paths");
+        args.extend(["--no-filters", "--stdin-paths"]);
         let input: String = present.iter().map(|p| format!("{p}\n")).collect();
         let out = Git::new(top).run_stdin(&args, &input)?;
         for (p, h) in present.iter().zip(out.lines()) {
@@ -614,7 +621,8 @@ fn hashes(top: &Path, paths: &[String], store: bool) -> Result<Vec<Option<String
 /// Write the undo manifest for every path of `paths` the write created, changed or removed,
 /// given each one's blob from `before`. Paths `git status` lists that the plan didn't name
 /// are recorded too: the tree was clean before, so they are migrate's, and their prior
-/// content is the start commit's.
+/// content is the start commit's, restored through the working-tree filters as a checkout
+/// would write it.
 fn record_undo(
     top: &Path,
     manifest: &Path,
@@ -625,6 +633,8 @@ fn record_undo(
     let git = Git::new(top);
     let mut paths = paths.to_vec();
     let mut before = before.to_vec();
+    // Which entries of `before` are start-commit blobs rather than raw bytes.
+    let mut filtered = vec![false; paths.len()];
     let status = git.run(&["status", "--porcelain", "-z", "--untracked-files=all"])?;
     let extra: Vec<String> = status
         .split('\0')
@@ -644,6 +654,7 @@ fn record_undo(
                 continue;
             }
             before.push(head.get(&p).cloned());
+            filtered.push(true);
             paths.push(p);
         }
     }
@@ -652,7 +663,8 @@ fn record_undo(
         .iter()
         .zip(&before)
         .zip(after)
-        .filter_map(|((path, blob), hash)| {
+        .zip(filtered)
+        .filter_map(|(((path, blob), hash), filtered)| {
             let action = match (blob, &hash) {
                 (None, Some(_)) => Action::Created,
                 (Some(_), None) => Action::Removed,
@@ -664,6 +676,7 @@ fn record_undo(
                 action,
                 hash,
                 blob: blob.clone(),
+                filtered,
             })
         })
         .collect();
@@ -735,17 +748,24 @@ pub fn undo(root: &Path) -> Result<Undone> {
         let Some(blob) = &f.blob else {
             bail!("the undo manifest records no prior content for {}", f.path);
         };
-        // `--filters` applies the working-tree conversions (eol, smudge) for `--path`, so
-        // the file comes back with the bytes it had on disk, CRLF endings included.
+        // A blob of captured bytes comes back raw, byte for byte, CRLF or LF as it was. A
+        // blob from the start commit goes through the working-tree conversions (eol,
+        // smudge) for its path, the way the checkout wrote it.
+        let path_arg = format!("--path={}", f.path);
+        let args: Vec<&str> = if f.filtered {
+            vec!["cat-file", "--filters", &path_arg, blob]
+        } else {
+            vec!["cat-file", "blob", blob]
+        };
         let out = std::process::Command::new("git")
-            .args(["cat-file", "--filters", &format!("--path={}", f.path), blob])
+            .args(&args)
             .current_dir(&top)
             .output()
             .context("running git (is it installed and on PATH?)")?;
         if !out.status.success() {
             bail!(
-                "git cat-file --filters --path={} {blob} failed: {}",
-                f.path,
+                "git {} failed: {}",
+                args.join(" "),
                 String::from_utf8_lossy(&out.stderr).trim()
             );
         }

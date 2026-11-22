@@ -1271,8 +1271,8 @@ and its content before the write, in
 `sj-migrate-undo.json` in the git directory (`git rev-parse --git-dir`), so it is
 never committed. `sj migrate --undo` then:
 
-- restores every changed or removed file to its content before the write, line
-  endings included, and deletes every file migrate created, along with any folder
+- restores every changed or removed file to its content before the write, byte for
+  byte, line endings included, and deletes every file migrate created, along with any folder
   that leaves empty;
 - touches no other file, so work you added since, such as a new `notes.txt`, stays;
 - deletes the manifest, and leaves the result uncommitted:
