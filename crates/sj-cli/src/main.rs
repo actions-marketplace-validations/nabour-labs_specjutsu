@@ -1735,8 +1735,11 @@ fn next_cmd(
     json: bool,
 ) -> Result<ExitCode> {
     use sj_core::agent_loop::next;
+    use std::fmt::Write as _;
     let (root, spec_root) = spec_paths(args)?;
-    if parallel {
+    // Built in full first so the bytes printed can be counted against the change folder read.
+    let mut out = String::new();
+    let name = if parallel {
         let Some(name) = next::parallel_change(&spec_root, change.as_deref())? else {
             println!("next: no open tasks");
             return Ok(ExitCode::SUCCESS);
@@ -1744,25 +1747,41 @@ fn next_cmd(
         let batches = next::parallel(&root, &spec_root, &name)?;
         if json {
             let v = serde_json::json!({ "change": name, "batches": batches });
-            println!("{}", serde_json::to_string_pretty(&v)?);
+            writeln!(out, "{}", serde_json::to_string_pretty(&v)?)?;
         } else if batches.is_empty() {
-            println!("next: no parallel tasks");
+            writeln!(out, "next: no parallel tasks")?;
         } else {
             for (i, b) in batches.iter().enumerate() {
-                println!("batch {}", i + 1);
+                writeln!(out, "batch {}", i + 1)?;
                 for t in b {
-                    println!("  {t}");
+                    writeln!(out, "  {t}")?;
                 }
             }
         }
-        return Ok(ExitCode::SUCCESS);
-    }
-    match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
-        None if json => println!("null"),
-        None => println!("next: no open tasks"),
-        Some(n) if json => println!("{}", serde_json::to_string_pretty(&n)?),
-        Some(n) => print!("{}", next::render(&n)),
-    }
+        name
+    } else {
+        match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
+            None if json => {
+                println!("null");
+                return Ok(ExitCode::SUCCESS);
+            }
+            None => {
+                println!("next: no open tasks");
+                return Ok(ExitCode::SUCCESS);
+            }
+            Some(n) => {
+                if json {
+                    writeln!(out, "{}", serde_json::to_string_pretty(&n)?)?;
+                } else {
+                    out.push_str(&next::render(&n));
+                }
+                n.change
+            }
+        }
+    };
+    let raw = sj_core::gain::dir_bytes(&sj_core::authoring::find_change(&spec_root, &name)?.dir);
+    let record = sj_core::gain::enabled(&root, false);
+    print_and_record_gain(&root, record, "next", &out, raw);
     Ok(ExitCode::SUCCESS)
 }
 

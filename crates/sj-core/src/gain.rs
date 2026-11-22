@@ -56,3 +56,19 @@ pub fn append(root: &Path, record: &Record) -> Result<()> {
     line.push('\n');
     crate::ledger::append_lines(&path(root), &line)
 }
+
+/// Total size in bytes of every file under `dir`, subfolders included: the raw side of a
+/// command that stands in for reading a change folder. Unreadable entries count as 0.
+pub fn dir_bytes(dir: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|e| match e.file_type() {
+            Ok(t) if t.is_dir() => dir_bytes(&e.path()),
+            Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),
+            _ => 0,
+        })
+        .sum()
+}
