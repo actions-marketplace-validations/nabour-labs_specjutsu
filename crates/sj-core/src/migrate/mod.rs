@@ -286,7 +286,13 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
                 let after = ids::add_prefix_lines(&before, &pinned);
                 if !matches!(Config::parse(&after), Ok(c) if c.id_prefixes == p.prefixes) {
                     bail!(
-                        "{FILE}: cannot find an `[ids.prefixes]` table to add the ID prefixes to"
+                        "{FILE}: adding the ID prefixes did not give the expected `[ids.prefixes]` table; \
+                         add these lines to it by hand:\n{}",
+                        pinned
+                            .iter()
+                            .map(|(cap, prefix)| format!("{cap} = \"{prefix}\""))
+                            .collect::<Vec<_>>()
+                            .join("\n")
                     );
                 }
                 let n = pinned.len();

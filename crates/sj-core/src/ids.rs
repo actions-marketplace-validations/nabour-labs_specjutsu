@@ -97,6 +97,15 @@ pub fn prefix_table(
     spec_root: &Path,
     configured: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, String>> {
+    table_with_use(spec_root, configured, &prefix_use(spec_root)?)
+}
+
+/// [`prefix_table`] given the capabilities' prefix use from [`prefix_use`].
+fn table_with_use(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+    used: &BTreeMap<String, BTreeMap<String, usize>>,
+) -> Result<BTreeMap<String, String>> {
     let mut folders = Vec::new();
     for file in spec::discover_spec_files(spec_root)? {
         if let Some(cap) = place(spec_root, &file).capability {
@@ -105,7 +114,6 @@ pub fn prefix_table(
             }
         }
     }
-    let used = prefix_use(spec_root)?;
     let mut kept = configured.clone();
     for cap in &folders {
         if kept.contains_key(cap) {
@@ -150,7 +158,7 @@ pub fn unmapped_prefixes(
     configured: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, String>> {
     let used = prefix_use(spec_root)?;
-    let mut table = prefix_table(spec_root, configured)?;
+    let mut table = table_with_use(spec_root, configured, &used)?;
     table.retain(|cap, _| !configured.contains_key(cap) && !used.contains_key(cap));
     Ok(table)
 }

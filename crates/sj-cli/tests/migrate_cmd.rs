@@ -562,3 +562,54 @@ fn mig_012_openspec_capabilities_get_short_prefixes() {
         .unwrap();
     assert_eq!(first, "#### Scenario: DIST-001 Adds two numbers");
 }
+
+/// MIG-012 with a `specjutsu.toml` already committed: the prefixes are spliced into it, and
+/// every other byte is kept. `table` is the file's `[ids.prefixes]` part, if any.
+fn existing_config_case(table: &str, preview: &str, after_table: &str) {
+    let repo = openspec_repo();
+    let head = "# project settings\nschema = 1\nspec_root = \"openspec\"\nmode = \"strict\"\n";
+    repo.write("specjutsu.toml", &format!("{head}{table}"));
+    repo.write(
+        "openspec/specs/distribution/spec.md",
+        &SPEC.replace("# math Specification", "# distribution Specification"),
+    );
+    repo.commit("config and distribution capability");
+    migrate(repo.path(), &["--from", "openspec"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "change specjutsu.toml ({preview})\n"
+        )));
+    assert_eq!(status(&repo), "");
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+    assert_eq!(
+        read(&repo, "specjutsu.toml"),
+        format!("{head}{after_table}")
+    );
+    let spec = read(&repo, "openspec/specs/distribution/spec.md");
+    let first = spec
+        .lines()
+        .find(|l| l.starts_with("#### Scenario:"))
+        .unwrap();
+    assert_eq!(first, "#### Scenario: DIST-001 Adds two numbers");
+}
+
+#[test]
+fn mig_012_existing_config_gets_the_prefix_spliced() {
+    existing_config_case(
+        "\n[ids.prefixes]\nmath = \"MATH\"\n",
+        "1 ID prefix",
+        "\n[ids.prefixes]\nmath = \"MATH\"\ndistribution = \"DIST\"\n",
+    );
+}
+
+#[test]
+fn mig_012_existing_config_without_a_table_gets_one() {
+    existing_config_case(
+        "",
+        "2 ID prefixes",
+        "\n[ids.prefixes]\ndistribution = \"DIST\"\nmath = \"MATH\"\n",
+    );
+}
