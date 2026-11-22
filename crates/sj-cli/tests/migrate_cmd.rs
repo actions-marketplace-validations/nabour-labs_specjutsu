@@ -561,54 +561,93 @@ fn mig_012_openspec_capabilities_get_short_prefixes() {
     assert_eq!(first, "#### Scenario: DIST-001 Adds two numbers");
 }
 
-/// MIG-012 with a `specjutsu.toml` already committed: the prefixes are spliced into it, and
-/// every other byte is kept. `table` is the file's `[ids.prefixes]` part, if any.
-fn existing_config_case(table: &str, preview: &str, after_table: &str) {
+/// The project settings above a committed `specjutsu.toml`'s `[ids.prefixes]` part.
+const CONFIG_HEAD: &str =
+    "# project settings\nschema = 1\nspec_root = \"openspec\"\nmode = \"strict\"\n";
+
+/// What `sj migrate --from openspec` did to a repo with a committed `specjutsu.toml`.
+struct ExistingConfigRun {
+    /// Stdout of the preview run.
+    preview: String,
+    /// `git status --porcelain` right after the preview.
+    status_after_preview: String,
+    /// `specjutsu.toml` after the `--write` run.
+    config: String,
+    /// The first scenario heading of the distribution spec after the `--write` run.
+    first_scenario: String,
+}
+
+/// MIG-012 with a `specjutsu.toml` already committed: previews, then writes, a migration of
+/// a repo whose config is `CONFIG_HEAD` followed by `table`, its `[ids.prefixes]` part, if any.
+fn existing_config_case(table: &str) -> ExistingConfigRun {
     let repo = openspec_repo();
-    let head = "# project settings\nschema = 1\nspec_root = \"openspec\"\nmode = \"strict\"\n";
-    repo.write("specjutsu.toml", &format!("{head}{table}"));
+    repo.write("specjutsu.toml", &format!("{CONFIG_HEAD}{table}"));
     repo.write(
         "openspec/specs/distribution/spec.md",
         &SPEC.replace("# math Specification", "# distribution Specification"),
     );
     repo.commit("config and distribution capability");
-    migrate(repo.path(), &["--from", "openspec"])
+    let preview = migrate(repo.path(), &["--from", "openspec"])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!(
-            "change specjutsu.toml ({preview})\n"
-        )));
-    assert_eq!(status(&repo), "");
+        .get_output()
+        .stdout
+        .clone();
+    let status_after_preview = status(&repo);
     migrate(repo.path(), &["--from", "openspec", "--write"])
         .assert()
         .success();
-    assert_eq!(
-        read(&repo, "specjutsu.toml"),
-        format!("{head}{after_table}")
-    );
     let spec = read(&repo, "openspec/specs/distribution/spec.md");
-    let first = spec
+    let first_scenario = spec
         .lines()
         .find(|l| l.starts_with("#### Scenario:"))
-        .unwrap();
-    assert_eq!(first, "#### Scenario: DIST-001 Adds two numbers");
+        .unwrap()
+        .to_string();
+    ExistingConfigRun {
+        preview: String::from_utf8(preview).unwrap(),
+        status_after_preview,
+        config: read(&repo, "specjutsu.toml"),
+        first_scenario,
+    }
 }
 
 #[test]
 fn mig_012_existing_config_gets_the_prefix_spliced() {
-    existing_config_case(
-        "\n[ids.prefixes]\nmath = \"MATH\"\n",
-        "1 ID prefix",
-        "\n[ids.prefixes]\nmath = \"MATH\"\ndistribution = \"DIST\"\n",
+    let run = existing_config_case("\n[ids.prefixes]\nmath = \"MATH\"\n");
+    assert!(
+        run.preview
+            .contains("change specjutsu.toml (1 ID prefix)\n"),
+        "{}",
+        run.preview
+    );
+    assert_eq!(run.status_after_preview, "");
+    assert_eq!(
+        run.config,
+        format!("{CONFIG_HEAD}\n[ids.prefixes]\nmath = \"MATH\"\ndistribution = \"DIST\"\n")
+    );
+    assert_eq!(
+        run.first_scenario,
+        "#### Scenario: DIST-001 Adds two numbers"
     );
 }
 
 #[test]
 fn mig_012_existing_config_without_a_table_gets_one() {
-    existing_config_case(
-        "",
-        "2 ID prefixes",
-        "\n[ids.prefixes]\ndistribution = \"DIST\"\nmath = \"MATH\"\n",
+    let run = existing_config_case("");
+    assert!(
+        run.preview
+            .contains("change specjutsu.toml (2 ID prefixes)\n"),
+        "{}",
+        run.preview
+    );
+    assert_eq!(run.status_after_preview, "");
+    assert_eq!(
+        run.config,
+        format!("{CONFIG_HEAD}\n[ids.prefixes]\ndistribution = \"DIST\"\nmath = \"MATH\"\n")
+    );
+    assert_eq!(
+        run.first_scenario,
+        "#### Scenario: DIST-001 Adds two numbers"
     );
 }
 
@@ -656,12 +695,8 @@ fn is_specjutsu_hook(line: &str) -> bool {
     line.contains("sj hook") || line.trim() == "\"SessionStart\": ["
 }
 
-#[test]
-fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
-    let repo = support::Repo::with_lib("");
-    repo.write(
-        ".claude/settings.json",
-        r#"{
+/// MIG-013: a `.claude/settings.json` with the Superpowers plugin and one lint hook.
+const SUPERPOWERS_LINT_SETTINGS: &str = r#"{
   "enabledPlugins": {
     "superpowers@superpowers-marketplace": true
   },
@@ -679,8 +714,43 @@ fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
     ]
   }
 }
-"#,
-    );
+"#;
+
+/// MIG-014: a `.claude/settings.json` with one lint hook.
+const LINT_HOOK_SETTINGS: &str = r#"{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run lint"
+          }
+        ]
+      }
+    ]
+  }
+}
+"#;
+
+/// MIG-018: a gitignored `.claude/settings.json` with one lint hook, on compact lines.
+const GITIGNORED_HOOK_SETTINGS: &str = r#"{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "npm run lint" }]
+      }
+    ]
+  }
+}
+"#;
+
+#[test]
+fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
+    let repo = support::Repo::with_lib("");
+    repo.write(".claude/settings.json", SUPERPOWERS_LINT_SETTINGS);
     repo.commit("superpowers project");
     let out = migrate(repo.path(), &["--from", "superpowers", "--diff"])
         .assert()
@@ -730,25 +800,7 @@ fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
 #[test]
 fn mig_014_preview_says_one_existing_hook_is_kept() {
     let repo = support::Repo::with_lib("");
-    repo.write(
-        ".claude/settings.json",
-        r#"{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npm run lint"
-          }
-        ]
-      }
-    ]
-  }
-}
-"#,
-    );
+    repo.write(".claude/settings.json", LINT_HOOK_SETTINGS);
     repo.commit("project with a hook");
     let out = migrate(repo.path(), &["--from", "superpowers"])
         .assert()
@@ -871,18 +923,7 @@ fn mig_018_undo_restores_a_gitignored_file_migrate_changed() {
     repo.write("openspec/specs/math/spec.md", SPEC);
     repo.write(".gitignore", ".claude/settings.json\n");
     repo.commit("project");
-    let hook = r#"{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "npm run lint" }]
-      }
-    ]
-  }
-}
-"#;
-    repo.write(".claude/settings.json", hook);
+    repo.write(".claude/settings.json", GITIGNORED_HOOK_SETTINGS);
     assert_eq!(status(&repo), "");
 
     // The specs still lack IDs, so the write may exit 1 on validate; its files are written.
@@ -897,7 +938,7 @@ fn mig_018_undo_restores_a_gitignored_file_migrate_changed() {
         .success();
 
     let after = std::fs::read(repo.path().join(".claude/settings.json")).unwrap();
-    assert_eq!(String::from_utf8(after).unwrap(), hook);
+    assert_eq!(String::from_utf8(after).unwrap(), GITIGNORED_HOOK_SETTINGS);
 }
 
 /// Undo puts back a file's working-tree bytes, smudge and eol conversion included: a file
@@ -925,10 +966,10 @@ fn undo_restores_crlf_line_endings() {
     assert_eq!(read(&repo, "openspec/config.yaml"), crlf);
 }
 
-/// IDS-013 through `sj migrate`: a prefix clash that cannot be lengthened away stops the
+/// Through `sj migrate`, a prefix clash that cannot be lengthened away stops the
 /// migration before it writes anything.
 #[test]
-fn ids_013_migrate_refuses_an_unresolvable_prefix_clash() {
+fn migrate_refuses_an_unresolvable_prefix_clash() {
     let repo = openspec_repo();
     repo.write(
         "specjutsu.toml",
