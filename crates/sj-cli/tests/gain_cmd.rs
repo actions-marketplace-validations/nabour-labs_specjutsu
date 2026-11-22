@@ -1,5 +1,5 @@
-//! LOOP-022, LOOP-023 and LOOP-026 from specjutsu/changes/add-sj-gain: `sj test` and `sj verify`
-//! record their gain.
+//! LOOP-022, LOOP-023, LOOP-024 and LOOP-026 from specjutsu/changes/add-sj-gain: `sj test`,
+//! `sj verify` and `sj next` record their gain.
 //!
 //! The fixture uses the generic junit runner: its command copies a canned report and prints a
 //! payload file of a fixed size with the OS shell, so the runner's output size is exact on every
@@ -218,4 +218,76 @@ fn loop_026_no_gain_record_from_verify_outside_git() {
         String::from_utf8_lossy(&out.stderr).contains("is not in a git repository"),
         "{out:?}"
     );
+}
+
+const NEXT_CHANGE_BYTES: usize = 12_000;
+
+/// A project with one open change, `add-oauth-login`, whose files (specs/ included) total
+/// exactly 12,000 bytes; a git repo if `git`.
+fn next_fixture(git: bool) -> Repo {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    if git {
+        repo.git(&["init", "-q", "-b", "main"]);
+    }
+    repo.write("openspec/specs/all/spec.md", SPEC);
+    let dir = "openspec/changes/add-oauth-login";
+    let files = [
+        ("proposal.md", "## Why\n\nLog in with OAuth.\n".to_string()),
+        (
+            "specs/auth/spec.md",
+            "## ADDED Requirements\n\n### Requirement: Login\nThe system SHALL log in.\n\n\
+             #### Scenario: AUTH-001 Logs in with OAuth\n- **WHEN** x\n- **THEN** y\n"
+                .to_string(),
+        ),
+        ("tasks.md", "- [ ] 1.1 Log in (AUTH-001)\n".to_string()),
+    ];
+    let mut total = 0;
+    for (name, text) in &files {
+        repo.write(&format!("{dir}/{name}"), text);
+        total += text.len();
+    }
+    repo.write(
+        &format!("{dir}/design.md"),
+        &"x".repeat(NEXT_CHANGE_BYTES - total),
+    );
+    repo
+}
+
+fn sj_next(root: &Path) -> std::process::Output {
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["next", "add-oauth-login", "--root"])
+        .arg(root)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn loop_024_sj_next_records_change_folder_as_raw() {
+    let repo = next_fixture(true);
+    let out = sj_next(repo.path());
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let records = gain_records(repo.path());
+    assert_eq!(records.len(), 1, "{records:?}");
+    let r = &records[0];
+    assert_eq!(r["command"], "next");
+    assert!(!out.stdout.is_empty());
+    assert_eq!(r["printed"], out.stdout.len() as u64);
+    assert_eq!(r["raw"], NEXT_CHANGE_BYTES as u64);
+    assert!(out.stdout.len() < NEXT_CHANGE_BYTES);
+}
+
+#[test]
+fn loop_026_no_gain_record_from_next_outside_git() {
+    let on = next_fixture(true);
+    let with = sj_next(on.path());
+    assert_eq!(gain_records(on.path()).len(), 1);
+
+    let outside = next_fixture(false);
+    let without = sj_next(outside.path());
+    assert!(!gain_path(outside.path()).exists());
+    assert_eq!(without.stdout, with.stdout);
+    assert_eq!(without.status.code(), with.status.code());
 }
