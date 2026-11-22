@@ -54,10 +54,25 @@ const ONBOARD: &str = "Stop if `git status` shows uncommitted changes or \
 run `sj test DEMO-001` red, then green, then `sj task done`, then `sj verify`. At the end, \
 delete `changes/sj-onboard-demo/`, the demo test and the demo code. Don't archive it.";
 
+/// An sj-apply body that satisfies SKILL-003 and SKILL-011.
+const APPLY: &str = "Run `sj next` and give it to an implementer with `implementer-prompt.md`. \
+Then send the task to a fresh reviewer subagent with `task-reviewer-prompt.md`. Findings go \
+back to the implementer and then to a fresh re-reviewer with `re-review-prompt.md`, for at \
+most 3 rounds. After approval, run `sj test AUTH-001` and `sj task done` yourself.";
+
+/// An implementer prompt that satisfies SKILL-013.
+const IMPLEMENTER: &str = "Run `sj test` red, then green. Never run `sj task done`. Report \
+DONE, DONE_WITH_CONCERNS, BLOCKED or NEEDS_CONTEXT.\n";
+
+/// A task-reviewer prompt that satisfies SKILL-012.
+const REVIEWER: &str = "Read the scenario text. Don't trust the implementer's report. Run \
+`git diff` and `sj verify`. Say whether the test would fail without the change. Answer \
+APPROVED or CHANGES_REQUESTED.\n";
+
 /// A body that satisfies every per-skill rule.
 fn body(name: &str) -> String {
     let needs = match name {
-        "sj-apply" => "Run `sj next`, then `sj test AUTH-001`, then `sj task done`.",
+        "sj-apply" => APPLY,
         "sj-debug" => "Reproduce it with `sj test AUTH-001`.",
         "sj-verify" => "Run `sj verify`.",
         "sj-finish" => "Run `sj verify`, then `sj spec archive`.",
@@ -86,6 +101,13 @@ fn valid() -> tempfile::TempDir {
     for s in SKILLS {
         put(dir.path(), &format!("{s}/SKILL.md"), &skill_md(s, &body(s)));
     }
+    put(dir.path(), "sj-apply/implementer-prompt.md", IMPLEMENTER);
+    put(dir.path(), "sj-apply/task-reviewer-prompt.md", REVIEWER);
+    put(
+        dir.path(),
+        "sj-apply/re-review-prompt.md",
+        "Check each finding.\n",
+    );
     put(dir.path(), "COVERAGE.md", COVERAGE);
     dir
 }
@@ -515,4 +537,127 @@ fn skill_002_a_foreign_command_in_a_reference_fails_the_check() {
                 == "sj-debug: root-cause-tracing.md names a foreign command (openspec status)"),
         "{got:?}"
     );
+}
+
+fn has(got: &[String], want: &str) -> bool {
+    got.iter().any(|m| m == want)
+}
+
+// spec: SKILL-011
+#[test]
+fn skill_011_sj_apply_names_the_per_task_review_loop() {
+    let dir = valid();
+    std::fs::remove_file(dir.path().join("sj-apply/task-reviewer-prompt.md")).unwrap();
+    std::fs::remove_file(dir.path().join("sj-apply/re-review-prompt.md")).unwrap();
+    put(
+        dir.path(),
+        "sj-apply/SKILL.md",
+        &skill_md(
+            "sj-apply",
+            "Run `sj next`, give it to an implementer with `implementer-prompt.md`, then \
+             review each diff yourself. Run `sj test AUTH-001`, then `sj task done`.\n",
+        ),
+    );
+    let got = messages(dir.path());
+    for want in [
+        "sj-apply: does not name task-reviewer-prompt.md",
+        "sj-apply: does not name re-review-prompt.md",
+        "sj-apply: does not send each task to a fresh reviewer subagent",
+        "sj-apply: does not limit the fix loop to 3 rounds",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got = messages(&shipped);
+    assert!(!got.iter().any(|m| m.starts_with("sj-apply")), "{got:?}");
+    assert!(shipped.join("sj-apply/task-reviewer-prompt.md").is_file());
+    assert!(shipped.join("sj-apply/re-review-prompt.md").is_file());
+}
+
+// spec: SKILL-011
+#[test]
+fn skill_011_phrases_match_across_line_breaks_and_case() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-apply/SKILL.md",
+        &skill_md(
+            "sj-apply",
+            &APPLY.replace("fresh reviewer subagent", "Fresh\n  reviewer\nsubagent"),
+        ),
+    );
+    assert_eq!(messages(dir.path()), Vec::<String>::new());
+}
+
+// spec: SKILL-012
+#[test]
+fn skill_012_the_task_reviewer_works_from_evidence() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-apply/task-reviewer-prompt.md",
+        "Read the implementer's summary and check `git diff`. Answer APPROVED or \
+         CHANGES_REQUESTED, and say whether the test would fail without the change.\n",
+    );
+    let got = messages(dir.path());
+    for want in [
+        "sj-apply: task-reviewer-prompt.md does not name sj verify",
+        "sj-apply: task-reviewer-prompt.md does not say to ignore the implementer's report",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/sj-apply");
+    let text = std::fs::read_to_string(shipped.join("task-reviewer-prompt.md")).unwrap();
+    for want in [
+        "git diff",
+        "sj verify",
+        "APPROVED",
+        "CHANGES_REQUESTED",
+        "scenario",
+    ] {
+        assert!(text.contains(want), "shipped reviewer prompt lacks {want}");
+    }
+}
+
+// spec: SKILL-013
+#[test]
+fn skill_013_the_implementer_reports_a_status_and_never_closes_the_task() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-apply/implementer-prompt.md",
+        &IMPLEMENTER.replace("Never run `sj task done`.", "Then run `sj task done`."),
+    );
+    let got = messages(dir.path());
+    assert!(
+        has(&got, "sj-apply: implementer-prompt.md runs sj task done"),
+        "{got:?}"
+    );
+    put(
+        dir.path(),
+        "sj-apply/implementer-prompt.md",
+        "Run `sj test`.\n",
+    );
+    let got = messages(dir.path());
+    assert!(
+        has(
+            &got,
+            "sj-apply: implementer-prompt.md does not name NEEDS_CONTEXT"
+        ),
+        "{got:?}"
+    );
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/sj-apply");
+    let text = std::fs::read_to_string(shipped.join("implementer-prompt.md")).unwrap();
+    for want in [
+        "sj test",
+        "DONE",
+        "DONE_WITH_CONCERNS",
+        "BLOCKED",
+        "NEEDS_CONTEXT",
+    ] {
+        assert!(
+            text.contains(want),
+            "shipped implementer prompt lacks {want}"
+        );
+    }
 }
