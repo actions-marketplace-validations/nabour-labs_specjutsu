@@ -323,6 +323,92 @@ fn check_references(dir: &Path, name: &str, text: &str, out: &mut Vec<Problem>) 
     Ok(())
 }
 
+/// Lower case with every run of whitespace collapsed to one space, so a phrase matches
+/// across line breaks.
+fn norm(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// The sj-apply review loop and its prompts (SKILL-011..013).
+fn check_apply(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
+    const NAME: &str = "sj-apply";
+    let t = norm(text);
+    for f in [
+        "implementer-prompt.md",
+        "task-reviewer-prompt.md",
+        "re-review-prompt.md",
+    ] {
+        if !t.contains(f) {
+            out.push(problem(NAME, format!("does not name {f}")));
+        }
+    }
+    if !t.contains("fresh reviewer subagent") {
+        out.push(problem(
+            NAME,
+            "does not send each task to a fresh reviewer subagent",
+        ));
+    }
+    if !t.contains("3 rounds") {
+        out.push(problem(NAME, "does not limit the fix loop to 3 rounds"));
+    }
+    let read = |f: &str| -> Result<Option<String>> {
+        let p = dir.join(NAME).join(f);
+        if !p.is_file() {
+            return Ok(None);
+        }
+        let raw =
+            std::fs::read_to_string(&p).with_context(|| format!("cannot read {}", p.display()))?;
+        Ok(Some(norm(&raw)))
+    };
+    if let Some(r) = read("task-reviewer-prompt.md")? {
+        const F: &str = "task-reviewer-prompt.md";
+        if !r.contains("sj verify") {
+            out.push(problem(NAME, format!("{F} does not name sj verify")));
+        }
+        if !r.contains("don't trust the implementer's report") {
+            out.push(problem(
+                NAME,
+                format!("{F} does not say to ignore the implementer's report"),
+            ));
+        }
+        for p in [
+            "git diff",
+            "approved",
+            "changes_requested",
+            "fail without the change",
+        ] {
+            if !r.contains(p) {
+                out.push(problem(NAME, format!("{F} does not name {p}")));
+            }
+        }
+    }
+    if let Some(i) = read("implementer-prompt.md")? {
+        const F: &str = "implementer-prompt.md";
+        if i.replace("never run `sj task done`", "")
+            .contains("sj task done")
+        {
+            out.push(problem(NAME, format!("{F} runs sj task done")));
+        }
+        let statuses = i.replace("done_with_concerns", "");
+        let wants: [(&str, bool); 5] = [
+            ("sj test", i.contains("sj test")),
+            ("DONE", statuses.contains("done")),
+            ("DONE_WITH_CONCERNS", i.contains("done_with_concerns")),
+            ("BLOCKED", i.contains("blocked")),
+            ("NEEDS_CONTEXT", i.contains("needs_context")),
+        ];
+        for (label, ok) in wants {
+            if !ok {
+                out.push(problem(NAME, format!("{F} does not name {label}")));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     let file = dir.join(name).join("SKILL.md");
     if !file.is_file() {
@@ -363,6 +449,9 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
                 out.push(problem(name, format!("does not name `{c}`")));
             }
         }
+    }
+    if name == "sj-apply" {
+        check_apply(dir, &text, out)?;
     }
     if name == "sj-onboard" {
         check_onboard(&text, out);
