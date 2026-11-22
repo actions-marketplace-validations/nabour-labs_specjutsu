@@ -3,11 +3,11 @@
 ### Requirement: Migration previews by default and needs a clean tree to write
 `sj migrate --from <tool>…` SHALL print every file it would create, change or remove, and SHALL write nothing. With `--write` it SHALL refuse, exiting 2, when the working tree has uncommitted changes. When it finishes it SHALL print `git diff --stat`-style counts and the rollback command `sj migrate --undo`.
 
-#### Scenario: MIG-001 Preview changes nothing
+#### Scenario: MIG-001 [keep] Preview changes nothing
 - **WHEN** `sj migrate --from openspec --from superpowers` runs without `--write`
 - **THEN** it lists the planned changes, and `git status --porcelain` is empty afterwards
 
-#### Scenario: MIG-002 A dirty tree blocks the write
+#### Scenario: MIG-002 [keep] A dirty tree blocks the write
 - **WHEN** `sj migrate --from openspec --write` runs with an unstaged edit to `README.md`
 - **THEN** nothing changes and it exits 2 asking to commit or stash first
 
@@ -39,6 +39,10 @@ With `--diff`, the preview SHALL print a unified diff (`--- a/<path>`, `+++ b/<p
 - touch no other file.
 
 It SHALL refuse, exiting 2 and changing nothing, when any recorded file differs from its recorded hash, naming each such file. With no manifest it SHALL exit 2 and say there is nothing to undo.
+
+#### Scenario: MIG-017 A write ends with the undo rollback line
+- **WHEN** `sj migrate --from openspec --write` finishes
+- **THEN** its last line is `rollback: sj migrate --undo`, and no line mentions `git clean`
 
 #### Scenario: MIG-015 Undo restores migrate's files and keeps new ones
 - **WHEN** `sj migrate --from openspec --write` ran, the user then created the untracked file `notes.txt`, and `sj migrate --undo` runs
