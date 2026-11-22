@@ -3,7 +3,7 @@
 ## 1. Records
 
 - [x] 1.1 Gain record type, append to `.specjutsu/ledger/gain.jsonl`, and recording from `sj test` with the `--no-ledger` and outside-git switches (LOOP-022, LOOP-026)
-- [ ] 1.2 Recording from `sj verify` (LOOP-023)
+- [x] 1.2 Recording from `sj verify` (LOOP-023)
 - [ ] 1.3 [P] Recording from `sj next` (LOOP-024)
 - [ ] 1.4 [P] Recording from `sj status` (LOOP-025)
 
