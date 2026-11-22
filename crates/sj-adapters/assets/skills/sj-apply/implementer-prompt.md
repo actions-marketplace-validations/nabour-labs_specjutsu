@@ -16,7 +16,7 @@ output below is your requirements. Use the scenario's values exactly as written.
 
 1. **Ask first.** If anything in the scenario is unclear, ask now and stop. Don't guess
    values or behaviour.
-2. **Write the failing test.** One test per scenario, linked by ID in its name
+2. **Write the failing test.** Read `writing-good-tests.md` first. One test per scenario, linked by ID in its name
    (`fn auth_005_refreshes_token`) or a `// spec: AUTH-005` line. Assert the THEN with the
    scenario's concrete values, through the public interface, not through mocks of the code
    under test. Put Rust tests in the crate's `tests/` directory, and other tests where the

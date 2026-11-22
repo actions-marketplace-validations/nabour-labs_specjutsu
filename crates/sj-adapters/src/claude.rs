@@ -59,7 +59,7 @@ pub const SKILLS: [(&str, &str); 10] = [
 ];
 
 /// Reference files shipped next to a skill's `SKILL.md`, as (skill, file name, source text).
-pub const REFERENCES: [(&str, &str, &str); 3] = [
+pub const REFERENCES: [(&str, &str, &str); 7] = [
     (
         "sj-apply",
         "implementer-prompt.md",
@@ -74,6 +74,26 @@ pub const REFERENCES: [(&str, &str, &str); 3] = [
         "sj-apply",
         "re-review-prompt.md",
         include_str!("../assets/skills/sj-apply/re-review-prompt.md"),
+    ),
+    (
+        "sj-apply",
+        "writing-good-tests.md",
+        include_str!("../assets/skills/sj-apply/writing-good-tests.md"),
+    ),
+    (
+        "sj-debug",
+        "root-cause-tracing.md",
+        include_str!("../assets/skills/sj-debug/root-cause-tracing.md"),
+    ),
+    (
+        "sj-debug",
+        "defense-in-depth.md",
+        include_str!("../assets/skills/sj-debug/defense-in-depth.md"),
+    ),
+    (
+        "sj-debug",
+        "condition-based-waiting.md",
+        include_str!("../assets/skills/sj-debug/condition-based-waiting.md"),
     ),
 ];
 

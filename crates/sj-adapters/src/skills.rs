@@ -332,6 +332,50 @@ fn norm(text: &str) -> String {
         .to_lowercase()
 }
 
+/// Skills that carry `## Rationalizations` and `## Red flags` sections (SKILL-014).
+const DISCIPLINE: [&str; 3] = ["sj-apply", "sj-debug", "sj-verify"];
+
+/// Discipline sections, and the techniques sj-apply, sj-debug and sj-verify must name
+/// (SKILL-014..016).
+fn check_discipline(name: &str, text: &str, out: &mut Vec<Problem>) {
+    if !DISCIPLINE.contains(&name) {
+        return;
+    }
+    for section in ["Rationalizations", "Red flags"] {
+        let heading = format!("## {section}");
+        if !text.lines().any(|l| l.trim_end() == heading) {
+            out.push(problem(name, format!("has no {heading} section")));
+        }
+    }
+    let t = norm(text);
+    let named: &[&str] = match name {
+        "sj-apply" => &["writing-good-tests.md"],
+        "sj-debug" => &[
+            "root-cause-tracing.md",
+            "defense-in-depth.md",
+            "condition-based-waiting.md",
+        ],
+        _ => &[],
+    };
+    for f in named {
+        if !t.contains(f) {
+            out.push(problem(name, format!("does not name {f}")));
+        }
+    }
+    if name == "sj-debug" && !t.contains("3 failed fixes") {
+        out.push(problem(
+            name,
+            "does not question the design after 3 failed fixes",
+        ));
+    }
+    if name == "sj-verify" && !t.contains("a subagent's report is not evidence") {
+        out.push(problem(
+            name,
+            "does not say a subagent's report is not evidence",
+        ));
+    }
+}
+
 /// Whether `word` appears in `text` as a whole word, case-sensitive; `_` counts as part of a
 /// word, so `DONE` doesn't match inside `DONE_WITH_CONCERNS`.
 fn has_word(text: &str, word: &str) -> bool {
@@ -468,6 +512,7 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     if name == "sj-apply" {
         check_apply(dir, &text, out)?;
     }
+    check_discipline(name, &text, out);
     if name == "sj-onboard" {
         check_onboard(&text, out);
     }

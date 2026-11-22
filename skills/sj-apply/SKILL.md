@@ -28,8 +28,8 @@ change folder, earlier tasks' history or your own summary into it.
 
 ### 2. Dispatch the implementer
 
-Start a new subagent with `implementer-prompt.md`, the `sj next` output, and only the
-interfaces or decisions from earlier tasks it can't see in the code. It writes the failing
+Start a new subagent with `implementer-prompt.md`, `writing-good-tests.md`, the `sj next`
+output, and only the interfaces or decisions from earlier tasks it can't see in the code. It writes the failing
 test, records red with `sj test <ID>`, makes it pass, refactors, and commits
 `test(<ID>): red` and `feat(<ID>): green`. It reports one status:
 
