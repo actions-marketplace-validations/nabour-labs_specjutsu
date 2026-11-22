@@ -695,15 +695,12 @@ pub fn skills_remove(root: &Path, skills: &Path) -> Result<Vec<Change>> {
                 None => {}
             }
         }
-        // Generated files an older version shipped and this one doesn't.
-        for f in md_files(&dir) {
-            let p = dir.join(&f);
-            if !ships(name, &f) && read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
-                std::fs::remove_file(&p)?;
-                out.push(Change::Removed(rel(&p, root)));
-            }
-        }
-        remove_if_empty(&dir);
+    }
+    // Generated files an older version shipped and this one doesn't, in any `sj-*` folder.
+    // Files without our marker, or edited since, are the user's and stay without comment.
+    out.extend(apply(stale_skills(root, skills)?)?);
+    for (name, _) in SKILLS {
+        remove_if_empty(&skills.join(name));
     }
     remove_if_empty(skills);
     Ok(out)
