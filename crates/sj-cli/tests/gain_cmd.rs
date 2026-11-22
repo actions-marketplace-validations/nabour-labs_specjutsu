@@ -373,8 +373,12 @@ fn loop_026_no_gain_record_from_status_outside_git() {
 }
 
 fn gain_line(command: &str, printed: u64, raw: u64) -> String {
+    gain_line_at(command, "2026-11-22T10:00:00Z", printed, raw)
+}
+
+fn gain_line_at(command: &str, ts: &str, printed: u64, raw: u64) -> String {
     format!(
-        "{{\"v\":1,\"command\":\"{command}\",\"ts\":\"2026-11-22T10:00:00Z\",\"printed\":{printed},\"raw\":{raw}}}\n"
+        "{{\"v\":1,\"command\":\"{command}\",\"ts\":\"{ts}\",\"printed\":{printed},\"raw\":{raw}}}\n"
     )
 }
 
@@ -497,5 +501,50 @@ fn loop_028_gain_json_totals_for_a_harness() {
                 "runs": 3, "printed": 1500, "raw": 54000, "saved_pct": 97, "tokens_saved": 13125
             },
         })
+    );
+}
+
+#[test]
+fn loop_029_gain_since_counts_one_session() {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    let text = [
+        gain_line_at("test", "2026-11-22T10:00:00Z", 300, 40_000),
+        gain_line_at("test", "2026-11-22T12:00:00Z", 200, 10_000),
+    ]
+    .concat();
+    repo.write(".specjutsu/ledger/gain.jsonl", &text);
+    let out = sj_gain_with(repo.path(), &["--since", "2026-11-22T11:00:00Z"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        tokens(&out.stdout),
+        vec![
+            words("test 1 200 10000 98%"),
+            words("total 1 200 10000 98% ~2450 tokens saved"),
+        ],
+        "{out:?}"
+    );
+}
+
+#[test]
+fn loop_030_gain_reset_clears_the_records() {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    let text: String = (0..7).map(|i| gain_line("test", 100 + i, 1_000)).collect();
+    repo.write(".specjutsu/ledger/gain.jsonl", &text);
+    let reset = sj_gain_with(repo.path(), &["--reset"]);
+    assert_eq!(reset.status.code(), Some(0), "{reset:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&reset.stdout),
+        "removed 7 gain records\n"
+    );
+    assert!(!gain_path(repo.path()).exists());
+    let after = sj_gain(repo.path());
+    assert_eq!(after.status.code(), Some(0), "{after:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&after.stdout),
+        "no gain records yet\n"
     );
 }
