@@ -1,4 +1,5 @@
-//! The crate embeds copies of `skills/` and `adapters/claude/` so it can be published on its
+//! The crate embeds copies of `skills/` (each skill's `SKILL.md` and reference files),
+//! `adapters/claude/` and `adapters/agents-md/` so it can be published on its
 //! own. The repository-root files are the source; this keeps the copies identical.
 
 use std::path::Path;

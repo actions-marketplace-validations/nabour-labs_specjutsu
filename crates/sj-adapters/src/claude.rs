@@ -532,8 +532,9 @@ pub fn plan(root: &Path, force: bool) -> Result<Vec<Step>> {
     Ok(out)
 }
 
-/// Every step that brings the `sj-*` skills in `skills` up to date: each skill written, or
-/// kept when it was edited by hand and not `force`, and each stale generated skill removed.
+/// Every step that brings the `sj-*` skills in `skills` up to date: each `SKILL.md` and
+/// reference file written, or kept when it was edited by hand and not `force`, and each
+/// stale generated file removed.
 pub fn skills_plan(root: &Path, skills: &Path, force: bool) -> Result<Vec<Step>> {
     let mut out = Vec::new();
     let files = SKILLS
@@ -554,7 +555,29 @@ pub fn skills_plan(root: &Path, skills: &Path, force: bool) -> Result<Vec<Step>>
     Ok(out)
 }
 
-/// A removal step for each unedited generated `sj-*` skill that is not in [`SKILLS`].
+/// Whether `file` in the skill folder `name` is one this version ships.
+fn ships(name: &str, file: &str) -> bool {
+    (file == "SKILL.md" && SKILLS.iter().any(|(s, _)| *s == name))
+        || REFERENCES.iter().any(|(s, f, _)| *s == name && *f == file)
+}
+
+/// The `*.md` files in a folder, sorted; none when it can't be read.
+fn md_files(dir: &Path) -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".md"))
+        .collect();
+    out.sort();
+    out
+}
+
+/// A removal step for each unedited generated file in an `sj-*` folder that this version
+/// doesn't ship: a whole skill no longer in [`SKILLS`], or a reference no longer in
+/// [`REFERENCES`].
 fn stale_skills(root: &Path, skills: &Path) -> Result<Vec<Step>> {
     let Ok(entries) = std::fs::read_dir(skills) else {
         return Ok(Vec::new());
@@ -563,14 +586,16 @@ fn stale_skills(root: &Path, skills: &Path) -> Result<Vec<Step>> {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with("sj-") && !SKILLS.iter().any(|(s, _)| s == n))
+        .filter(|n| n.starts_with("sj-"))
         .collect();
     names.sort();
     let mut out = Vec::new();
     for n in names {
-        let p = skills.join(&n).join("SKILL.md");
-        if read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
-            out.push(Step::delete(p, root));
+        for f in md_files(&skills.join(&n)) {
+            let p = skills.join(&n).join(&f);
+            if !ships(&n, &f) && read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
+                out.push(Step::delete(p, root));
+            }
         }
     }
     Ok(out)
@@ -628,8 +653,9 @@ pub fn remove(root: &Path) -> Result<Vec<Change>> {
     Ok(out)
 }
 
-/// Delete the unmodified `sj-*` skills in `skills`, reporting hand-edited ones as kept, and
-/// `skills` itself when that leaves it empty.
+/// Delete the unmodified `sj-*` skills in `skills`, their reference files and any generated
+/// file an older version left, reporting hand-edited ones as kept, and `skills` itself when
+/// that leaves it empty.
 pub fn skills_remove(root: &Path, skills: &Path) -> Result<Vec<Change>> {
     let mut out = Vec::new();
     for (name, _) in SKILLS {
@@ -647,6 +673,14 @@ pub fn skills_remove(root: &Path, skills: &Path) -> Result<Vec<Change>> {
                 }
                 Some(_) => out.push(Change::Kept(rel(&p, root))),
                 None => {}
+            }
+        }
+        // Generated files an older version shipped and this one doesn't.
+        for f in md_files(&dir) {
+            let p = dir.join(&f);
+            if !ships(name, &f) && read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
+                std::fs::remove_file(&p)?;
+                out.push(Change::Removed(rel(&p, root)));
             }
         }
         remove_if_empty(&dir);
