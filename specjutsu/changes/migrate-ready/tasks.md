@@ -7,7 +7,7 @@
 
 ## 2. Adopt: setup and ledger
 
-- [ ] 2.1 Choose each suite's `setup` from the nearest lockfile and note suites without one (CONF-035..037)
+- [x] 2.1 Choose each suite's `setup` from the nearest lockfile and note suites without one (CONF-035..037)
 - [ ] 2.2 Add `.specjutsu/ledger/` to `.gitignore` from `sj init` and `sj adopt` (CONF-038)
 
 ## 3. Migrate
