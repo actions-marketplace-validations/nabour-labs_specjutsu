@@ -37,6 +37,251 @@ pub fn derive_prefix(capability: &str) -> String {
         .collect()
 }
 
+/// The longest derived prefix a suggestion keeps whole; longer ones are cut to [`SHORT`].
+const WHOLE: usize = 6;
+/// The length a long derived prefix is cut to before clashes lengthen it.
+const SHORT: usize = 4;
+
+/// Suggested prefixes for `open` capabilities, beside the `kept` ones (capability to prefix).
+/// A capability's letters, uppercased, are kept whole up to six letters and cut to four
+/// beyond that; suggestions equal to each other or to a kept prefix lengthen together, one
+/// letter at a time, until distinct or out of letters. Returns `kept` plus the suggestions,
+/// or an error naming two capabilities and their prefix when a clash is left.
+pub fn suggest_prefixes(
+    kept: &BTreeMap<String, String>,
+    open: &[String],
+) -> Result<BTreeMap<String, String>> {
+    let letters: Vec<(&String, String)> = open
+        .iter()
+        .filter(|c| !kept.contains_key(*c))
+        .map(|c| (c, derive_prefix(c)))
+        .filter(|(_, l)| !l.is_empty())
+        .collect();
+    let mut len: Vec<usize> = letters
+        .iter()
+        .map(|(_, l)| if l.len() <= WHOLE { l.len() } else { SHORT })
+        .collect();
+    loop {
+        let current: Vec<&str> = letters
+            .iter()
+            .zip(&len)
+            .map(|((_, l), n)| &l[..*n])
+            .collect();
+        let clashing: Vec<usize> = (0..letters.len())
+            .filter(|&i| {
+                len[i] < letters[i].1.len()
+                    && (kept.values().any(|p| p == current[i])
+                        || current
+                            .iter()
+                            .enumerate()
+                            .any(|(j, s)| j != i && *s == current[i]))
+            })
+            .collect();
+        if clashing.is_empty() {
+            break;
+        }
+        for i in clashing {
+            len[i] += 1;
+        }
+    }
+    let mut out = kept.clone();
+    for ((cap, l), n) in letters.iter().zip(&len) {
+        let prefix = &l[..*n];
+        let other = out
+            .iter()
+            .find(|(c, p)| *p == prefix && *c != *cap)
+            .map(|(c, _)| c.clone());
+        if let Some(other) = other {
+            let mut pair = [other.as_str(), cap.as_str()];
+            pair.sort();
+            bail!(
+                "capabilities `{}` and `{}` both use prefix {prefix}; \
+                 map one in [ids.prefixes] in specjutsu.toml",
+                pair[0],
+                pair[1]
+            );
+        }
+        out.insert((*cap).clone(), prefix.to_string());
+    }
+    Ok(out)
+}
+
+/// The `[ids.prefixes]` table `sj ids prefixes` prints: one line per capability folder. A
+/// configured prefix is kept, then the most common prefix among a capability's IDs (the
+/// alphabetically first on a tie), and the rest get [`suggest_prefixes`].
+pub fn prefix_table(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>> {
+    table_with_use(spec_root, configured, &prefix_use(spec_root)?)
+}
+
+/// [`prefix_table`] given the capabilities' prefix use from [`prefix_use`].
+fn table_with_use(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+    used: &BTreeMap<String, BTreeMap<String, usize>>,
+) -> Result<BTreeMap<String, String>> {
+    let mut folders = Vec::new();
+    for file in spec::discover_spec_files(spec_root)? {
+        if let Some(cap) = place(spec_root, &file).capability {
+            if !folders.contains(&cap) {
+                folders.push(cap);
+            }
+        }
+    }
+    let mut kept = configured.clone();
+    for cap in &folders {
+        if kept.contains_key(cap) {
+            continue;
+        }
+        if let Some(counts) = used.get(cap) {
+            let top = counts.values().max().copied().unwrap_or(0);
+            if let Some((prefix, _)) = counts.iter().find(|(_, n)| **n == top) {
+                kept.insert(cap.clone(), prefix.clone());
+            }
+        }
+    }
+    let mut table = suggest_prefixes(&kept, &folders)?;
+    table.retain(|cap, _| folders.contains(cap));
+    Ok(table)
+}
+
+/// Prefix use per capability, archive included: how many IDs carry each prefix.
+fn prefix_use(spec_root: &Path) -> Result<BTreeMap<String, BTreeMap<String, usize>>> {
+    let mut used: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    for file in all_spec_files(spec_root)? {
+        let Some(cap) = place(spec_root, &file).capability else {
+            continue;
+        };
+        for s in spec::parse_scenarios(&file, &read(&file)?) {
+            if let Some((prefix, _)) = s.id.as_deref().and_then(|id| id.rsplit_once('-')) {
+                *used
+                    .entry(cap.clone())
+                    .or_default()
+                    .entry(prefix.to_string())
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+    Ok(used)
+}
+
+/// The [`prefix_table`] entries for capabilities that have no IDs and no configured prefix:
+/// the mappings to pin before `plan` assigns their first IDs.
+pub fn unmapped_prefixes(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>> {
+    let used = prefix_use(spec_root)?;
+    let mut table = table_with_use(spec_root, configured, &used)?;
+    table.retain(|cap, _| !configured.contains_key(cap) && !used.contains_key(cap));
+    Ok(table)
+}
+
+/// Each capability that `plan` mints IDs for with a derived prefix longer than six letters:
+/// the capability, that prefix, and the one `sj ids prefixes --write` would map it to, in
+/// capability order. Mapped capabilities are skipped, and so are those whose existing IDs
+/// already use the long prefix.
+pub fn long_prefixes(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+    plan: &[Assignment],
+) -> Result<Vec<(String, String, String)>> {
+    let mut caps: Vec<String> = Vec::new();
+    for a in plan {
+        if let Some(cap) = place(spec_root, &a.file).capability {
+            if !caps.contains(&cap) {
+                caps.push(cap);
+            }
+        }
+    }
+    caps.sort();
+    let table = prefix_table(spec_root, configured)?;
+    Ok(caps
+        .into_iter()
+        .filter(|cap| !configured.contains_key(cap))
+        .filter_map(|cap| {
+            let long = derive_prefix(&cap);
+            let minted = plan.iter().any(|a| a.id.starts_with(&format!("{long}-")));
+            let short = table.get(&cap)?.clone();
+            (long.len() > WHOLE && minted && short != long).then_some((cap, long, short))
+        })
+        .collect())
+}
+
+/// `toml` (the text of `specjutsu.toml`) with a `key = "VALUE"` line for each of `add`
+/// spliced into `[ids.prefixes]`, after the table's last key line; the table is appended at
+/// the end when absent. Every other byte is kept, and new lines use the file's line ending.
+pub fn add_prefix_lines(toml: &str, add: &BTreeMap<String, String>) -> String {
+    if add.is_empty() {
+        return toml.to_string();
+    }
+    let eol = if toml.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut new_lines = String::new();
+    for (cap, prefix) in add {
+        new_lines.push_str(&format!("{} = \"{prefix}\"{eol}", toml_key(cap)));
+    }
+    let lines: Vec<&str> = toml.split_inclusive('\n').collect();
+    // `[ids.prefixes]`, allowing spaces inside the brackets and a trailing comment.
+    let is_header = |l: &str| {
+        let Some((inner, rest)) = l.trim().strip_prefix('[').and_then(|t| t.split_once(']')) else {
+            return false;
+        };
+        let rest = rest.trim();
+        inner.split('.').map(str::trim).eq(["ids", "prefixes"])
+            && (rest.is_empty() || rest.starts_with('#'))
+    };
+    let Some(header) = lines.iter().position(|l| is_header(l)) else {
+        let mut out = toml.to_string();
+        if !out.is_empty() {
+            if !out.ends_with('\n') {
+                out.push_str(eol);
+            }
+            out.push_str(eol);
+        }
+        out.push_str("[ids.prefixes]");
+        out.push_str(eol);
+        out.push_str(&new_lines);
+        return out;
+    };
+    // The last key line before the next table header, or the header itself.
+    let mut last = header;
+    for (i, l) in lines.iter().enumerate().skip(header + 1) {
+        let t = l.trim();
+        if t.starts_with('[') {
+            break;
+        }
+        if !t.is_empty() && !t.starts_with('#') {
+            last = i;
+        }
+    }
+    let mut out = String::with_capacity(toml.len() + new_lines.len() + eol.len());
+    for (i, l) in lines.iter().enumerate() {
+        out.push_str(l);
+        if i == last {
+            if !l.ends_with('\n') {
+                out.push_str(eol);
+            }
+            out.push_str(&new_lines);
+        }
+    }
+    out
+}
+
+/// `key` as a TOML key: bare when it may be, quoted otherwise.
+fn toml_key(key: &str) -> String {
+    let bare = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if bare {
+        key.to_string()
+    } else {
+        format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
 /// Where a spec file sits relative to the spec root.
 struct Place {
     capability: Option<String>,
