@@ -490,6 +490,16 @@ fn mig_011_the_migration_commit_passes_the_gate() {
     repo.write("openspec/changes/.gitkeep", "");
     repo.write("openspec/config.yaml", CONFIG_YAML);
     repo.commit("openspec project");
+    // Installed (ignored) dependencies, so `sj doctor` finds vitest.
+    let bin = repo.path().join("node_modules/.bin/vitest");
+    repo.write("node_modules/.bin/vitest", "#!/bin/sh\nexit 0\n");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    #[cfg(not(unix))]
+    let _ = bin;
 
     migrate(repo.path(), &["--from", "openspec"])
         .assert()

@@ -254,6 +254,12 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
         p.lines.push(format!("create {FILE} (adopt)"));
         p.adopt = Some(config.clone());
     }
+    // The local run ledger stays out of the migration commit (MIG-011).
+    match config::ledger_ignore(root) {
+        config::LedgerIgnore::Present => {}
+        config::LedgerIgnore::Change => p.lines.push("change .gitignore (ignore the ledger)".into()),
+        config::LedgerIgnore::Create => p.lines.push("create .gitignore (ignore the ledger)".into()),
+    }
 
     if tools.contains(&Tool::OpenSpec) {
         if !spec_root.is_dir() {
@@ -448,6 +454,7 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     if let Some(config) = &plan.adopt {
         write(&root.join(FILE), &config.to_toml())?;
     }
+    config::ignore_ledger(root)?;
     if plan.assign_ids {
         ids::write(&ids::plan(&plan.spec_root, &plan.prefixes)?)?;
     }
