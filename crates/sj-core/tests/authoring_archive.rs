@@ -344,3 +344,44 @@ fn spec_008_an_existing_archive_destination_is_an_error() {
     assert!(e.contains("already exists"), "{e}");
     assert_eq!(files(dir.path()), before);
 }
+
+// ---------- [keep] in MODIFIED blocks ----------
+
+#[test]
+fn spec_043_a_keep_marker_in_a_modified_block_matches_the_unmarked_scenario() {
+    let delta = "## MODIFIED Requirements\n\n### Requirement: Login\nThe system SHALL log in.\n\n\
+#### Scenario: AUTH-001 Valid login\n- **WHEN** a\n- **THEN** b2\n\n\
+#### Scenario: AUTH-002 [keep] Wrong password\n- **WHEN** c\n- **THEN** d\n";
+    let merged = merge(Some(AUTH), delta, "auth", "c").unwrap();
+    assert!(
+        merged
+            .text
+            .contains("#### Scenario: AUTH-002 [keep] Wrong password\n"),
+        "{}",
+        merged.text
+    );
+    assert_eq!(merged.modified, 1);
+
+    // The other way round: the main spec has the marker, the delta drops it.
+    let marked = AUTH.replace("AUTH-002 Wrong password", "AUTH-002 [keep] Wrong password");
+    let unmarked = delta.replace("AUTH-002 [keep] Wrong password", "AUTH-002 Wrong password");
+    let merged = merge(Some(&marked), &unmarked, "auth", "c").unwrap();
+    assert!(
+        merged
+            .text
+            .contains("#### Scenario: AUTH-002 Wrong password\n"),
+        "{}",
+        merged.text
+    );
+}
+
+#[test]
+fn spec_044_a_modified_block_that_drops_a_scenario_is_still_refused() {
+    let e = merge_err("## MODIFIED Requirements\n\n### Requirement: Login\nThe system SHALL log in.\n\n#### Scenario: AUTH-001 Valid login\n- **WHEN** a\n- **THEN** b\n");
+    assert!(
+        e.contains(
+            "current spec contains scenario(s) not present in the modified block: \"AUTH-002 Wrong password\""
+        ),
+        "{e}"
+    );
+}
