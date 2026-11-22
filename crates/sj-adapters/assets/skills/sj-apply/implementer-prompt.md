@@ -16,11 +16,12 @@ output below is your requirements. Use the scenario's values exactly as written.
 
 1. **Ask first.** If anything in the scenario is unclear, ask now and stop. Don't guess
    values or behaviour.
-2. **Write the failing test.** Read `writing-good-tests.md` first. One test per scenario, linked by ID in its name
-   (`fn auth_005_refreshes_token`) or a `// spec: AUTH-005` line. Assert the THEN with the
-   scenario's concrete values, through the public interface, not through mocks of the code
-   under test. Put Rust tests in the crate's `tests/` directory, and other tests where the
-   suite's `tests` globs find them, so CI can run them against the base branch.
+2. **Write the failing test.** Read `writing-good-tests.md` first. One test per scenario,
+   linked by ID in its name (`fn auth_005_refreshes_token`) or a `// spec: AUTH-005` line.
+   Assert the THEN with the scenario's concrete values, through the public interface, not
+   through mocks of the code under test. Put Rust tests in the crate's `tests/` directory,
+   and other tests where the suite's `tests` globs find them, so CI can run them against
+   the base branch.
 3. **Record red.** Run `sj test <ID>`. It must fail because the behaviour is missing, not
    because of a typo. A compile error because the function doesn't exist yet counts as
    red. If it passes, stop and report `NEEDS_CONTEXT`: either the behaviour

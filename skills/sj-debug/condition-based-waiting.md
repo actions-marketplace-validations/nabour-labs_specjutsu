@@ -22,8 +22,10 @@ fn wait_for<T>(what: &str, timeout: Duration, mut check: impl FnMut() -> Option<
     }
 }
 
+// Read the log inside the check, so each try sees new output.
 let line = wait_for("the server to print its port", Duration::from_secs(5), || {
-    log.lines().find(|l| l.starts_with("listening on"))
+    let log = std::fs::read_to_string(&log_path).ok()?;
+    log.lines().find(|l| l.starts_with("listening on")).map(str::to_owned)
 });
 ```
 

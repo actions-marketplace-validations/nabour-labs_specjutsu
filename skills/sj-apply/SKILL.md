@@ -29,9 +29,9 @@ change folder, earlier tasks' history or your own summary into it.
 ### 2. Dispatch the implementer
 
 Start a new subagent with `implementer-prompt.md`, `writing-good-tests.md`, the `sj next`
-output, and only the interfaces or decisions from earlier tasks it can't see in the code. It writes the failing
-test, records red with `sj test <ID>`, makes it pass, refactors, and commits
-`test(<ID>): red` and `feat(<ID>): green`. It reports one status:
+output, and only the interfaces or decisions from earlier tasks it can't see in the code.
+It writes the failing test, records red with `sj test <ID>`, makes it pass, refactors, and
+commits `test(<ID>): red` and `feat(<ID>): green`. It reports one status:
 
 - `DONE`: go to review.
 - `DONE_WITH_CONCERNS`: read the concerns. If one is about correctness or scope, settle it
@@ -84,8 +84,8 @@ sj next --parallel
 ```
 
 It lists open `[P]` tasks in batches whose tests share no file. Dispatch one implementer per
-task in a batch at once. Each task still gets its own fresh reviewer subagent and its own fix
-loop, and you close each task yourself. Run one batch at a time.
+task in a batch at once. Each task still gets its own fresh reviewer subagent and its own
+fix loop, and you close each task yourself. Run one batch at a time.
 
 ## Tasks with no scenario
 

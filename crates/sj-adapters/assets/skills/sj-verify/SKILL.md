@@ -10,17 +10,18 @@ when it turns out to be right.
 
 ## The gate
 
-Before you say anything is done, fixed, passing or ready, in any wording, including
-"should work now", "looks good" or a thumbs-up:
+Any sentence that says or implies work is done, fixed, passing or ready ("should work
+now", "looks good", a thumbs-up) has to answer three questions first:
 
-1. **Name the command** that proves the claim. For a change, that is `sj verify`. For "the
-   bug is fixed", it is the bug's scenario test. For "it builds", it is the build.
-2. **Run it now**, after your last edit. An earlier run, a run before a merge, or a run in
-   another worktree doesn't count.
-3. **Read the whole output**: the summary line, every problem line, the exit code.
-4. **Check that it says what you're about to claim.** If it doesn't, report what it does
-   say instead.
-5. **Only then make the claim**, and quote the evidence with it.
+- **What proves it?** For a change: `sj verify`. For "the bug is fixed": the bug's
+  scenario test. For "it builds": the build. If nothing you can run proves it, say what
+  you checked instead and that it isn't proven.
+- **Did it run after my last edit, here?** A run before your last edit, before a merge, or
+  in another worktree is stale. Run it again.
+- **Does the output say exactly what I'm claiming?** Read the summary, every problem line
+  and the exit code. If it says less, claim less, and quote what it does say.
+
+Then make the claim, with the evidence quoted next to it.
 
 ## 1. Run it
 

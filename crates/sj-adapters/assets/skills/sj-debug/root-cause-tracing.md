@@ -1,14 +1,14 @@
 # Root-cause tracing
 
-A bug usually shows deep in the call stack, a long way from where it started: a file
-written to the wrong folder, a query with an empty id, a panic on `None`. Fixing it where
+Where a bug shows and where it starts are usually far apart: a ledger written to the
+wrong folder, a query with an empty id, a panic on `None`. Fixing it where
 it shows leaves the cause in place. Trace the bad value back to where it was first wrong,
 and fix it there.
 
 ## The steps
 
-1. **Write down the symptom exactly.** "`git init` runs in the source folder instead of
-   the temp folder" is better than "tests mess up the repository".
+1. **Write down the symptom exactly.** "`sj test` writes `.sj/ledger.jsonl` in the
+   home folder instead of the repository" is better than "the ledger is broken".
 2. **Find the line that misbehaves.** The function call, write or comparison that does
    the wrong thing. Note the value it got.
 3. **Ask what called it with that value.** Go up one frame. Is the value already wrong

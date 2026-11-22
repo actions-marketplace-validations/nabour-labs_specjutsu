@@ -44,6 +44,10 @@ when skipping costs the most.
 
 If you don't understand something, say so. Don't fill the gap with a plausible story.
 
+If the investigation ends without a cause in the code, because it is really the
+environment, the network or timing, write down what you ruled out and how, add a check or
+a condition-based wait where it fails, and tell the user the cause is unproven.
+
 ## Phase 4: Capture it, then fix it
 
 ### Capture it as a scenario

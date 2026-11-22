@@ -25,7 +25,8 @@ Run `sj test <ID>` and read the failure excerpt before you write any code.
 - **Wrong reason:** a typo, a wrong import, a fixture that doesn't load, a panic in setup.
   Fix the test and run it again until it fails on the assertion that matters.
 - **It passes straight away:** either the behaviour already exists or the test doesn't test
-  it. Find out which before you go on. Never leave a test you have only seen pass.
+  it. Find out which before you go on. If the behaviour exists and must stay, it belongs
+  in a `[keep]` scenario; tell the controller. Never leave a test you have only seen pass.
 
 ## Test behaviour, not mocks
 
@@ -37,13 +38,34 @@ Run `sj test <ID>` and read the failure excerpt before you write any code.
 - Don't add methods, flags or hooks to production code just so a test can reach in. If the
   code is hard to test, the design is telling you something; mention it in your report.
 
+A test that only checks the mock, and one that checks the result:
+
+```rust
+// Passes whatever `refresh` returns: it only proves the clock was asked.
+#[test]
+fn auth_005_refreshes_token() {
+    let clock = MockClock::new();
+    refresh(&clock, &token());
+    assert!(clock.was_called());
+}
+
+// Asserts the THEN: a new token, valid for 24 hours.
+#[test]
+fn auth_005_refreshes_a_token_expiring_in_5_minutes() {
+    let clock = FixedClock::at("2026-01-01T12:00:00Z");
+    let fresh = refresh(&clock, &token_expiring_in(Duration::from_secs(300))).unwrap();
+    assert_eq!(fresh.expires_at, clock.now() + Duration::from_secs(24 * 3600));
+}
+```
+
 ## Make it pass with the least code
 
 - Write only what the failing test needs. No options, settings or branches no scenario asks
   for. You aren't going to need them, and nobody has tested them.
 - Hard-coding the expected value to get green is not done. If a second value from the
   scenario would break it, the code isn't finished.
-- Run the package's tests, not just the one, before you call it green.
+- Run the package's tests (`sj test <package>`), not just the one, before you call it
+  green.
 
 ## Refactor only while green
 
