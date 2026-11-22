@@ -614,24 +614,48 @@ fn mig_012_existing_config_without_a_table_gets_one() {
     );
 }
 
-/// The `-` and `+` lines of `path`'s diff in `sj migrate --diff` output.
-fn diff_lines(out: &str, path: &str) -> (Vec<String>, Vec<String>) {
+/// The context, `-` and `+` lines of `path`'s diff in `sj migrate --diff` output, each
+/// without its one-character prefix.
+fn diff_lines(out: &str, path: &str) -> (Vec<String>, Vec<String>, Vec<String>) {
     let mut lines = out.lines();
     let from = format!("--- a/{path}");
     assert!(
         lines.any(|l| l == from),
         "no diff header for {path} in:\n{out}"
     );
-    assert_eq!(lines.next(), Some(format!("+++ b/{path}").as_str()), "{out}");
-    let (mut minus, mut plus) = (Vec::new(), Vec::new());
+    assert_eq!(
+        lines.next(),
+        Some(format!("+++ b/{path}").as_str()),
+        "{out}"
+    );
+    let (mut context, mut minus, mut plus) = (Vec::new(), Vec::new(), Vec::new());
     for l in lines.take_while(|l| !l.starts_with("--- a/")) {
-        if let Some(rest) = l.strip_prefix('-') {
+        if let Some(rest) = l.strip_prefix(' ') {
+            context.push(rest.to_string());
+        } else if let Some(rest) = l.strip_prefix('-') {
             minus.push(rest.to_string());
         } else if let Some(rest) = l.strip_prefix('+') {
             plus.push(rest.to_string());
         }
     }
-    (minus, plus)
+    (context, minus, plus)
+}
+
+/// A line that, trimmed, is only JSON punctuation: brackets, braces and commas.
+fn is_punctuation(line: &str) -> bool {
+    let t = line.trim();
+    !t.is_empty() && t.chars().all(|c| "{}[],".contains(c))
+}
+
+/// A line of the Superpowers entry: it names `enabledPlugins` or `superpowers`.
+fn is_superpowers(line: &str) -> bool {
+    line.contains("enabledPlugins") || line.contains("superpowers")
+}
+
+/// A line of a specjutsu hook entry: it runs `sj hook`, or opens the added `SessionStart`
+/// list that holds one.
+fn is_specjutsu_hook(line: &str) -> bool {
+    line.contains("sj hook") || line.trim() == "\"SessionStart\": ["
 }
 
 #[test]
@@ -667,24 +691,40 @@ fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
         .stdout
         .clone();
     let out = String::from_utf8(out).unwrap();
-    let (minus, plus) = diff_lines(&out, ".claude/settings.json");
-    // `-` lines: only the Superpowers entry.
-    assert_eq!(
-        minus,
-        [
-            "  \"enabledPlugins\": {",
-            "    \"superpowers@superpowers-marketplace\": true",
-            "  },",
-        ],
+    let (context, minus, plus) = diff_lines(&out, ".claude/settings.json");
+    for l in &minus {
+        assert!(is_superpowers(l) || is_punctuation(l), "- {l}\n{out}");
+    }
+    for l in &plus {
+        assert!(is_specjutsu_hook(l) || is_punctuation(l), "+ {l}\n{out}");
+    }
+    assert!(
+        minus
+            .iter()
+            .any(|l| l.contains("superpowers@superpowers-marketplace")),
         "{out}"
     );
-    // `+` lines: only the specjutsu hook entries.
-    assert!(!plus.is_empty(), "{out}");
-    let added = plus.join("\n");
-    assert!(added.contains("sj hook claude pre-edit"), "{out}");
-    assert!(added.contains("sj hook claude session-start"), "{out}");
-    assert!(!added.contains("superpowers"), "{out}");
-    assert!(!added.contains("npm run lint"), "{out}");
-    assert!(!minus.iter().any(|l| l.contains("npm run lint")), "{out}");
+    assert!(
+        plus.iter().any(|l| l.contains("sj hook claude pre-edit")),
+        "{out}"
+    );
+    assert!(
+        plus.iter()
+            .any(|l| l.contains("sj hook claude session-start")),
+        "{out}"
+    );
+    assert!(
+        !minus
+            .iter()
+            .chain(&plus)
+            .any(|l| l.contains("npm run lint")),
+        "{out}"
+    );
+    assert!(
+        context
+            .iter()
+            .any(|l| l.trim() == "\"command\": \"npm run lint\""),
+        "{out}"
+    );
     assert_eq!(status(&repo), "");
 }
