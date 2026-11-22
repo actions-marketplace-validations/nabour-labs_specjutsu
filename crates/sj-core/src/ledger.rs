@@ -134,20 +134,30 @@ pub struct Loaded {
 }
 
 pub fn load(root: &Path) -> Result<Loaded> {
-    let p = path(root);
-    let text = match std::fs::read_to_string(&p) {
+    let (records, skipped) = load_lines(&path(root), |r: &Record| r.v == FORMAT)?;
+    Ok(Loaded { records, skipped })
+}
+
+/// Read a JSON Lines file: the records that parse and pass `keep`, in file order, and the
+/// number of non-blank lines that don't. A missing file is empty.
+pub(crate) fn load_lines<T: serde::de::DeserializeOwned>(
+    p: &Path,
+    keep: impl Fn(&T) -> bool,
+) -> Result<(Vec<T>, usize)> {
+    let text = match std::fs::read_to_string(p) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Loaded::default()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
         Err(e) => return Err(e).with_context(|| format!("reading {}", p.display())),
     };
-    let mut out = Loaded::default();
+    let mut records = Vec::new();
+    let mut skipped = 0;
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        match serde_json::from_str::<Record>(line) {
-            Ok(r) if r.v == FORMAT => out.records.push(r),
-            _ => out.skipped += 1,
+        match serde_json::from_str::<T>(line) {
+            Ok(r) if keep(&r) => records.push(r),
+            _ => skipped += 1,
         }
     }
-    Ok(out)
+    Ok((records, skipped))
 }
 
 /// What `record` did.

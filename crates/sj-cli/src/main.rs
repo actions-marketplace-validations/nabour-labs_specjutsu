@@ -278,6 +278,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Bytes the agent-loop commands printed against the raw output they replaced.
+    Gain {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
     /// Print a shell completion script to stdout, e.g. `sj completions zsh > ~/.zfunc/_sj`.
     Completions {
         #[arg(value_enum)]
@@ -646,6 +651,7 @@ fn run() -> Result<ExitCode> {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
         }
+        Command::Gain { root } => gain_cmd(&root),
         Command::Audit {
             base,
             root,
@@ -1368,6 +1374,53 @@ fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode>
             let tag = if s.proven { "proven" } else { "open" };
             println!("{tag:<8}{}  latest {}", s.id, s.latest.as_str());
         }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn gain_cmd(root: &Path) -> Result<ExitCode> {
+    let loaded = sj_core::gain::load(root)?;
+    if loaded.skipped > 0 {
+        eprintln!(
+            "warn    skipped {} unreadable gain {}",
+            loaded.skipped,
+            if loaded.skipped == 1 {
+                "record"
+            } else {
+                "records"
+            }
+        );
+    }
+    if loaded.records.is_empty() {
+        return Ok(ExitCode::SUCCESS);
+    }
+    let summary = sj_core::gain::summarize(&loaded.records);
+    let rows: Vec<(&str, &sj_core::gain::Totals)> = summary
+        .commands
+        .iter()
+        .map(|(c, t)| (c.as_str(), t))
+        .chain([("total", &summary.total)])
+        .collect();
+    let width = |f: fn(&sj_core::gain::Totals) -> String| {
+        rows.iter().map(|(_, t)| f(t).len()).max().unwrap_or(0)
+    };
+    let name_w = rows.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
+    let runs_w = width(|t| t.runs.to_string());
+    let printed_w = width(|t| t.printed.to_string());
+    let raw_w = width(|t| t.raw.to_string());
+    let pct_w = width(|t| format!("{}%", t.saved_percent()));
+    for (i, (name, t)) in rows.iter().enumerate() {
+        let mut line = format!(
+            "{name:<name_w$}  {:>runs_w$}  {:>printed_w$}  {:>raw_w$}  {:>pct_w$}",
+            t.runs,
+            t.printed,
+            t.raw,
+            format!("{}%", t.saved_percent()),
+        );
+        if i == rows.len() - 1 {
+            line.push_str(&format!("  ~{} tokens saved", t.tokens_saved()));
+        }
+        println!("{line}");
     }
     Ok(ExitCode::SUCCESS)
 }

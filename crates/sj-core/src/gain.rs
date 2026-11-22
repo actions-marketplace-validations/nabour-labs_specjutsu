@@ -72,3 +72,71 @@ pub fn dir_bytes(dir: &Path) -> u64 {
         })
         .sum()
 }
+
+/// Records in file order, plus the number of lines that could not be read.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Loaded {
+    pub records: Vec<Record>,
+    pub skipped: usize,
+}
+
+/// Every readable record. A missing file is empty; a line that isn't JSON, or has another
+/// `v` than [`FORMAT`], is counted in `skipped`.
+pub fn load(root: &Path) -> Result<Loaded> {
+    let (records, skipped) = crate::ledger::load_lines(&path(root), |r: &Record| r.v == FORMAT)?;
+    Ok(Loaded { records, skipped })
+}
+
+/// Runs and bytes for one command, or for all of them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Totals {
+    pub runs: u64,
+    pub printed: u64,
+    pub raw: u64,
+}
+
+impl Totals {
+    fn add(&mut self, r: &Record) {
+        self.runs += 1;
+        self.printed += r.printed;
+        self.raw += r.raw;
+    }
+
+    /// Share of `raw` not printed, as a whole percent rounded down; 0 when `raw` is 0.
+    pub fn saved_percent(&self) -> u64 {
+        if self.raw == 0 {
+            return 0;
+        }
+        let saved = u128::from(self.raw.saturating_sub(self.printed));
+        (saved * 100 / u128::from(self.raw)) as u64
+    }
+
+    /// Estimated tokens saved: (raw − printed) / 4, rounded down.
+    pub fn tokens_saved(&self) -> u64 {
+        self.raw.saturating_sub(self.printed) / 4
+    }
+}
+
+/// The report: one entry per recorded command, then the overall total.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Summary {
+    /// `test`, `verify`, `next`, `status` in that order, then any other command
+    /// alphabetically; only commands with records.
+    pub commands: Vec<(String, Totals)>,
+    pub total: Totals,
+}
+
+const ORDER: [&str; 4] = ["test", "verify", "next", "status"];
+
+pub fn summarize(records: &[Record]) -> Summary {
+    let mut by: std::collections::BTreeMap<String, Totals> = Default::default();
+    let mut total = Totals::default();
+    for r in records {
+        by.entry(r.command.clone()).or_default().add(r);
+        total.add(r);
+    }
+    let mut commands: Vec<(String, Totals)> = by.into_iter().collect();
+    // Stable sort keeps the alphabetical order of the commands not in ORDER.
+    commands.sort_by_key(|(c, _)| ORDER.iter().position(|o| o == c).unwrap_or(ORDER.len()));
+    Summary { commands, total }
+}
