@@ -211,3 +211,25 @@ fn ids_010_clashing_suggestions_lengthen_until_distinct() {
          transfers = \"TRANSF\"\n",
     );
 }
+
+#[test]
+fn ids_011_writing_keeps_the_rest_of_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["billing", "distribution"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    let toml = "# project settings\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\n";
+    put(dir.path(), "specjutsu.toml", toml);
+    sj(dir.path()).arg("prefixes").arg("--write").assert().success();
+    assert_eq!(
+        read(dir.path(), "specjutsu.toml"),
+        "# project settings\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\ndistribution = \"DIST\"\n"
+    );
+    let after = read(dir.path(), "specjutsu.toml");
+    sj(dir.path()).arg("prefixes").arg("--write").assert().success();
+    assert_eq!(read(dir.path(), "specjutsu.toml"), after);
+}
