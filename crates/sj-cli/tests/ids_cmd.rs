@@ -32,7 +32,8 @@ fn ids_001_listing_shows_the_proposed_ids_and_exits_1() {
     sj(dir.path()).assert().code(1).stdout(
         "2 scenarios without IDs\n\
          USERAUTH-001 Valid registration (openspec/specs/user-auth/spec.md:6)\n\
-         USERAUTH-002 Password too short (openspec/specs/user-auth/spec.md:10)\n",
+         USERAUTH-002 Password too short (openspec/specs/user-auth/spec.md:10)\n\
+         hint: user-auth would use USERAUTH; sj ids prefixes --write maps it to USER\n",
     );
     assert_eq!(
         read(dir.path(), "openspec/specs/user-auth/spec.md"),

@@ -138,6 +138,37 @@ pub fn prefix_table(
     Ok(table)
 }
 
+/// Each capability that `plan` mints IDs for with a derived prefix longer than six letters:
+/// the capability, that prefix, and the one `sj ids prefixes --write` would map it to, in
+/// capability order. Mapped capabilities are skipped, and so are those whose existing IDs
+/// already use the long prefix.
+pub fn long_prefixes(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+    plan: &[Assignment],
+) -> Result<Vec<(String, String, String)>> {
+    let mut caps: Vec<String> = Vec::new();
+    for a in plan {
+        if let Some(cap) = place(spec_root, &a.file).capability {
+            if !caps.contains(&cap) {
+                caps.push(cap);
+            }
+        }
+    }
+    caps.sort();
+    let table = prefix_table(spec_root, configured)?;
+    Ok(caps
+        .into_iter()
+        .filter(|cap| !configured.contains_key(cap))
+        .filter_map(|cap| {
+            let long = derive_prefix(&cap);
+            let minted = plan.iter().any(|a| a.id.starts_with(&format!("{long}-")));
+            let short = table.get(&cap)?.clone();
+            (long.len() > WHOLE && minted && short != long).then_some((cap, long, short))
+        })
+        .collect())
+}
+
 /// `toml` (the text of `specjutsu.toml`) with a `key = "VALUE"` line for each of `add`
 /// spliced into `[ids.prefixes]`, after the table's last key line; the table is appended at
 /// the end when absent. Every other byte is kept, and new lines use the file's line ending.

@@ -1952,6 +1952,15 @@ fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> 
         for a in &plan {
             println!("{} {} ({}:{})", a.id, a.name, rel(&a.file, root), a.line);
         }
+        if !write {
+            for (cap, long, short) in
+                sj_core::ids::long_prefixes(&root.join(&spec_root), &config.id_prefixes, &plan)?
+            {
+                println!(
+                    "hint: {cap} would use {long}; sj ids prefixes --write maps it to {short}"
+                );
+            }
+        }
         if write && !plan.is_empty() {
             println!(
                 "wrote {} to {}",
