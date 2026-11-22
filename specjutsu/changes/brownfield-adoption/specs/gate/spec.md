@@ -11,7 +11,7 @@ The gate SHALL read `<spec_root>/trace-baseline.txt` as it is on the merge base.
 - **WHEN** `tests/auth.rs` has `auth_009_old` naming the unknown ID AUTH-009, and the baseline on base lists `orphan AUTH-009 tests/auth.rs auth_009_old`
 - **THEN** the gate does not fail with `orphan AUTH-009 auth_009_old`
 
-#### Scenario: GATE-052 A baselined scenario that the change modifies is still gated
+#### Scenario: GATE-052 [keep] A baselined scenario that the change modifies is still gated
 - **WHEN** the baseline on base lists `gap AUTH-002`, and the change modifies AUTH-002 without adding a test for it
 - **THEN** the gate fails with reason `untested AUTH-002`
 
