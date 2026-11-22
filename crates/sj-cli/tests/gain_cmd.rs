@@ -78,12 +78,35 @@ fn loop_022_sj_test_records_printed_and_raw_bytes() {
     assert_eq!(records.len(), 1, "{records:?}");
     let r = &records[0];
     assert_eq!(r["command"], "test");
+    assert!(!out.stdout.is_empty());
+    assert!(out.stdout.len() < RUNNER_BYTES);
     assert_eq!(r["printed"], out.stdout.len() as u64);
     assert_eq!(r["raw"], RUNNER_BYTES as u64);
     let ts = r["ts"].as_str().expect("ts is a string");
     assert!(
         ts.len() == 20 && &ts[10..11] == "T" && ts.ends_with('Z'),
         "ts {ts} is RFC 3339 UTC"
+    );
+}
+
+#[test]
+fn loop_022_sj_test_records_cargo_output_as_raw() {
+    // Cargo's output size varies by toolchain, so assert it was counted and exceeds what sj printed.
+    let repo = Repo::with_lib("");
+    repo.write("openspec/specs/all/spec.md", SPEC);
+    repo.write("tests/t.rs", "#[test]\nfn svc_001_works() {}\n");
+    let out = sj_test(repo.path(), &[]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let records = gain_records(repo.path());
+    assert_eq!(records.len(), 1, "{records:?}");
+    let r = &records[0];
+    assert_eq!(r["command"], "test");
+    assert!(!out.stdout.is_empty());
+    assert_eq!(r["printed"], out.stdout.len() as u64);
+    let raw = r["raw"].as_u64().expect("raw is a number");
+    assert!(
+        raw > out.stdout.len() as u64,
+        "raw {raw} counts cargo's output"
     );
 }
 
