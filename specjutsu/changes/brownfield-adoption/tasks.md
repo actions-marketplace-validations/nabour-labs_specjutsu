@@ -22,7 +22,7 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 
 ## 4. Migrate
 
-- [ ] 4.1 OpenSpec migration pins short prefixes before assigning IDs (MIG-012)
+- [x] 4.1 OpenSpec migration pins short prefixes before assigning IDs (MIG-012)
 - [ ] 4.2 [P] In-house line diff and `sj migrate --diff` (MIG-013)
 - [ ] 4.3 Merge note on the settings.json preview line (MIG-014)
 - [ ] 4.4 Undo manifest, `sj migrate --undo` and the new rollback line (MIG-001, MIG-002, MIG-015, MIG-016)
