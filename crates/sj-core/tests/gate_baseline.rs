@@ -137,3 +137,74 @@ fn gate_055_a_stale_baseline_entry_only_warns() {
         r.failures
     );
 }
+
+#[test]
+fn gate_053_adding_an_orphan_to_the_baseline_fails_without_an_exemption() {
+    let repo = Repo::with_lib("pub fn lib() {}\n");
+    repo.write(
+        "openspec/specs/auth/spec.md",
+        &spec_md(&[("AUTH-001", "Logs in")]),
+    );
+    repo.commit("base");
+    repo.branch("feature");
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_010_x() { assert!(true); }\n",
+    );
+    repo.write(
+        "openspec/trace-baseline.txt",
+        "orphan AUTH-010 tests/auth.rs auth_010_x\n",
+    );
+    repo.commit("test: AUTH-010, baselined");
+
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    for want in [
+        "orphan AUTH-010 auth_010_x",
+        "baseline-added orphan AUTH-010 tests/auth.rs auth_010_x",
+    ] {
+        assert!(
+            r.failures.iter().any(|f| f == want),
+            "{want}: {:?}",
+            r.failures
+        );
+    }
+}
+
+#[test]
+fn gate_054_adopting_a_baseline_passes_with_a_config_exemption() {
+    let repo = Repo::with_lib("pub fn lib() {}\n");
+    repo.write(
+        "openspec/specs/auth/spec.md",
+        &spec_md(&[("AUTH-001", "Logs in")]),
+    );
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_007_a() { assert!(true); }\n\
+         #[test]\nfn auth_008_b() { assert!(true); }\n\
+         #[test]\nfn auth_009_c() { assert!(true); }\n",
+    );
+    repo.commit("base with three orphans");
+    repo.branch("feature");
+    let entries = [
+        "orphan AUTH-007 tests/auth.rs auth_007_a",
+        "orphan AUTH-008 tests/auth.rs auth_008_b",
+        "orphan AUTH-009 tests/auth.rs auth_009_c",
+    ];
+    let baseline: String = entries.iter().map(|e| format!("{e}\n")).collect();
+    repo.write("openspec/trace-baseline.txt", &baseline);
+    repo.commit("chore: adopt baseline\n\nSpecjutsu-Exempt: config — adopt trace baseline");
+
+    let r = run(&opts(&repo)).unwrap();
+    assert!(r.pass, "{:?}", r.failures);
+    let added: Vec<&String> = r
+        .warnings
+        .iter()
+        .filter(|w| w.starts_with("baseline-added orphan "))
+        .collect();
+    assert_eq!(added.len(), 3, "{:?}", r.warnings);
+    for e in entries {
+        let want = format!("baseline-added {e}");
+        assert!(r.warnings.contains(&want), "{want}: {:?}", r.warnings);
+    }
+}
