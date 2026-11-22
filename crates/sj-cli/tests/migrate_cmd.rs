@@ -893,7 +893,7 @@ fn undo_restores_crlf_line_endings() {
 /// IDS-013 through `sj migrate`: a prefix clash that cannot be lengthened away stops the
 /// migration before it writes anything.
 #[test]
-fn migrate_refuses_an_unresolvable_prefix_clash() {
+fn ids_013_migrate_refuses_an_unresolvable_prefix_clash() {
     let repo = openspec_repo();
     repo.write(
         "specjutsu.toml",

@@ -46,7 +46,7 @@ const SHORT: usize = 4;
 /// A capability's letters, uppercased, are kept whole up to six letters and cut to four
 /// beyond that; suggestions equal to each other or to a kept prefix lengthen together, one
 /// letter at a time, until distinct or out of letters. Returns `kept` plus the suggestions,
-/// or an error naming two `open` capabilities and their prefix when a clash is left.
+/// or an error naming two capabilities and their prefix when a clash is left.
 pub fn suggest_prefixes(
     kept: &BTreeMap<String, String>,
     open: &[String],
@@ -89,7 +89,7 @@ pub fn suggest_prefixes(
         let prefix = &l[..*n];
         let other = out
             .iter()
-            .find(|(c, p)| *p == prefix && *c != *cap && open.contains(c))
+            .find(|(c, p)| *p == prefix && *c != *cap)
             .map(|(c, _)| c.clone());
         if let Some(other) = other {
             let mut pair = [other.as_str(), cap.as_str()];

@@ -356,3 +356,21 @@ fn ids_013_an_unresolvable_clash_is_refused() {
         ));
     assert_eq!(read(dir.path(), "specjutsu.toml"), toml);
 }
+
+/// IDS-013 with a configured mapping whose capability has no folder: the clash still counts.
+#[test]
+fn ids_013_a_clash_with_a_mapping_without_a_folder_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/bill/spec.md", USER_AUTH);
+    let toml = "schema = 1\n\n[ids.prefixes]\nbilling = \"BILL\"\n";
+    put(dir.path(), "specjutsu.toml", toml);
+    sj(dir.path())
+        .arg("prefixes")
+        .arg("--write")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "capabilities `bill` and `billing` both use prefix BILL",
+        ));
+    assert_eq!(read(dir.path(), "specjutsu.toml"), toml);
+}
