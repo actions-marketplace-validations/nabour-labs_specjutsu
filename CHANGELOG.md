@@ -26,6 +26,11 @@ All notable changes are recorded here. The format follows
   evidence. Both, and `sj-apply`, list rationalizations and red flags.
 - `skills/COVERAGE.md` has a Depth column naming the file that carries each Superpowers
   technique; the skill check fails when it's missing.
+- `sj gain` totals the bytes `sj test`, `sj verify`, `sj next` and `sj status`
+  printed against the raw output they stand in for, per command, with an estimate
+  of tokens saved (bytes / 4). Each of those commands appends one record per run
+  to `.specjutsu/ledger/gain.jsonl`; `--json`, `--since <time>` and `--reset`.
+  The numbers are bytes, the local half of the v0.6 token benchmark.
 
 ## [0.5.0] - 2026-11-21
 

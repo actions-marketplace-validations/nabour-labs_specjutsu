@@ -379,9 +379,15 @@ fn gain_line(command: &str, printed: u64, raw: u64) -> String {
 }
 
 fn sj_gain(root: &Path) -> std::process::Output {
+    sj_gain_with(root, &[])
+}
+
+fn sj_gain_with(root: &Path, extra: &[&str]) -> std::process::Output {
     Command::cargo_bin("sj")
         .unwrap()
-        .args(["gain", "--root"])
+        .arg("gain")
+        .args(extra)
+        .arg("--root")
         .arg(root)
         .output()
         .unwrap()
@@ -457,5 +463,39 @@ fn loop_031_damaged_gain_record_does_not_block_report() {
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("skipped 1 unreadable gain record"),
         "{out:?}"
+    );
+}
+
+#[test]
+fn loop_028_gain_json_totals_for_a_harness() {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    let text = [
+        gain_line("test", 300, 40_000),
+        gain_line("next", 1_000, 4_000),
+        gain_line("test", 200, 10_000),
+    ]
+    .concat();
+    repo.write(".specjutsu/ledger/gain.jsonl", &text);
+    let out = sj_gain_with(repo.path(), &["--json"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    // Exactly one JSON value on stdout, followed by a newline.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.ends_with('\n'), "{stdout}");
+    let mut values = serde_json::Deserializer::from_str(&stdout).into_iter::<serde_json::Value>();
+    let v = values.next().expect("a JSON value").expect("valid JSON");
+    assert!(values.next().is_none(), "one JSON value: {stdout}");
+    assert_eq!(
+        v,
+        serde_json::json!({
+            "commands": [
+                {"command": "test", "runs": 2, "printed": 500, "raw": 50000, "saved_pct": 99},
+                {"command": "next", "runs": 1, "printed": 1000, "raw": 4000, "saved_pct": 75},
+            ],
+            "total": {
+                "runs": 3, "printed": 1500, "raw": 54000, "saved_pct": 97, "tokens_saved": 13125
+            },
+        })
     );
 }
