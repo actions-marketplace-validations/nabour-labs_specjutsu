@@ -99,44 +99,147 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
 }
 
 /// The 1-based line of the `}` closing the item whose header is on 0-based line `start`.
-/// Skips strings, char literals of braces and comments; falls back to `start + 1`.
+///
+/// Lexes from the header to the end of the file, keeping string, raw string, char literal and
+/// comment state across lines, so braces and quotes inside literals and comments are skipped.
+/// Falls back to `start + 1`.
 fn rust_body_end(content: &str, start: usize) -> usize {
+    let from: usize = content
+        .split_inclusive('\n')
+        .take(start)
+        .map(str::len)
+        .sum();
+    let b = &content.as_bytes()[from..];
+    let ident = |c: u8| c == b'_' || c.is_ascii_alphanumeric() || c >= 0x80;
     let mut depth = 0usize;
     let mut opened = false;
-    for (i, line) in content.lines().enumerate().skip(start) {
-        let b = line.as_bytes();
-        let mut j = 0;
-        let mut in_str = false;
-        while j < b.len() {
-            let c = b[j];
-            if in_str {
-                if c == b'\\' {
+    let mut j = 0;
+    while j < b.len() {
+        let c = b[j];
+        match c {
+            b'/' if b.get(j + 1) == Some(&b'/') => {
+                while j < b.len() && b[j] != b'\n' {
                     j += 1;
-                } else if c == b'"' {
-                    in_str = false;
                 }
-            } else if c == b'"' {
-                in_str = true;
-            } else if c == b'/' && b.get(j + 1) == Some(&b'/') {
-                break;
-            } else if c == b'\''
-                && matches!(b.get(j + 1), Some(b'{' | b'}'))
-                && b.get(j + 2) == Some(&b'\'')
-            {
-                j += 2;
-            } else if c == b'{' {
+                continue;
+            }
+            b'/' if b.get(j + 1) == Some(&b'*') => {
+                j = skip_block_comment(b, j);
+                continue;
+            }
+            b'"' => {
+                j = skip_string(b, j + 1);
+                continue;
+            }
+            b'\'' => {
+                j = skip_char_or_lifetime(b, j);
+                continue;
+            }
+            b'{' => {
                 depth += 1;
                 opened = true;
-            } else if c == b'}' {
+            }
+            b'}' => {
                 depth = depth.saturating_sub(1);
                 if opened && depth == 0 {
-                    return i + 1;
+                    return start + 1 + b[..j].iter().filter(|&&x| x == b'\n').count();
                 }
             }
+            _ if ident(c) && (j == 0 || !ident(b[j - 1])) => {
+                if let Some(end) = skip_raw_string(b, j) {
+                    j = end;
+                } else {
+                    while j < b.len() && ident(b[j]) {
+                        j += 1;
+                    }
+                }
+                continue;
+            }
+            _ => {}
+        }
+        j += 1;
+    }
+    start + 1
+}
+
+/// Index just past the `"` closing a normal string whose body starts at `j`.
+fn skip_string(b: &[u8], mut j: usize) -> usize {
+    while j < b.len() {
+        match b[j] {
+            b'\\' => j += 2,
+            b'"' => return j + 1,
+            _ => j += 1,
+        }
+    }
+    b.len()
+}
+
+/// When a raw string (`r"…"`, `r#"…"#`, `br…`, `cr…`) starts at `j`, the index just past it.
+fn skip_raw_string(b: &[u8], j: usize) -> Option<usize> {
+    let mut k = j;
+    if matches!(b.get(k), Some(b'b' | b'c')) {
+        k += 1;
+    }
+    if b.get(k) != Some(&b'r') {
+        return None;
+    }
+    k += 1;
+    let hashes = b[k..].iter().take_while(|&&x| x == b'#').count();
+    k += hashes;
+    if b.get(k) != Some(&b'"') {
+        return None;
+    }
+    k += 1;
+    while k < b.len() {
+        if b[k] == b'"' && b[k + 1..].iter().take_while(|&&x| x == b'#').count() >= hashes {
+            return Some(k + 1 + hashes);
+        }
+        k += 1;
+    }
+    Some(b.len())
+}
+
+/// Index past a char literal (`'{'`, `'\''`, `'\u{7f}'`) at `j`, or past the `'` of a lifetime.
+fn skip_char_or_lifetime(b: &[u8], j: usize) -> usize {
+    if b.get(j + 1) == Some(&b'\\') {
+        // An escape: the closing quote follows within a few bytes (`\u{10FFFF}` is the longest).
+        if let Some(n) = b.iter().skip(j + 3).take(10).position(|&x| x == b'\'') {
+            return j + 3 + n + 1;
+        }
+        return j + 1;
+    }
+    let width = match b.get(j + 1) {
+        Some(&x) if x < 0x80 => 1,
+        Some(&x) if x >= 0xF0 => 4,
+        Some(&x) if x >= 0xE0 => 3,
+        Some(_) => 2,
+        None => return j + 1,
+    };
+    if b.get(j + 1 + width) == Some(&b'\'') {
+        j + 2 + width
+    } else {
+        j + 1
+    }
+}
+
+/// Index just past the `*/` closing the (possibly nested) block comment opening at `j`.
+fn skip_block_comment(b: &[u8], mut j: usize) -> usize {
+    let mut depth = 0usize;
+    while j < b.len() {
+        if b[j] == b'/' && b.get(j + 1) == Some(&b'*') {
+            depth += 1;
+            j += 2;
+        } else if b[j] == b'*' && b.get(j + 1) == Some(&b'/') {
+            depth -= 1;
+            j += 2;
+            if depth == 0 {
+                return j;
+            }
+        } else {
             j += 1;
         }
     }
-    start + 1
+    b.len()
 }
 
 /// Walk `root` for `*.rs` files (respecting .gitignore, skipping `target/` and `fixtures/`) and scan each.
