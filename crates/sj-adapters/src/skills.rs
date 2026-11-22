@@ -26,6 +26,18 @@ pub const SKILLS: [&str; 10] = [
 /// Most bytes in a skill's body, after the frontmatter.
 pub const BODY_LIMIT: usize = 6000;
 
+/// Most bytes in one reference file next to a skill's `SKILL.md` (SKILL-010).
+pub const REF_LIMIT: usize = 8000;
+
+/// Project files a skill names that are not references in its folder.
+const PROJECT_FILES: [&str; 5] = [
+    "proposal.md",
+    "design.md",
+    "tasks.md",
+    "spec.md",
+    "principles.md",
+];
+
 /// Superpowers skills the set replaces (`writing-skills` and `using-superpowers` are left out).
 pub const SUPERPOWERS: [&str; 12] = [
     "brainstorming",
@@ -243,6 +255,74 @@ fn foreign(text: &str) -> Vec<String> {
     out
 }
 
+/// The bare lowercase `*.md` file names `text` mentions that are not project files: the
+/// reference files a skill expects in its folder.
+pub fn named_references(text: &str) -> Vec<String> {
+    static R: OnceLock<Regex> = OnceLock::new();
+    let r = R
+        .get_or_init(|| Regex::new(r"(?:^|[^A-Za-z0-9_./<>-])([a-z0-9][a-z0-9-]*\.md)\b").unwrap());
+    let mut out: Vec<String> = Vec::new();
+    for c in r.captures_iter(text) {
+        let f = c[1].to_string();
+        if !PROJECT_FILES.contains(&f.as_str()) && !out.contains(&f) {
+            out.push(f);
+        }
+    }
+    out
+}
+
+/// The reference files in a skill folder: every `*.md` other than `SKILL.md`, sorted.
+pub fn reference_files(skill_dir: &Path) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    if !skill_dir.is_dir() {
+        return Ok(out);
+    }
+    for e in std::fs::read_dir(skill_dir)
+        .with_context(|| format!("cannot read {}", skill_dir.display()))?
+    {
+        let e = e?;
+        let n = e.file_name().to_string_lossy().into_owned();
+        if n != "SKILL.md" && n.ends_with(".md") && e.file_type()?.is_file() {
+            out.push(n);
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// Reference rules (SKILL-010) and foreign commands in references (SKILL-002).
+fn check_references(dir: &Path, name: &str, text: &str, out: &mut Vec<Problem>) -> Result<()> {
+    let folder = dir.join(name);
+    let present = reference_files(&folder)?;
+    let named = named_references(text);
+    for f in &named {
+        if !present.contains(f) {
+            out.push(problem(name, format!("names missing reference {f}")));
+        }
+    }
+    for f in &present {
+        if !named.contains(f) {
+            out.push(problem(
+                name,
+                format!("reference {f} is not named in SKILL.md"),
+            ));
+        }
+        let path = folder.join(f);
+        let t = std::fs::read_to_string(&path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        if t.len() > REF_LIMIT {
+            out.push(problem(
+                name,
+                format!("reference {f} is {} bytes (limit {REF_LIMIT})", t.len()),
+            ));
+        }
+        for c in foreign(&t) {
+            out.push(problem(name, format!("{f} names a foreign command ({c})")));
+        }
+    }
+    Ok(())
+}
+
 fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     let file = dir.join(name).join("SKILL.md");
     if !file.is_file() {
@@ -276,6 +356,7 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     for f in foreign(&text) {
         out.push(problem(name, format!("names a foreign command ({f})")));
     }
+    check_references(dir, name, &text, out)?;
     if let Some((_, cmds)) = REQUIRED.iter().find(|(s, _)| *s == name) {
         for c in *cmds {
             if !text.contains(c) {

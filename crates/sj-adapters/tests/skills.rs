@@ -510,8 +510,9 @@ fn skill_002_a_foreign_command_in_a_reference_fails_the_check() {
     );
     let got = messages(dir.path());
     assert!(
-        got.iter().any(|m| m
-            == "sj-debug: root-cause-tracing.md names a foreign command (openspec status)"),
+        got.iter()
+            .any(|m| m
+                == "sj-debug: root-cause-tracing.md names a foreign command (openspec status)"),
         "{got:?}"
     );
 }

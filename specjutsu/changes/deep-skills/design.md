@@ -41,10 +41,10 @@ single files are where agents skim. Superpowers' own layout shows the split work
 
 ### 2. How the check sees references
 - `SKILL.md` names a reference by its file name in backticks or a Markdown link
-  (`` `root-cause-tracing.md` `` or `[…](root-cause-tracing.md)`). Any `*.md` name it mentions
-  that is a bare file name (no `/`) must exist in the folder, except `SKILL.md`,
+  (`` `root-cause-tracing.md` `` or `[…](root-cause-tracing.md)`). Any bare lowercase
+  `*.md` name it mentions (no `/` or `<` before it) must exist in the folder, except
   `principles.md`, `design.md`, `proposal.md`, `tasks.md` and `spec.md`, which name project
-  files.
+  files. Upper-case names such as `SKILL.md` and `CLAUDE.md` are never references.
 - Every `*.md` in the folder other than `SKILL.md` must be named by `SKILL.md`.
 - The foreign-command rule runs on references too.
 
