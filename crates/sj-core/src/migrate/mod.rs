@@ -945,6 +945,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         git(root, &["init", "-q"]);
+        // Git for Windows defaults to `core.autocrlf=true`, which would restore these LF files
+        // as CRLF, the way a checkout writes them. Line endings have their own test
+        // (`undo_restores_crlf_line_endings`).
+        git(root, &["config", "core.autocrlf", "false"]);
         std::fs::write(root.join("kept.txt"), "old\n").unwrap();
         std::fs::write(root.join("gone.txt"), "gone\n").unwrap();
         git(root, &["add", "."]);
