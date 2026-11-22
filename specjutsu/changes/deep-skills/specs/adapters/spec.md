@@ -8,7 +8,7 @@ Every adapter that installs the `sj-*` skills SHALL install each skill's referen
 - **THEN** `.claude/skills/sj-apply/task-reviewer-prompt.md` and `.agents/skills/sj-apply/task-reviewer-prompt.md` exist, each byte-identical to the shipped reference plus the generated marker, and a second `sj update` prints `adapters up to date`
 
 #### Scenario: ADAPT-046 A hand-edited reference is kept on update
-- **WHEN** a user edited `.claude/skills/sj-debug/root-cause-tracing.md` and runs `sj update`
+- **WHEN** a user edited `.claude/skills/sj-apply/task-reviewer-prompt.md` and runs `sj update`
 - **THEN** the file is unchanged and the output names it as modified, and `sj update --force` replaces it
 
 #### Scenario: ADAPT-047 A reference no longer shipped is removed
