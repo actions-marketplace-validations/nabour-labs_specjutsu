@@ -18,7 +18,7 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 
 - [x] 3.1 [P] Suggestion rule, pinning and clash lengthening in `sj ids prefixes` (IDS-008..010)
 - [x] 3.2 `sj ids prefixes --write` splices `[ids.prefixes]` (IDS-011)
-- [ ] 3.3 Long-prefix hint in `sj ids` (IDS-012)
+- [x] 3.3 Long-prefix hint in `sj ids` (IDS-012)
 
 ## 4. Migrate
 
