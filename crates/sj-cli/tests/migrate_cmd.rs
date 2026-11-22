@@ -536,3 +536,29 @@ fn mig_011_the_migration_commit_passes_the_gate() {
         .assert()
         .success();
 }
+
+/// MIG-012 (specjutsu/changes/brownfield-adoption): a capability without IDs gets the short
+/// prefix `sj ids prefixes` suggests, pinned in `specjutsu.toml` before IDs are assigned.
+#[test]
+fn mig_012_openspec_capabilities_get_short_prefixes() {
+    let repo = openspec_repo();
+    repo.write(
+        "openspec/specs/distribution/spec.md",
+        &SPEC.replace("# math Specification", "# distribution Specification"),
+    );
+    repo.commit("distribution capability");
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+    let config = sj_core::config::load(repo.path()).unwrap();
+    assert_eq!(
+        config.id_prefixes.get("distribution").map(String::as_str),
+        Some("DIST")
+    );
+    let spec = read(&repo, "openspec/specs/distribution/spec.md");
+    let first = spec
+        .lines()
+        .find(|l| l.starts_with("#### Scenario:"))
+        .unwrap();
+    assert_eq!(first, "#### Scenario: DIST-001 Adds two numbers");
+}
