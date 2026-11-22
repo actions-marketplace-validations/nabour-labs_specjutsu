@@ -60,7 +60,9 @@ sj task done sj-onboard-demo 1.1
 ```
 
 Explain: tasks close through `sj`, never by editing the checkbox, so the evidence is checked
-first.
+first. In real work, `sj-apply` hands each task to an implementer subagent and a fresh
+reviewer subagent, and closes it only after the reviewer approves; the demo does it all in
+one place to show the steps.
 
 ## 5. Verify
 
@@ -86,4 +88,4 @@ in `.specjutsu/ledger/` is not tracked and keeps the demo runs, which is harmles
 
 Tell the user where real work starts: `sj-explore` for a vague idea, `sj-propose` for an
 agreed one, `sj-apply` to implement, `sj-finish` to land it.
-<!-- specjutsu:generated d2feaf584cf8eb51 -->
+<!-- specjutsu:generated 11678135779c5477 -->

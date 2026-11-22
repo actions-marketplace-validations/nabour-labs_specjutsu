@@ -49,10 +49,19 @@ fn adapt_032_codex_and_gemini_share_one_skills_folder() {
     assert!(shared.contains(&"sj-apply".to_string()), "{shared:?}");
     assert_eq!(shared, claude);
     for name in &shared {
-        let files: Vec<_> = std::fs::read_dir(root.join(".agents/skills").join(name))
+        let mut files: Vec<String> = std::fs::read_dir(root.join(".agents/skills").join(name))
             .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(files.len(), 1, "{name}: one SKILL.md");
+        files.sort();
+        let mut want: Vec<String> = sj_adapters::claude::REFERENCES
+            .iter()
+            .filter(|(s, _, _)| s == name)
+            .map(|(_, f, _)| f.to_string())
+            .chain(["SKILL.md".to_string()])
+            .collect();
+        want.sort();
+        assert_eq!(files, want, "{name}: SKILL.md and its references only");
     }
     assert_eq!(
         std::fs::read(root.join(".agents/skills/sj-apply/SKILL.md")).unwrap(),

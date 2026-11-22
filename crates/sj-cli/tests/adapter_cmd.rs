@@ -144,12 +144,18 @@ fn adapt_003_update_is_idempotent() {
         .assert()
         .success()
         .stdout("adapters up to date\n");
-    // A removed skill comes back.
+    // A removed skill comes back, with its reference files.
     std::fs::remove_dir_all(dir.path().join(".claude/skills/sj-debug")).unwrap();
-    sj(dir.path(), &["update"])
-        .assert()
-        .success()
-        .stdout("created .claude/skills/sj-debug/SKILL.md\n");
+    let want: String = std::iter::once("SKILL.md")
+        .chain(
+            sj_adapters::claude::REFERENCES
+                .iter()
+                .filter(|(s, _, _)| *s == "sj-debug")
+                .map(|(_, f, _)| *f),
+        )
+        .map(|f| format!("created .claude/skills/sj-debug/{f}\n"))
+        .collect();
+    sj(dir.path(), &["update"]).assert().success().stdout(want);
 }
 
 #[test]

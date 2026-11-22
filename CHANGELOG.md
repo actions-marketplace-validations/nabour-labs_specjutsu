@@ -13,6 +13,19 @@ All notable changes are recorded here. The format follows
 - Homebrew: `brew install nabour-labs/tap/specjutsu`, updated by every release.
 - `cargo binstall specjutsu` downloads the release binary instead of compiling.
 - Releases build `aarch64-pc-windows-msvc`.
+- `sj-apply` sends every task to an implementer subagent and then to a fresh reviewer
+  subagent that works from the scenario, the diff and `sj verify`, not the implementer's
+  report. Fixes go to a fresh re-reviewer for at most 3 rounds; only the main agent runs
+  `sj task done`; a whole-change `sj-review` runs at the end.
+- Skills ship reference files next to `SKILL.md`: `sj-apply`'s implementer, task-reviewer
+  and re-review prompts and `writing-good-tests.md`; `sj-debug`'s
+  `root-cause-tracing.md`, `defense-in-depth.md` and `condition-based-waiting.md`. The
+  adapters install, update and remove them like `SKILL.md`.
+- `sj-debug` works in four phases and stops after 3 failed fixes to question the design.
+  `sj-verify` has a gate procedure and treats a subagent's report as a claim, not
+  evidence. Both, and `sj-apply`, list rationalizations and red flags.
+- `skills/COVERAGE.md` has a Depth column naming the file that carries each Superpowers
+  technique; the skill check fails when it's missing.
 
 ## [0.5.0] - 2026-11-21
 

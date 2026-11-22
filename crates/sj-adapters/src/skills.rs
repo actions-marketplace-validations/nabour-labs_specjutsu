@@ -26,6 +26,18 @@ pub const SKILLS: [&str; 10] = [
 /// Most bytes in a skill's body, after the frontmatter.
 pub const BODY_LIMIT: usize = 6000;
 
+/// Most bytes in one reference file next to a skill's `SKILL.md` (SKILL-010).
+pub const REF_LIMIT: usize = 8000;
+
+/// Project files a skill names that are not references in its folder.
+const PROJECT_FILES: [&str; 5] = [
+    "proposal.md",
+    "design.md",
+    "tasks.md",
+    "spec.md",
+    "principles.md",
+];
+
 /// Superpowers skills the set replaces (`writing-skills` and `using-superpowers` are left out).
 pub const SUPERPOWERS: [&str; 12] = [
     "brainstorming",
@@ -243,6 +255,219 @@ fn foreign(text: &str) -> Vec<String> {
     out
 }
 
+/// The bare lowercase `*.md` file names `text` mentions that are not project files: the
+/// reference files a skill expects in its folder.
+pub fn named_references(text: &str) -> Vec<String> {
+    static R: OnceLock<Regex> = OnceLock::new();
+    let r = R
+        .get_or_init(|| Regex::new(r"(?:^|[^A-Za-z0-9_./<>-])([a-z0-9][a-z0-9-]*\.md)\b").unwrap());
+    let mut out: Vec<String> = Vec::new();
+    for c in r.captures_iter(text) {
+        let f = c[1].to_string();
+        if !PROJECT_FILES.contains(&f.as_str()) && !out.contains(&f) {
+            out.push(f);
+        }
+    }
+    out
+}
+
+/// The reference files in a skill folder: every `*.md` other than `SKILL.md`, sorted.
+pub fn reference_files(skill_dir: &Path) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    if !skill_dir.is_dir() {
+        return Ok(out);
+    }
+    for e in std::fs::read_dir(skill_dir)
+        .with_context(|| format!("cannot read {}", skill_dir.display()))?
+    {
+        let e = e?;
+        let n = e.file_name().to_string_lossy().into_owned();
+        if n != "SKILL.md" && n.ends_with(".md") && e.file_type()?.is_file() {
+            out.push(n);
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// Reference rules (SKILL-010) and foreign commands in references (SKILL-002).
+fn check_references(dir: &Path, name: &str, text: &str, out: &mut Vec<Problem>) -> Result<()> {
+    let folder = dir.join(name);
+    let present = reference_files(&folder)?;
+    let named = named_references(text);
+    for f in &named {
+        if !present.contains(f) {
+            out.push(problem(name, format!("names missing reference {f}")));
+        }
+    }
+    for f in &present {
+        if !named.contains(f) {
+            out.push(problem(
+                name,
+                format!("reference {f} is not named in SKILL.md"),
+            ));
+        }
+        let path = folder.join(f);
+        let t = std::fs::read_to_string(&path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        if t.len() > REF_LIMIT {
+            out.push(problem(
+                name,
+                format!("reference {f} is {} bytes (limit {REF_LIMIT})", t.len()),
+            ));
+        }
+        for c in foreign(&t) {
+            out.push(problem(name, format!("{f} names a foreign command ({c})")));
+        }
+    }
+    Ok(())
+}
+
+/// Lower case with every run of whitespace collapsed to one space, so a phrase matches
+/// across line breaks.
+fn norm(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// Skills that carry `## Rationalizations` and `## Red flags` sections (SKILL-014).
+const DISCIPLINE: [&str; 3] = ["sj-apply", "sj-debug", "sj-verify"];
+
+/// Discipline sections, and the techniques sj-apply, sj-debug and sj-verify must name
+/// (SKILL-014..016).
+fn check_discipline(name: &str, text: &str, out: &mut Vec<Problem>) {
+    if !DISCIPLINE.contains(&name) {
+        return;
+    }
+    for section in ["Rationalizations", "Red flags"] {
+        let heading = format!("## {section}");
+        if !text.lines().any(|l| l.trim_end() == heading) {
+            out.push(problem(name, format!("has no {heading} section")));
+        }
+    }
+    let t = norm(text);
+    let named: &[&str] = match name {
+        "sj-apply" => &["writing-good-tests.md"],
+        "sj-debug" => &[
+            "root-cause-tracing.md",
+            "defense-in-depth.md",
+            "condition-based-waiting.md",
+        ],
+        _ => &[],
+    };
+    for f in named {
+        if !t.contains(f) {
+            out.push(problem(name, format!("does not name {f}")));
+        }
+    }
+    if name == "sj-debug" && !t.contains("3 failed fixes") {
+        out.push(problem(
+            name,
+            "does not question the design after 3 failed fixes",
+        ));
+    }
+    if name == "sj-verify" && !t.contains("a subagent's report is not evidence") {
+        out.push(problem(
+            name,
+            "does not say a subagent's report is not evidence",
+        ));
+    }
+}
+
+/// Whether `word` appears in `text` as a whole word, case-sensitive; `_` counts as part of a
+/// word, so `DONE` doesn't match inside `DONE_WITH_CONCERNS`.
+fn has_word(text: &str, word: &str) -> bool {
+    let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        let after = text[at + word.len()..].chars().next();
+        !before.is_some_and(is_word) && !after.is_some_and(is_word)
+    })
+}
+
+/// The sj-apply review loop and its prompts (SKILL-011..013).
+fn check_apply(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
+    const NAME: &str = "sj-apply";
+    let t = norm(text);
+    for f in [
+        "implementer-prompt.md",
+        "task-reviewer-prompt.md",
+        "re-review-prompt.md",
+    ] {
+        if !t.contains(f) {
+            out.push(problem(NAME, format!("does not name {f}")));
+        }
+    }
+    if !t.contains("fresh reviewer subagent") {
+        out.push(problem(
+            NAME,
+            "does not send each task to a fresh reviewer subagent",
+        ));
+    }
+    if !t.contains("3 rounds") {
+        out.push(problem(NAME, "does not limit the fix loop to 3 rounds"));
+    }
+    // Each prompt as written (for status tokens) and normalised (for phrases).
+    let read = |f: &str| -> Result<Option<(String, String)>> {
+        let p = dir.join(NAME).join(f);
+        if !p.is_file() {
+            return Ok(None);
+        }
+        let raw =
+            std::fs::read_to_string(&p).with_context(|| format!("cannot read {}", p.display()))?;
+        let n = norm(&raw);
+        Ok(Some((raw, n)))
+    };
+    if let Some((raw, r)) = read("task-reviewer-prompt.md")? {
+        const F: &str = "task-reviewer-prompt.md";
+        if !r.contains("sj verify") {
+            out.push(problem(NAME, format!("{F} does not name sj verify")));
+        }
+        if !r.contains("don't trust the implementer's report") {
+            out.push(problem(
+                NAME,
+                format!("{F} does not say to ignore the implementer's report"),
+            ));
+        }
+        let wants = [
+            ("the scenario text", r.contains("scenario text")),
+            ("git diff", r.contains("git diff")),
+            ("APPROVED", has_word(&raw, "APPROVED")),
+            ("CHANGES_REQUESTED", has_word(&raw, "CHANGES_REQUESTED")),
+            (
+                "fail without the change",
+                r.contains("fail without the change"),
+            ),
+        ];
+        for (label, ok) in wants {
+            if !ok {
+                out.push(problem(NAME, format!("{F} does not name {label}")));
+            }
+        }
+    }
+    if let Some((raw, i)) = read("implementer-prompt.md")? {
+        const F: &str = "implementer-prompt.md";
+        // The exception's wording is fixed by the change's design (decision 3).
+        if i.replace("never run `sj task done`", "")
+            .contains("sj task done")
+        {
+            out.push(problem(NAME, format!("{F} runs sj task done")));
+        }
+        let mut wants = vec![("sj test", i.contains("sj test"))];
+        for status in ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"] {
+            wants.push((status, has_word(&raw, status)));
+        }
+        for (label, ok) in wants {
+            if !ok {
+                out.push(problem(NAME, format!("{F} does not name {label}")));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     let file = dir.join(name).join("SKILL.md");
     if !file.is_file() {
@@ -276,6 +501,7 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
     for f in foreign(&text) {
         out.push(problem(name, format!("names a foreign command ({f})")));
     }
+    check_references(dir, name, &text, out)?;
     if let Some((_, cmds)) = REQUIRED.iter().find(|(s, _)| *s == name) {
         for c in *cmds {
             if !text.contains(c) {
@@ -283,6 +509,10 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
             }
         }
     }
+    if name == "sj-apply" {
+        check_apply(dir, &text, out)?;
+    }
+    check_discipline(name, &text, out);
     if name == "sj-onboard" {
         check_onboard(&text, out);
     }
@@ -331,6 +561,29 @@ fn check_coverage(dir: &Path, out: &mut Vec<Problem>) -> Result<()> {
                 "coverage",
                 format!("{tool} {item} maps to unknown skill {skill}"),
             ));
+        }
+        // Each Superpowers technique names the file that carries it (SKILL-017).
+        if tool == "Superpowers" {
+            match cells.get(3).copied().filter(|d| !d.is_empty()) {
+                None => out.push(problem("coverage", format!("{tool} {item} has no depth"))),
+                // A bare file name only: no `..`, no folder, no absolute path.
+                Some(d)
+                    if !matches!(
+                        Path::new(d).components().collect::<Vec<_>>().as_slice(),
+                        [std::path::Component::Normal(_)]
+                    ) =>
+                {
+                    out.push(problem(
+                        "coverage",
+                        format!("{tool} {item} depth {skill}/{d} is not in the skill folder"),
+                    ))
+                }
+                Some(d) if !dir.join(skill).join(d).is_file() => out.push(problem(
+                    "coverage",
+                    format!("{tool} {item} depth {skill}/{d} does not exist"),
+                )),
+                Some(_) => {}
+            }
         }
     }
     let lists: [(&str, &[&str]); 3] = [

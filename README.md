@@ -790,8 +790,8 @@ spec folders and logs:
 | `sj-propose` | write the proposal, delta specs, design and tasks | Superpowers writing-plans; OpenSpec propose, update; Spec Kit specify, plan, tasks, analyze |
 | `sj-clarify` | resolve `[NEEDS CLARIFICATION]` markers with the user | Spec Kit clarify |
 | `sj-principles` | create or amend `<spec_root>/principles.md` | Spec Kit constitution |
-| `sj-apply` | implement tasks test-first, in parallel where `[P]` allows | Superpowers TDD, executing-plans, subagent and parallel-agent skills; OpenSpec apply; Spec Kit implement |
-| `sj-debug` | reproduce a bug as a failing scenario test, then fix it | Superpowers systematic-debugging |
+| `sj-apply` | implement tasks test-first, each by an implementer subagent and checked by a fresh reviewer subagent, in parallel where `[P]` allows | Superpowers TDD, executing-plans, subagent and parallel-agent skills; OpenSpec apply; Spec Kit implement |
+| `sj-debug` | find a bug's root cause in four phases, capture it as a failing scenario test, then fix it | Superpowers systematic-debugging |
 | `sj-review` | review a diff against its scenarios and the principles | Superpowers code review; Spec Kit checklist |
 | `sj-verify` | check `sj verify` before calling anything done | Superpowers verification-before-completion |
 | `sj-finish` | verify, archive, and open the PR | Superpowers finishing-a-branch, git worktrees; OpenSpec archive, sync |
@@ -803,11 +803,31 @@ done` and `sj verify`, explaining each step first. It refuses to start on a dirt
 working tree or when `sj-onboard-demo` already exists. At the end it deletes the
 change, the demo test and the demo code without archiving, so `specs/` is unchanged.
 
+`sj-apply` runs every task as a loop. An implementer subagent gets the task's `sj next`
+output and does red, green and refactor. A fresh reviewer subagent, which never sees the
+implementer's report, checks the scenario, the diff and `sj verify`, and answers
+`APPROVED` or `CHANGES_REQUESTED`. Fixes go to a fresh re-reviewer, for at most 3 rounds
+before the user decides. Only the main agent runs `sj task done`, and the change ends
+with a whole-change `sj-review` in a fresh subagent.
+
+A skill keeps its `SKILL.md` short and loads the detail from reference files next to it
+only at the step that needs it:
+
+| Skill | Reference files |
+| --- | --- |
+| `sj-apply` | `implementer-prompt.md`, `task-reviewer-prompt.md`, `re-review-prompt.md`, `writing-good-tests.md` |
+| `sj-debug` | `root-cause-tracing.md`, `defense-in-depth.md`, `condition-based-waiting.md` |
+
+`sj-apply`, `sj-debug` and `sj-verify` also list the rationalizations that lead agents to
+skip a step, and the red flags that mean stop and go back.
+
 [skills/COVERAGE.md](skills/COVERAGE.md) maps every replaced skill and command to
-its skill. `cargo test` checks the skills: frontmatter whose description says when
-to use the skill, a body of at most 6,000 bytes, no commands from the tools they
-replace, the `sj` commands each workflow needs, and complete coverage. Agent
-adapters install the ten `sj-*` skills; the setup skill is fetched on its own.
+its skill and, for Superpowers, to the file that carries the technique. `cargo test`
+checks the skills: frontmatter whose description says when to use the skill, a body of
+at most 6,000 bytes, reference files of at most 8,000 bytes that `SKILL.md` names, no
+commands from the tools they replace, the `sj` commands each workflow needs, the review
+loop and discipline sections above, and complete coverage. Agent adapters install the
+ten `sj-*` skills with their reference files; the setup skill is fetched on its own.
 
 ## The Claude Code adapter
 
@@ -823,8 +843,8 @@ It writes three things and touches nothing else:
 - **A block in CLAUDE.md**, between `<!-- specjutsu:begin -->` and
   `<!-- specjutsu:end -->`, appended after your own content. It is under 1,200
   bytes.
-- **The ten skills**, under `.claude/skills/sj-*/SKILL.md`. Each ends with a
-  generated-hash line. `sj update` reports a skill you edited by hand
+- **The ten skills**, under `.claude/skills/sj-*/`: each `SKILL.md` and its reference
+  files. Each file ends with a generated-hash line. `sj update` reports a skill you edited by hand
   (`modified … (kept; sj update --force replaces it)`), keeps it, and exits 1.
 - **Two hooks** in `.claude/settings.json`, added after your existing ones. The
   file is edited as text, so your indentation, key order, permissions and other

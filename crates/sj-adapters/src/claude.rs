@@ -58,6 +58,45 @@ pub const SKILLS: [(&str, &str); 10] = [
     ),
 ];
 
+/// Reference files shipped next to a skill's `SKILL.md`, as (skill, file name, source text).
+pub const REFERENCES: [(&str, &str, &str); 7] = [
+    (
+        "sj-apply",
+        "implementer-prompt.md",
+        include_str!("../assets/skills/sj-apply/implementer-prompt.md"),
+    ),
+    (
+        "sj-apply",
+        "task-reviewer-prompt.md",
+        include_str!("../assets/skills/sj-apply/task-reviewer-prompt.md"),
+    ),
+    (
+        "sj-apply",
+        "re-review-prompt.md",
+        include_str!("../assets/skills/sj-apply/re-review-prompt.md"),
+    ),
+    (
+        "sj-apply",
+        "writing-good-tests.md",
+        include_str!("../assets/skills/sj-apply/writing-good-tests.md"),
+    ),
+    (
+        "sj-debug",
+        "root-cause-tracing.md",
+        include_str!("../assets/skills/sj-debug/root-cause-tracing.md"),
+    ),
+    (
+        "sj-debug",
+        "defense-in-depth.md",
+        include_str!("../assets/skills/sj-debug/defense-in-depth.md"),
+    ),
+    (
+        "sj-debug",
+        "condition-based-waiting.md",
+        include_str!("../assets/skills/sj-debug/condition-based-waiting.md"),
+    ),
+];
+
 const PRE_EDIT: &str = r#"{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "sj hook claude pre-edit"}]}"#;
 const SESSION_START: &str =
     r#"{"hooks": [{"type": "command", "command": "sj hook claude session-start"}]}"#;
@@ -513,12 +552,17 @@ pub fn plan(root: &Path, force: bool) -> Result<Vec<Step>> {
     Ok(out)
 }
 
-/// Every step that brings the `sj-*` skills in `skills` up to date: each skill written, or
-/// kept when it was edited by hand and not `force`, and each stale generated skill removed.
+/// Every step that brings the `sj-*` skills in `skills` up to date: each `SKILL.md` and
+/// reference file written, or kept when it was edited by hand and not `force`, and each
+/// stale generated file removed.
 pub fn skills_plan(root: &Path, skills: &Path, force: bool) -> Result<Vec<Step>> {
     let mut out = Vec::new();
-    for (name, source) in SKILLS {
-        let path = skills.join(name).join("SKILL.md");
+    let files = SKILLS
+        .iter()
+        .map(|(name, source)| (*name, "SKILL.md", *source))
+        .chain(REFERENCES);
+    for (name, file, source) in files {
+        let path = skills.join(name).join(file);
         let old = read_opt(&path)?;
         let new = generated(&lf(source));
         match old.as_deref() {
@@ -531,7 +575,29 @@ pub fn skills_plan(root: &Path, skills: &Path, force: bool) -> Result<Vec<Step>>
     Ok(out)
 }
 
-/// A removal step for each unedited generated `sj-*` skill that is not in [`SKILLS`].
+/// Whether `file` in the skill folder `name` is one this version ships.
+fn ships(name: &str, file: &str) -> bool {
+    (file == "SKILL.md" && SKILLS.iter().any(|(s, _)| *s == name))
+        || REFERENCES.iter().any(|(s, f, _)| *s == name && *f == file)
+}
+
+/// The `*.md` files in a folder, sorted; none when it can't be read.
+fn md_files(dir: &Path) -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".md"))
+        .collect();
+    out.sort();
+    out
+}
+
+/// A removal step for each unedited generated file in an `sj-*` folder that this version
+/// doesn't ship: a whole skill no longer in [`SKILLS`], or a reference no longer in
+/// [`REFERENCES`].
 fn stale_skills(root: &Path, skills: &Path) -> Result<Vec<Step>> {
     let Ok(entries) = std::fs::read_dir(skills) else {
         return Ok(Vec::new());
@@ -540,14 +606,16 @@ fn stale_skills(root: &Path, skills: &Path) -> Result<Vec<Step>> {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with("sj-") && !SKILLS.iter().any(|(s, _)| s == n))
+        .filter(|n| n.starts_with("sj-"))
         .collect();
     names.sort();
     let mut out = Vec::new();
     for n in names {
-        let p = skills.join(&n).join("SKILL.md");
-        if read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
-            out.push(Step::delete(p, root));
+        for f in md_files(&skills.join(&n)) {
+            let p = skills.join(&n).join(&f);
+            if !ships(&n, &f) && read_opt(&p)?.is_some_and(|t| is_unmodified(&t)) {
+                out.push(Step::delete(p, root));
+            }
         }
     }
     Ok(out)
@@ -605,22 +673,34 @@ pub fn remove(root: &Path) -> Result<Vec<Change>> {
     Ok(out)
 }
 
-/// Delete the unmodified `sj-*` skills in `skills`, reporting hand-edited ones as kept, and
-/// `skills` itself when that leaves it empty.
+/// Delete the unmodified `sj-*` skills in `skills`, their reference files and any generated
+/// file an older version left, reporting hand-edited ones as kept, and `skills` itself when
+/// that leaves it empty.
 pub fn skills_remove(root: &Path, skills: &Path) -> Result<Vec<Change>> {
     let mut out = Vec::new();
     for (name, _) in SKILLS {
         let dir = skills.join(name);
-        let p = dir.join("SKILL.md");
-        match read_opt(&p)? {
-            Some(t) if is_unmodified(&t) => {
-                std::fs::remove_file(&p)?;
-                remove_if_empty(&dir);
-                out.push(Change::Removed(rel(&p, root)));
+        let refs = REFERENCES
+            .iter()
+            .filter(|(s, _, _)| *s == name)
+            .map(|(_, f, _)| *f);
+        for file in refs.chain(["SKILL.md"]) {
+            let p = dir.join(file);
+            match read_opt(&p)? {
+                Some(t) if is_unmodified(&t) => {
+                    std::fs::remove_file(&p)?;
+                    out.push(Change::Removed(rel(&p, root)));
+                }
+                Some(_) => out.push(Change::Kept(rel(&p, root))),
+                None => {}
             }
-            Some(_) => out.push(Change::Kept(rel(&p, root))),
-            None => {}
         }
+    }
+    // Generated files an older version shipped and this one doesn't, in any `sj-*` folder.
+    // Files without our marker, or edited since, are the user's and stay without comment.
+    out.extend(apply(stale_skills(root, skills)?)?);
+    for (name, _) in SKILLS {
+        remove_if_empty(&skills.join(name));
     }
     remove_if_empty(skills);
     Ok(out)

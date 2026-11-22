@@ -60,7 +60,9 @@ sj task done sj-onboard-demo 1.1
 ```
 
 Explain: tasks close through `sj`, never by editing the checkbox, so the evidence is checked
-first.
+first. In real work, `sj-apply` hands each task to an implementer subagent and a fresh
+reviewer subagent, and closes it only after the reviewer approves; the demo does it all in
+one place to show the steps.
 
 ## 5. Verify
 
