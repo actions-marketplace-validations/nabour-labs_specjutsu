@@ -20,9 +20,10 @@ When `<spec_root>/trace-baseline.txt` exists, `sj trace` SHALL print one line on
 - **THEN** it prints no gap or orphan line and exits 0
 
 ### Requirement: Stale baseline entries are reported
-A baseline entry that is no longer a gap or orphan SHALL be reported as `stale <entry> (remove from trace-baseline.txt)`, and `sj trace --strict` SHALL exit 1 when there is one. `sj trace --write-baseline` drops stale entries.
+A baseline entry that is no longer a gap or orphan SHALL be reported as `stale <entry> (remove from trace-baseline.txt)`, and `sj trace --strict` SHALL exit 1 when there is one. `--json` SHALL list them in a `stale` array, as their baseline lines. `sj trace --write-baseline` drops stale entries.
 
 #### Scenario: TRACE-020 A gap that gained a test is stale
 - **WHEN** the baseline lists `gap AUTH-002`, a test now names AUTH-002, and `sj trace --strict` runs
 - **THEN** it prints `stale gap AUTH-002 (remove from trace-baseline.txt)` and exits 1
+- **AND** with `--json` the `stale` array is exactly `["gap AUTH-002"]`
 - **AND** after `sj trace --write-baseline` the baseline no longer lists AUTH-002
