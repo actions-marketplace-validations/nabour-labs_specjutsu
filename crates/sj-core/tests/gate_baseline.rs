@@ -79,3 +79,42 @@ fn gate_051_baselined_orphan_does_not_fail_the_gate() {
         r.failures
     );
 }
+
+const AUTH_SPEC: &str = "## Requirements\n\n### Requirement: Login\nThe system SHALL log in.\n\n\
+                         #### Scenario: AUTH-001 Logs in\n- **WHEN** credentials match\n- **THEN** a session starts\n\n\
+                         #### Scenario: AUTH-002 Remembers\n- **WHEN** asked to remember\n- **THEN** the session lasts\n";
+
+/// Base: AUTH-001 and AUTH-002 untested, with `gap AUTH-002` in the baseline.
+fn base_with_baselined_auth_002() -> Repo {
+    let repo = Repo::with_lib("pub fn add(a: i32, b: i32) -> i32 { a + b }\n");
+    repo.write("openspec/specs/auth/spec.md", AUTH_SPEC);
+    repo.write("openspec/trace-baseline.txt", "gap AUTH-002\n");
+    repo.commit("base with baselined gap");
+    repo
+}
+
+#[test]
+fn gate_055_a_stale_baseline_entry_only_warns() {
+    let repo = base_with_baselined_auth_002();
+    repo.branch("feature");
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_002_remembers() { assert_eq!(demo::add(2, 2), 4); }\n",
+    );
+    repo.commit("test: AUTH-002");
+
+    let r = run(&opts(&repo)).unwrap();
+    assert!(
+        !r.failures
+            .iter()
+            .any(|f| f.contains("baseline") || f.contains("stale")),
+        "{:?}",
+        r.failures
+    );
+    assert!(
+        r.warnings.iter().any(|w| w == "stale gap AUTH-002"),
+        "{:?} / failures {:?}",
+        r.warnings,
+        r.failures
+    );
+}
