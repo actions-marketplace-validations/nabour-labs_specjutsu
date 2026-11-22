@@ -289,6 +289,19 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Bytes the agent-loop commands printed against the raw output they replaced.
+    Gain {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        json: bool,
+        /// Count only records at or after this RFC 3339 time, e.g. 2026-11-22T11:00:00Z.
+        #[arg(long, value_parser = parse_rfc3339)]
+        since: Option<chrono::DateTime<chrono::FixedOffset>>,
+        /// Delete the records and print how many were removed.
+        #[arg(long, conflicts_with_all = ["since", "json"])]
+        reset: bool,
+    },
     /// Print a shell completion script to stdout, e.g. `sj completions zsh > ~/.zfunc/_sj`.
     Completions {
         #[arg(value_enum)]
@@ -700,6 +713,23 @@ fn run() -> Result<ExitCode> {
         Command::Ledger { id, root, json } => {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
+        }
+        Command::Gain {
+            root,
+            json,
+            since,
+            reset,
+        } => {
+            sj_core::config::load(&root)?;
+            if reset {
+                let n = sj_core::gain::reset(&root)?;
+                println!(
+                    "removed {n} gain {}",
+                    if n == 1 { "record" } else { "records" }
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
+            gain_cmd(&root, json, since)
         }
         Command::Audit {
             base,
@@ -1325,26 +1355,35 @@ fn test_cmd(
 ) -> Result<ExitCode> {
     use sj_core::ledger::{self, Recorded};
     use sj_core::run::{run_tests, Scope};
+    use std::fmt::Write as _;
 
     let run = run_tests(&root, &spec_root, &Scope::parse(scope.as_deref()))?;
-    if !no_ledger {
-        match ledger::record(&root, &run) {
-            Ok(Recorded::Records(_)) => {}
-            Ok(Recorded::NotGit) => eprintln!("warn    not a git repository; run not recorded"),
-            Err(e) => eprintln!("warn    run not recorded: {e:#}"),
-        }
-    }
+    // The ledger's answer settles "in a git repository" for the gain record too.
+    let record_gain = !no_ledger
+        && match ledger::record(&root, &run) {
+            Ok(Recorded::Records(_)) => true,
+            Ok(Recorded::NotGit) => {
+                eprintln!("warn    not a git repository; run not recorded");
+                false
+            }
+            Err(e) => {
+                eprintln!("warn    run not recorded: {e:#}");
+                true
+            }
+        };
+    // Built in full first so the bytes printed can be counted for the gain record.
+    let mut out = String::new();
     if json {
-        println!("{}", serde_json::to_string_pretty(&run)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&run)?)?;
     } else if run.build_failed {
         if run.suites.len() > 1 {
             let names: Vec<&str> = run.suites.iter().map(|s| s.name.as_str()).collect();
-            println!("test: fail — build failed ({})", names.join(", "));
+            writeln!(out, "test: fail — build failed ({})", names.join(", "))?;
         } else {
-            println!("test: fail — build failed");
+            writeln!(out, "test: fail — build failed")?;
         }
         for l in &run.build_errors {
-            println!("        {l}");
+            writeln!(out, "        {l}")?;
         }
     } else {
         let mut counts = Vec::new();
@@ -1367,38 +1406,55 @@ fn test_cmd(
         } else {
             String::new()
         };
-        println!("test: {verdict} — {}{suffix}", counts.join(", "));
+        writeln!(out, "test: {verdict} — {}{suffix}", counts.join(", "))?;
         for t in run
             .tests
             .iter()
             .filter(|t| t.result == sj_core::run::Outcome::Failed)
         {
             if t.ids.is_empty() {
-                println!("fail    {}", t.path);
+                writeln!(out, "fail    {}", t.path)?;
             } else {
-                println!("fail    {}  {}", t.path, t.ids.join(", "));
+                writeln!(out, "fail    {}  {}", t.path, t.ids.join(", "))?;
             }
             if let Some(ex) = &t.excerpt {
                 for l in &ex.lines {
-                    println!("        {l}");
+                    writeln!(out, "        {l}")?;
                 }
                 if ex.omitted > 0 {
-                    println!("        … {} more", plural(ex.omitted, "line"));
+                    writeln!(out, "        … {} more", plural(ex.omitted, "line"))?;
                 }
             }
         }
         for s in run.suites.iter().filter(|s| !s.build_errors.is_empty()) {
-            println!("build failed ({})", s.name);
+            writeln!(out, "build failed ({})", s.name)?;
             for l in &s.build_errors {
-                println!("        {l}");
+                writeln!(out, "        {l}")?;
             }
         }
     }
+    print_and_record_gain(&root, record_gain, "test", &out, run.raw_bytes);
     Ok(if run.pass {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
     })
+}
+
+/// Print `out` to stdout as is, then, if `record`, record its length against `raw` in the gain
+/// records (`sj_core::gain::enabled` decides `record` for commands without a ledger). A record
+/// that can't be written warns on stderr and the command carries on.
+fn print_and_record_gain(root: &Path, record: bool, command: &str, out: &str, raw: u64) {
+    use std::io::Write as _;
+    print!("{out}");
+    let _ = std::io::stdout().flush();
+    if !record {
+        return;
+    }
+    let r = sj_core::gain::Record::now(command, out.len() as u64, raw);
+    if let Err(e) = sj_core::gain::append(root, &r) {
+        eprintln!("warn    gain not recorded: {e:#}");
+    }
 }
 
 fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode> {
@@ -1429,6 +1485,94 @@ fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode>
             let tag = if s.proven { "proven" } else { "open" };
             println!("{tag:<8}{}  latest {}", s.id, s.latest.as_str());
         }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn parse_rfc3339(s: &str) -> Result<chrono::DateTime<chrono::FixedOffset>, String> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .map_err(|e| format!("not an RFC 3339 time, e.g. 2026-11-22T11:00:00Z ({e})"))
+}
+
+fn gain_cmd(
+    root: &Path,
+    json: bool,
+    since: Option<chrono::DateTime<chrono::FixedOffset>>,
+) -> Result<ExitCode> {
+    let mut loaded = sj_core::gain::load(root)?;
+    if let Some(t) = since {
+        loaded = sj_core::gain::since(loaded, t);
+    }
+    if loaded.skipped > 0 {
+        eprintln!(
+            "warn    skipped {} unreadable gain {}",
+            loaded.skipped,
+            if loaded.skipped == 1 {
+                "record"
+            } else {
+                "records"
+            }
+        );
+    }
+    let summary = sj_core::gain::summarize(&loaded.records);
+    if json {
+        let totals = |t: &sj_core::gain::Totals| {
+            serde_json::json!({
+                "runs": t.runs,
+                "printed": t.printed,
+                "raw": t.raw,
+                "saved_pct": t.saved_percent(),
+            })
+        };
+        let commands: Vec<serde_json::Value> = summary
+            .commands
+            .iter()
+            .map(|(c, t)| {
+                let mut v = totals(t);
+                v["command"] = c.as_str().into();
+                v
+            })
+            .collect();
+        let mut total = totals(&summary.total);
+        total["tokens_saved"] = summary.total.tokens_saved().into();
+        let report = serde_json::json!({
+            "commands": commands,
+            "total": total,
+            "skipped": loaded.skipped,
+        });
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(ExitCode::SUCCESS);
+    }
+    if loaded.records.is_empty() {
+        println!("no gain records yet");
+        return Ok(ExitCode::SUCCESS);
+    }
+    let rows: Vec<(&str, &sj_core::gain::Totals)> = summary
+        .commands
+        .iter()
+        .map(|(c, t)| (c.as_str(), t))
+        .chain([("total", &summary.total)])
+        .collect();
+    let width = |f: fn(&sj_core::gain::Totals) -> String| {
+        rows.iter().map(|(_, t)| f(t).len()).max().unwrap_or(0)
+    };
+    let name_w = rows.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
+    let runs_w = width(|t| t.runs.to_string());
+    let printed_w = width(|t| t.printed.to_string());
+    let raw_w = width(|t| t.raw.to_string());
+    let pct_w = width(|t| format!("{}%", t.saved_percent()));
+    for (i, (name, t)) in rows.iter().enumerate() {
+        let mut line = format!(
+            "{name:<name_w$}  {:>runs_w$}  {:>printed_w$}  {:>raw_w$}  {:>pct_w$}",
+            t.runs,
+            t.printed,
+            t.raw,
+            format!("{}%", t.saved_percent()),
+        );
+        if i == rows.len() - 1 {
+            line.push_str(&format!("  ~{} tokens saved", t.tokens_saved()));
+        }
+        println!("{line}");
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -1785,19 +1929,29 @@ fn templates_cmd(args: &SpecArgs, json: bool) -> Result<ExitCode> {
 
 fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {
     use sj_core::agent_loop::status;
+    use std::fmt::Write as _;
     let (root, spec_root) = spec_paths(args)?;
-    let rows = status::status(&root, &spec_root, change.as_deref())?;
+    let changes = status::changes(&spec_root, change.as_deref())?;
+    let rows = status::status_of_changes(&root, &changes)?;
+    // Built in full first so the bytes printed can be counted against the change folders read.
+    let mut out = String::new();
     if json {
-        println!("{}", serde_json::to_string_pretty(&rows)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&rows)?)?;
     } else if rows.is_empty() {
-        println!("no open changes");
+        writeln!(out, "no open changes")?;
     } else {
         for r in &rows {
             for l in status::render(r) {
-                println!("{l}");
+                writeln!(out, "{l}")?;
             }
         }
     }
+    let raw = changes
+        .iter()
+        .map(|c| sj_core::gain::dir_bytes(&c.dir))
+        .sum();
+    let record = sj_core::gain::enabled(&root, false);
+    print_and_record_gain(&root, record, "status", &out, raw);
     Ok(ExitCode::SUCCESS)
 }
 
@@ -1809,34 +1963,57 @@ fn next_cmd(
     json: bool,
 ) -> Result<ExitCode> {
     use sj_core::agent_loop::next;
+    use std::fmt::Write as _;
     let (root, spec_root) = spec_paths(args)?;
-    if parallel {
-        let Some(name) = next::parallel_change(&spec_root, change.as_deref())? else {
-            println!("next: no open tasks");
-            return Ok(ExitCode::SUCCESS);
-        };
-        let batches = next::parallel(&root, &spec_root, &name)?;
-        if json {
-            let v = serde_json::json!({ "change": name, "batches": batches });
-            println!("{}", serde_json::to_string_pretty(&v)?);
-        } else if batches.is_empty() {
-            println!("next: no parallel tasks");
-        } else {
-            for (i, b) in batches.iter().enumerate() {
-                println!("batch {}", i + 1);
-                for t in b {
-                    println!("  {t}");
+    // Built in full first so the bytes printed can be counted against the change folder read.
+    let mut out = String::new();
+    let name = if parallel {
+        match next::parallel_change(&spec_root, change.as_deref())? {
+            None => {
+                writeln!(out, "next: no open tasks")?;
+                None
+            }
+            Some(name) => {
+                let batches = next::parallel(&root, &spec_root, &name)?;
+                if json {
+                    let v = serde_json::json!({ "change": name, "batches": batches });
+                    writeln!(out, "{}", serde_json::to_string_pretty(&v)?)?;
+                } else if batches.is_empty() {
+                    writeln!(out, "next: no parallel tasks")?;
+                } else {
+                    for (i, b) in batches.iter().enumerate() {
+                        writeln!(out, "batch {}", i + 1)?;
+                        for t in b {
+                            writeln!(out, "  {t}")?;
+                        }
+                    }
                 }
+                Some(name)
             }
         }
-        return Ok(ExitCode::SUCCESS);
-    }
-    match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
-        None if json => println!("null"),
-        None => println!("next: no open tasks"),
-        Some(n) if json => println!("{}", serde_json::to_string_pretty(&n)?),
-        Some(n) => print!("{}", next::render(&n)),
-    }
+    } else {
+        match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
+            None => {
+                writeln!(out, "{}", if json { "null" } else { "next: no open tasks" })?;
+                None
+            }
+            Some(n) => {
+                if json {
+                    writeln!(out, "{}", serde_json::to_string_pretty(&n)?)?;
+                } else {
+                    out.push_str(&next::render(&n));
+                }
+                Some(n.change)
+            }
+        }
+    };
+    // Raw is the change folder reported on; with no open task none was, so 0. A failed
+    // lookup also counts 0, so recording never changes the output or the exit code.
+    let raw = name
+        .and_then(|name| sj_core::authoring::find_change(&spec_root, &name).ok())
+        .map_or(0, |c| sj_core::gain::dir_bytes(&c.dir));
+    let record = sj_core::gain::enabled(&root, false);
+    print_and_record_gain(&root, record, "next", &out, raw);
     Ok(ExitCode::SUCCESS)
 }
 
@@ -1847,6 +2024,7 @@ fn verify_cmd(
     json: bool,
 ) -> Result<ExitCode> {
     use sj_core::agent_loop::verify;
+    use std::fmt::Write as _;
     let spec_root = spec_root_for(&args.root, args.spec_root.clone())?;
     let r = verify::verify(&verify::Options {
         root: args.root.clone(),
@@ -1857,16 +2035,20 @@ fn verify_cmd(
     for w in &r.warnings {
         eprintln!("warn    {w}");
     }
+    // Built in full first so the bytes printed can be counted for the gain record.
+    let mut out = String::new();
     if json {
-        println!("{}", serde_json::to_string_pretty(&r)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&r)?)?;
     } else if r.ok {
-        println!("verify: ok");
+        writeln!(out, "verify: ok")?;
     } else {
-        println!("verify: {}", plural(r.problems.len(), "problem"));
+        writeln!(out, "verify: {}", plural(r.problems.len(), "problem"))?;
         for p in &r.problems {
-            println!("{}", p.message);
+            writeln!(out, "{}", p.message)?;
         }
     }
+    // `verify` has already refused to run outside a git repository.
+    print_and_record_gain(&args.root, true, "verify", &out, r.raw_bytes);
     Ok(if r.ok {
         ExitCode::SUCCESS
     } else {

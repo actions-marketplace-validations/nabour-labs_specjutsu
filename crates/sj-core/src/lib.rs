@@ -9,6 +9,7 @@ pub mod config;
 pub mod context;
 pub mod doctor;
 pub mod drift;
+pub mod gain;
 pub mod gate;
 pub mod git;
 pub mod hook;

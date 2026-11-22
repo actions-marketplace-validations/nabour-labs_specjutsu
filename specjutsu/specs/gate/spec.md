@@ -263,3 +263,38 @@ The gate SHALL read base scenarios from the base commit's own spec root: the `sp
 #### Scenario: GATE-044 Moving openspec/ to specjutsu/ changes no scenario
 - **WHEN** base has `openspec/specs/math/spec.md` with MATH-001 and its passing test, and the change only runs `git mv openspec specjutsu`
 - **THEN** `sj gate --base main` prints `gate: pass — no changed scenarios to prove` and exits 0
+
+### Requirement: Base and head read an open change's scenarios the same way
+When `specs/` and an open change both hold a scenario, `sj gate` SHALL take its text from the open change on base and at head alike, reading `specs/` first and then the open changes by name.
+
+#### Scenario: GATE-045 A merged, unarchived change is not modified again
+- **WHEN** base holds AUTH-001 in `specs/` and an open change that MODIFIES its text, with the code and test merged, and the pull request leaves AUTH-001 alone
+- **THEN** AUTH-001 is unchanged and the gate passes, while a pull request that adds an open change modifying AUTH-001 still classifies it modified
+
+### Requirement: Project and agent configuration is not source
+The gate's built-in rule SHALL treat `specjutsu.toml` at the repository root, and every file
+under a root `.claude/`, `.agents/`, `.agent/`, `.codex/`, `.cursor/`, `.gemini/`, `.kiro/`,
+`.windsurf/` or `.clinerules/` folder, as non-source, the same as `.github/`.
+
+#### Scenario: GATE-048 Agent and project config changes need no scenario
+- **WHEN** a change edits only `specjutsu.toml`, `.claude/settings.json`, `.agents/hooks.json` and `.cursor/hooks.json`
+- **THEN** the gate passes with `gate: pass — no changed scenarios to prove`
+
+#### Scenario: GATE-049 [keep] A nested config-named folder is still source
+- **WHEN** a change edits `src/.claude/tool.rs` with no scenario or exemption
+- **THEN** the gate fails with `unspecified change: src/.claude/tool.rs`
+
+### Requirement: A base suite that writes no report is an environment error
+When a non-Cargo suite's base run writes no parsable report, the gate SHALL treat it as an
+environment error, not red: it SHALL name the package and runner, print the runner's last 20
+output lines, suggest declaring `setup` or `red_on_base = "skip"`, and exit 2.
+
+#### Scenario: GATE-046 A base run without installed dependencies exits 2
+- **WHEN** the vitest suite of `apps/api` declares no `setup`, AUTH-004's test passes on base's
+  `auth.ts`, and the base run fails with `Cannot find module 'vitest'` and writes no report
+- **THEN** the gate prints `apps/api:vitest`, `Cannot find module 'vitest'` and a hint to declare `setup` on stderr
+- **AND** exits 2 instead of recording AUTH-004 `red:compile`
+
+#### Scenario: GATE-047 [keep] A base report with a failed test file is still red:compile
+- **WHEN** the vitest suite of `apps/api` declares no `setup`, its base run writes a report whose only entry is a failed `src/auth.test.ts` file, and AUTH-004's test passes at head
+- **THEN** AUTH-004 is recorded `red:compile` and the gate passes

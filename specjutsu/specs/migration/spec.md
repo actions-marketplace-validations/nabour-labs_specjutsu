@@ -61,3 +61,13 @@ Besides the Claude adapter, the migration SHALL install every adapter `sj init -
 #### Scenario: MIG-010 Detected agents get their adapters
 - **WHEN** a project has `AGENTS.md` and `.cursor/` but no `.claude/`, and `sj migrate --from openspec --write` runs
 - **THEN** the preview lists `change AGENTS.md (adapter)` and the Cursor hook file with `(adapter)`, and afterwards `AGENTS.md` holds the specjutsu block, the Cursor pre-edit hook is installed, and the Claude adapter is installed
+
+### Requirement: A migration commit passes the gate
+`sj migrate --write` SHALL add `.specjutsu/ledger/` to `.gitignore` as `sj adopt` does, its
+preview SHALL list `change .gitignore (ignore the ledger)`, or `create .gitignore (ignore the
+ledger)` when there is none, whenever it will, and the commit of its changes SHALL pass
+`sj gate` without an exemption.
+
+#### Scenario: MIG-011 The migration commit passes the gate
+- **WHEN** an OpenSpec project with a root `pnpm-lock.yaml`, a vitest package, `.claude/settings.json` and a `.gitignore` without the ledger runs `sj migrate --from openspec --write`, and the result is committed
+- **THEN** the preview listed `change .gitignore (ignore the ledger)`, `.gitignore` holds `.specjutsu/ledger/`, the vitest suite has `setup = "pnpm install --frozen-lockfile"`, and `sj gate --base <the commit before>` exits 0

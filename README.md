@@ -192,6 +192,7 @@ sj gate --base origin/main   # CI: changed scenarios tested, red on base, green 
 sj test             # run the tests; print failures only; record the run
 sj test GATE-004    # run only the tests mapped to one scenario (or pass a package name)
 sj ledger           # per scenario: latest result, red-before-green proven or not
+sj gain             # bytes sj printed vs the raw output it replaced, per command
 sj init             # new project: write specjutsu.toml, create specjutsu/specs and changes
 sj adopt --dry-run  # existing project: detect packages and runners, print the config
 sj doctor           # check the config, runner executables and spec folders
@@ -918,6 +919,38 @@ takes `--json`, except `sj task done`.
 `sj next` and `sj verify` compare against `--base`, or else the first of
 `origin/HEAD`, `origin/main`, `origin/master`, `main` and `master` that exists.
 
+### Gain: bytes saved
+
+`sj test`, `sj verify`, `sj next` and `sj status` each append one record per run
+to `.specjutsu/ledger/gain.jsonl` (gitignored with the ledger): the bytes the
+command printed and the bytes of the raw material it stands in for. For `sj test`
+and `sj verify` that is the runners' combined stdout and stderr; for `sj next`,
+every file in the change folder it reported on; for `sj status`, every file in
+the open change folders it reported on (or the named one). Nothing is recorded
+with `sj test --no-ledger` or outside a git repository, and recording never
+changes a command's output or exit code.
+
+`sj gain` totals the records, one line per command, then a total:
+
+```
+test   2   500  50000  99%
+next   1  1000   4000  75%
+total  3  1500  54000  97%  ~13125 tokens saved
+```
+
+The columns are runs, printed bytes, raw bytes and percent saved (rounded down).
+Tokens are estimated as (raw − printed) / 4, and printed > raw shows 0% and ~0
+tokens saved; specjutsu never calls a model. The numbers are bytes, a proxy, not
+a benchmark. Unreadable lines are skipped with a warning on stderr, and with no
+records it prints `no gain records yet`. `--json` reports the skipped lines as
+`skipped`, and with no records prints empty `commands` and zero totals instead.
+
+```bash
+sj gain --json                          # {"commands": [...], "total": {...}, "skipped": 0}
+sj gain --since 2026-11-22T09:00:00Z    # only records at or after a time: one session
+sj gain --reset                         # delete the records: removed N gain records
+```
+
 ## Skills
 
 `skills/` holds ten agent skills that cover spec-driven work from idea to merge,
@@ -1261,7 +1294,7 @@ the deleted files goes even if it existed, empty, before the migration.
 | v0.3 | vitest, Jest, Playwright, pytest and JUnit suites; `specjutsu.toml`; `sj ids`, `sj spec`, `status`, `next`, `verify`; Claude Code adapter and skills; Spec Kit import; `sj migrate` |
 | v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
 | v0.5 | Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills; bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; `specjutsu/` as the default spec root |
-| v0.6 (beta) | One-line installers, Homebrew and `cargo binstall`; public token benchmark against the tools specjutsu replaces; beta launch |
+| v0.6 (beta) | One-line installers, Homebrew and `cargo binstall`; public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); beta launch |
 | v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing

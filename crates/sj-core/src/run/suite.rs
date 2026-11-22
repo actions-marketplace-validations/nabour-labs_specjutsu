@@ -558,6 +558,8 @@ pub struct SuiteResult {
     pub no_report: bool,
     /// The last lines of the runner's output, when there is no report.
     pub build_errors: Vec<String>,
+    /// Combined stdout and stderr bytes of the runner process.
+    pub output_bytes: u64,
     /// The runner exited 0.
     pub exit_ok: bool,
 }
@@ -608,6 +610,7 @@ pub fn run_suite(
 
     let mut result = SuiteResult {
         exit_ok: out.status.success(),
+        output_bytes: (out.stdout.len() + out.stderr.len()) as u64,
         ..SuiteResult::default()
     };
     let cases = std::fs::read_to_string(&report)

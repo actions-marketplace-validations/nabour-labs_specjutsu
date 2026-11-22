@@ -104,18 +104,23 @@ pub fn append(root: &Path, records: &[Record]) -> Result<()> {
     if records.is_empty() {
         return Ok(());
     }
-    let p = path(root);
-    std::fs::create_dir_all(p.parent().unwrap())
-        .with_context(|| format!("creating {}", p.parent().unwrap().display()))?;
     let mut buf = String::new();
     for r in records {
         buf.push_str(&serde_json::to_string(r)?);
         buf.push('\n');
     }
+    append_lines(&path(root), &buf)
+}
+
+/// Append `buf` (whole JSON lines) to the file at `p` with a single write, creating its folder.
+/// Shared by the evidence ledger and the gain records.
+pub(crate) fn append_lines(p: &Path, buf: &str) -> Result<()> {
+    std::fs::create_dir_all(p.parent().unwrap())
+        .with_context(|| format!("creating {}", p.parent().unwrap().display()))?;
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&p)
+        .open(p)
         .with_context(|| format!("opening {}", p.display()))?;
     f.write_all(buf.as_bytes())
         .with_context(|| format!("writing {}", p.display()))
@@ -129,20 +134,30 @@ pub struct Loaded {
 }
 
 pub fn load(root: &Path) -> Result<Loaded> {
-    let p = path(root);
-    let text = match std::fs::read_to_string(&p) {
+    let (records, skipped) = load_lines(&path(root), |r: &Record| r.v == FORMAT)?;
+    Ok(Loaded { records, skipped })
+}
+
+/// Read a JSON Lines file: the records that parse and pass `keep`, in file order, and the
+/// number of non-blank lines that don't. A missing file is empty.
+pub(crate) fn load_lines<T: serde::de::DeserializeOwned>(
+    p: &Path,
+    keep: impl Fn(&T) -> bool,
+) -> Result<(Vec<T>, usize)> {
+    let text = match std::fs::read_to_string(p) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Loaded::default()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
         Err(e) => return Err(e).with_context(|| format!("reading {}", p.display())),
     };
-    let mut out = Loaded::default();
+    let mut records = Vec::new();
+    let mut skipped = 0;
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        match serde_json::from_str::<Record>(line) {
-            Ok(r) if r.v == FORMAT => out.records.push(r),
-            _ => out.skipped += 1,
+        match serde_json::from_str::<T>(line) {
+            Ok(r) if keep(&r) => records.push(r),
+            _ => skipped += 1,
         }
     }
-    Ok(out)
+    Ok((records, skipped))
 }
 
 /// What `record` did.

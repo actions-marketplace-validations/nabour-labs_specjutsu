@@ -156,7 +156,7 @@
           <tr><td><code>sj spec show</code>, <code>sj view</code>, <code>sj instructions</code>, <code>sj templates</code></td><td><span class="badge live">v0.4.0</span></td><td>Read specs and changes in the terminal; next-step instructions for agents.</td></tr>
           <tr><td>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared and global skills</td><td><span class="badge live">v0.5.0</span></td><td>A pre-edit hook in each; <code>.agents/skills/</code> beside <code>.claude/skills/</code>; <code>--global</code> installs the skills for every project.</td></tr>
           <tr><td>Trace baseline, <code>sj ids prefixes</code>, <code>sj migrate --diff</code> and <code>--undo</code></td><td><span class="badge next">unreleased</span></td><td>Gradual adoption: old gaps and orphans counted, not listed; short ID prefixes; a migration you can read and roll back.</td></tr>
-          <tr><td>Token benchmark</td><td><span class="badge plan">v0.6</span></td><td>Public comparison against the tools specjutsu replaces.</td></tr>
+          <tr><td>Token benchmark</td><td><span class="badge plan">v0.6</span></td><td>Public comparison against the tools specjutsu replaces. <code>sj gain</code> is its local half: byte counts on your machine.</td></tr>
         </tbody>
       </table></div>
       <div class="callout"><p><b>In practice today:</b> specjutsu runs the whole loop on its own, from <code>sj spec new</code> to <code>sj spec archive</code>. You don't need OpenSpec, Spec Kit or Superpowers alongside it, and <code>sj migrate</code> removes them for you.</p></div>
@@ -564,6 +564,18 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj ledger [ID]</h3>
         <p>Per scenario: the latest result, and whether red-before-green is proven.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj gain</h3>
+        <p>Bytes saved. <code>sj test</code>, <code>sj verify</code>, <code>sj next</code> and <code>sj status</code> each record, per run, the bytes they printed and the raw bytes they stand in for (the runners' output, or the change files) in <code>.specjutsu/ledger/gain.jsonl</code>. Nothing is recorded with <code>sj test --no-ledger</code> or outside a git repository, and recording never changes output or exit codes. <code>sj gain</code> prints one line per command (runs, printed bytes, raw bytes, % saved) and a total with the tokens saved, estimated as (raw − printed) / 4. specjutsu never calls a model; the numbers are bytes, a proxy. Unreadable lines are skipped with a warning on stderr, and with no records it prints <code>no gain records yet</code>.</p>
+<pre class="code">test   2   500  50000  99%
+next   1  1000   4000  75%
+total  3  1500  54000  97%  ~13125 tokens saved</pre>
+        <dl>
+          <dt>--json</dt><dd><code>commands</code> (<code>command</code>, <code>runs</code>, <code>printed</code>, <code>raw</code>, <code>saved_pct</code>), <code>total</code>, which adds <code>tokens_saved</code>, and <code>skipped</code>, the number of unreadable lines. With no records, <code>commands</code> is empty and the totals are zero.</dd>
+          <dt>--since &lt;time&gt;</dt><dd>Only records at or after an RFC 3339 timestamp, e.g. one session.</dd>
+          <dt>--reset</dt><dd>Delete the records and print <code>removed N gain records</code>.</dd>
+        </dl>
       </div>
 
       <h3>Project setup</h3>
