@@ -25,7 +25,7 @@ enum Command {
         /// Print JSON instead of the compact report.
         #[arg(long)]
         json: bool,
-        /// Exit 1 when there are gaps or orphans.
+        /// Exit 1 on gaps or orphans the baseline doesn't list, or stale baseline entries.
         #[arg(long)]
         strict: bool,
         /// Write every current gap and orphan to <spec root>/trace-baseline.txt.
