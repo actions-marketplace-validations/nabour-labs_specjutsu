@@ -140,6 +140,19 @@ fn fold(name: &str) -> String {
 }
 
 /// Apply one delta file to its target spec (`None` for a new capability).
+/// A scenario name with a `[keep]` marker after its ID removed: `AUTH-002 [keep] Wrong
+/// password` → `AUTH-002 Wrong password`. Any other text is left as is.
+fn without_keep(name: &str) -> String {
+    let (id, rest) = match name.split_once(char::is_whitespace) {
+        Some((id, rest)) => (id, rest.trim_start()),
+        None => return name.to_string(),
+    };
+    match crate::spec::split_marker(rest) {
+        (Some(crate::spec::KEEP), tail) => format!("{id} {tail}"),
+        _ => name.to_string(),
+    }
+}
+
 pub fn merge(target: Option<&str>, delta: &str, capability: &str, change: &str) -> Result<Merged> {
     let delta = blocks::normalize(delta);
     let plan = blocks::parse_delta(&delta);
@@ -308,10 +321,14 @@ pub fn merge(target: Option<&str>, delta: &str, capability: &str, change: &str) 
                 b.name
             );
         };
-        let incoming = blocks::scenario_names(&b.raw);
+        // A scenario carried in as `[keep]` is the same scenario (SPEC-043).
+        let incoming: Vec<String> = blocks::scenario_names(&b.raw)
+            .iter()
+            .map(|n| without_keep(n))
+            .collect();
         let missing: Vec<String> = blocks::scenario_names(&cur.raw)
             .into_iter()
-            .filter(|n| !incoming.contains(n))
+            .filter(|n| !incoming.contains(&without_keep(n)))
             .map(|n| format!("\"{n}\""))
             .collect();
         if !missing.is_empty() {
