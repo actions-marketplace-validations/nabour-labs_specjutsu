@@ -14,7 +14,7 @@ use crate::git::Git;
 use crate::run::suite::{self, JoinedOutcome, Pick};
 use crate::spec::{self, Fingerprint};
 use crate::testscan;
-use crate::trace::{self, Baseline, Report, BASELINE_FILE};
+use crate::trace::{self, Baseline, BaselineEntry, Report, BASELINE_FILE};
 
 /// How a scenario changed between base and head.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -144,6 +144,9 @@ pub struct Input {
     pub keep: BTreeSet<String>,
     /// The trace baseline as it is on the merge base (GATE-050/051).
     pub baseline: Baseline,
+    /// Baseline entries at head that base doesn't list; honoured only with a `config`
+    /// exemption (GATE-053/054).
+    pub baseline_added: BTreeSet<BaselineEntry>,
 }
 
 /// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
@@ -411,14 +414,27 @@ pub fn evaluate(input: &Input) -> GateReport {
         });
     }
 
-    // Unchanged gaps only warn; those the base baseline lists are counted once (GATE-050).
+    // GATE-053/054: entries added at head count only with a `config` exemption.
+    let mut baseline = input.baseline.clone();
+    let adopt = input.exemptions.iter().any(|e| e.kind == "config");
+    for e in &input.baseline_added {
+        let msg = format!("baseline-added {e}");
+        if adopt {
+            baseline.entries.insert(e.clone());
+            r.warnings.push(msg);
+        } else {
+            r.failures.push(msg);
+        }
+    }
+
+    // Unchanged gaps only warn; those the baseline lists are counted once (GATE-050).
     let mut known_gaps = 0;
     for g in &input.trace.gaps {
         if let Some(id) = &g.id {
             if targets.contains(&id) {
                 continue;
             }
-            if input.baseline.knows_gap(g) {
+            if baseline.knows_gap(g) {
                 known_gaps += 1;
             } else {
                 r.warnings.push(format!("gap {id} {}", g.name));
@@ -430,7 +446,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             .push(format!("known gaps: {known_gaps} ({BASELINE_FILE})"));
     }
     // GATE-055: stale entries only warn; `sj trace --strict` enforces the cleanup.
-    for e in input.baseline.stale(&input.trace) {
+    for e in baseline.stale(&input.trace) {
         r.warnings.push(format!("stale {e}"));
     }
 
@@ -445,12 +461,12 @@ pub fn evaluate(input: &Input) -> GateReport {
         });
     }
 
-    // GATE-051: orphans the base baseline lists don't fail.
+    // GATE-051: orphans the baseline lists don't fail.
     for o in input
         .trace
         .orphans
         .iter()
-        .filter(|o| !input.baseline.knows_orphan(o))
+        .filter(|o| !baseline.knows_orphan(o))
     {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
@@ -685,6 +701,8 @@ pub struct Prepared {
     pub exemptions: Vec<Exemption>,
     /// The trace baseline on the merge base; empty when base has none.
     pub baseline: Baseline,
+    /// Entries of the head baseline that the base baseline doesn't list.
+    pub baseline_added: BTreeSet<BaselineEntry>,
 }
 
 /// Gather the gate's inputs against the merge-base of `base` and `HEAD`, without running tests.
@@ -733,6 +751,18 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
         }
     }
     let head_spec_root = root.join(spec_root_rel);
+    let head_baseline_path = head_spec_root.join(BASELINE_FILE);
+    let baseline_added = if head_baseline_path.is_file() {
+        let text = std::fs::read_to_string(&head_baseline_path)?;
+        Baseline::parse(&text)
+            .with_context(|| head_baseline_path.display().to_string())?
+            .entries
+            .difference(&baseline.entries)
+            .cloned()
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
     let mut head_fps = Vec::new();
     // Scenarios without an ID: new text fails, text already on base only counts (GATE-024/025).
     let mut unidentified = Vec::new();
@@ -824,6 +854,7 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
         changed_files,
         exemptions,
         baseline,
+        baseline_added,
     })
 }
 
@@ -866,6 +897,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         changed_files,
         exemptions,
         baseline,
+        baseline_added,
     } = prepare(root, &opts.spec_root, &config, &opts.base)?;
 
     let targets: Vec<&String> = changes
@@ -1045,6 +1077,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         reasons,
         keep,
         baseline,
+        baseline_added,
     });
     // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
     let audit = crate::audit::run(&crate::audit::Options {
