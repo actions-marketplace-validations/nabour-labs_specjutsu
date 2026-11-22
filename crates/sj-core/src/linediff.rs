@@ -49,7 +49,7 @@ fn ops(a: &[&str], b: &[&str]) -> Vec<Op> {
             j += 1;
         }
     }
-    out.extend(std::iter::repeat_n(Op::Same, suf));
+    out.resize(out.len() + suf, Op::Same);
     out
 }
 

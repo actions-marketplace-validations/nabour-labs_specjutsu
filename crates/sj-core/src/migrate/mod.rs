@@ -526,7 +526,9 @@ fn write_plan(root: &Path, plan: &Plan) -> Result<()> {
 }
 
 /// The files a project's migration may read: every file but those `.gitignore` excludes and
-/// `.git/`, relative to `root`.
+/// `.git/`, relative to `root`. Ignored files stay out of the copy [`diff`] plans on, since
+/// folders like `target/` can be huge; a plan that reads an ignored file (say
+/// `.claude/settings.local.json`) may then preview differently from the real `--write`.
 fn project_files(root: &Path) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = ignore::WalkBuilder::new(root)
         .hidden(false)
