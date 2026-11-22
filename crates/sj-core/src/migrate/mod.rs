@@ -442,6 +442,16 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
     for step in agents::plan(root, &p.agents, false)? {
         p.lines.push(match step.change {
             Change::Created(f) => format!("create {f} (adapter)"),
+            Change::Updated(f) if f == ".claude/settings.json" => {
+                let text = std::fs::read_to_string(root.join(&f)).unwrap_or_default();
+                match sj_adapters::claude::kept_hooks(&text) {
+                    0 => format!("change {f} (adapter)"),
+                    n => format!(
+                        "change {f} (adapter) (merged: {} kept)",
+                        plural(n, "existing hook")
+                    ),
+                }
+            }
             Change::Updated(f) => format!("change {f} (adapter)"),
             Change::Removed(f) => format!("remove {f} (adapter)"),
             Change::Kept(f) => format!("keep   {f} (hand-edited; the adapter leaves it)"),
