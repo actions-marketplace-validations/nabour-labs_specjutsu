@@ -728,3 +728,44 @@ fn mig_013_diff_shows_the_settings_change_and_writes_nothing() {
     );
     assert_eq!(status(&repo), "");
 }
+
+#[test]
+fn mig_014_preview_says_one_existing_hook_is_kept() {
+    let repo = support::Repo::with_lib("");
+    repo.write(
+        ".claude/settings.json",
+        r#"{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run lint"
+          }
+        ]
+      }
+    ]
+  }
+}
+"#,
+    );
+    repo.commit("project with a hook");
+    let out = migrate(repo.path(), &["--from", "superpowers"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let out = String::from_utf8(out).unwrap();
+    let lines: Vec<&str> = out
+        .lines()
+        .filter(|l| l.contains(".claude/settings.json"))
+        .collect();
+    assert_eq!(lines.len(), 1, "{out}");
+    assert!(
+        lines[0].ends_with("(merged: 1 existing hook kept)"),
+        "{out}"
+    );
+}
