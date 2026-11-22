@@ -105,8 +105,10 @@ fn adapt_047_remove_agents_clears_stale_files_without_an_update_first() {
 
     sj(root, &["init", "--remove-agents", "claude"])
         .assert()
+        .success()
         .stdout(predicate::str::contains(format!("removed {stale_ref}")))
         .stdout(predicate::str::contains(format!("removed {stale_skill}")));
+    assert!(!root.join(stale_ref).exists());
     assert!(!root.join(".claude/skills/sj-old").exists());
     assert_eq!(read(root, mine), "# My notes\n");
 }
