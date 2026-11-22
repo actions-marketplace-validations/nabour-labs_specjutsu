@@ -52,6 +52,8 @@ pub struct Plan {
     spec_root: PathBuf,
     adopt: Option<Config>,
     prefixes: BTreeMap<String, String>,
+    /// `specjutsu.toml` with the pinned prefixes spliced in, when the project has one.
+    config_text: Option<String>,
     import: Option<speckit::Plan>,
     assign_ids: bool,
     principles: Option<(PathBuf, String)>,
@@ -203,6 +205,7 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
         spec_root: spec_root.clone(),
         adopt: None,
         prefixes: config.id_prefixes.clone(),
+        config_text: None,
         import: None,
         assign_ids: false,
         principles: None,
@@ -270,8 +273,32 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
             bail!("--from openspec: {} does not exist", rel(&spec_root, root));
         }
         p.assign_ids = true;
+        // Short prefixes for capabilities without IDs, pinned before IDs are assigned (MIG-012).
+        let pinned = ids::unmapped_prefixes(&spec_root, &config.id_prefixes)?;
+        if !pinned.is_empty() {
+            p.prefixes.extend(pinned.clone());
+            if let Some(adopt) = &mut p.adopt {
+                adopt.id_prefixes.extend(pinned.clone());
+            } else {
+                let path = root.join(FILE);
+                let before = std::fs::read_to_string(&path)
+                    .with_context(|| format!("cannot read {}", path.display()))?;
+                let after = ids::add_prefix_lines(&before, &pinned);
+                if !matches!(Config::parse(&after), Ok(c) if c.id_prefixes == p.prefixes) {
+                    bail!(
+                        "{FILE}: cannot find an `[ids.prefixes]` table to add the ID prefixes to"
+                    );
+                }
+                let n = pinned.len();
+                p.lines.push(format!(
+                    "change {FILE} ({n} ID {})",
+                    if n == 1 { "prefix" } else { "prefixes" }
+                ));
+                p.config_text = Some(after);
+            }
+        }
         let mut per_file: BTreeMap<PathBuf, usize> = BTreeMap::new();
-        for a in ids::plan(&spec_root, &config.id_prefixes)? {
+        for a in ids::plan(&spec_root, &p.prefixes)? {
             *per_file.entry(a.file).or_default() += 1;
         }
         for (file, n) in per_file {
@@ -457,6 +484,9 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     }
     if let Some(config) = &plan.adopt {
         write(&root.join(FILE), &config.to_toml())?;
+    }
+    if let Some(text) = &plan.config_text {
+        write(&root.join(FILE), text)?;
     }
     config::ignore_ledger(root)?;
     if plan.assign_ids {

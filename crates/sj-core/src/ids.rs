@@ -105,7 +105,26 @@ pub fn prefix_table(
             }
         }
     }
-    // Prefix use per capability, archive included.
+    let used = prefix_use(spec_root)?;
+    let mut kept = configured.clone();
+    for cap in &folders {
+        if kept.contains_key(cap) {
+            continue;
+        }
+        if let Some(counts) = used.get(cap) {
+            let top = counts.values().max().copied().unwrap_or(0);
+            if let Some((prefix, _)) = counts.iter().find(|(_, n)| **n == top) {
+                kept.insert(cap.clone(), prefix.clone());
+            }
+        }
+    }
+    let mut table = suggest_prefixes(&kept, &folders);
+    table.retain(|cap, _| folders.contains(cap));
+    Ok(table)
+}
+
+/// Prefix use per capability, archive included: how many IDs carry each prefix.
+fn prefix_use(spec_root: &Path) -> Result<BTreeMap<String, BTreeMap<String, usize>>> {
     let mut used: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     for file in all_spec_files(spec_root)? {
         let Some(cap) = place(spec_root, &file).capability else {
@@ -121,20 +140,18 @@ pub fn prefix_table(
             }
         }
     }
-    let mut kept = configured.clone();
-    for cap in &folders {
-        if kept.contains_key(cap) {
-            continue;
-        }
-        if let Some(counts) = used.get(cap) {
-            let top = counts.values().max().copied().unwrap_or(0);
-            if let Some((prefix, _)) = counts.iter().find(|(_, n)| **n == top) {
-                kept.insert(cap.clone(), prefix.clone());
-            }
-        }
-    }
-    let mut table = suggest_prefixes(&kept, &folders);
-    table.retain(|cap, _| folders.contains(cap));
+    Ok(used)
+}
+
+/// The [`prefix_table`] entries for capabilities that have no IDs and no configured prefix:
+/// the mappings to pin before `plan` assigns their first IDs.
+pub fn unmapped_prefixes(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>> {
+    let used = prefix_use(spec_root)?;
+    let mut table = prefix_table(spec_root, configured)?;
+    table.retain(|cap, _| !configured.contains_key(cap) && !used.contains_key(cap));
     Ok(table)
 }
 
