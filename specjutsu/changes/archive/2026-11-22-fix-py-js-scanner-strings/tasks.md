@@ -7,4 +7,4 @@
 
 ## 2. Docs
 
-- [ ] 2.1 CHANGELOG entry (no-scenario: docs)
+- [x] 2.1 CHANGELOG entry (no-scenario: docs)
