@@ -1740,34 +1740,34 @@ fn next_cmd(
     // Built in full first so the bytes printed can be counted against the change folder read.
     let mut out = String::new();
     let name = if parallel {
-        let Some(name) = next::parallel_change(&spec_root, change.as_deref())? else {
-            println!("next: no open tasks");
-            return Ok(ExitCode::SUCCESS);
-        };
-        let batches = next::parallel(&root, &spec_root, &name)?;
-        if json {
-            let v = serde_json::json!({ "change": name, "batches": batches });
-            writeln!(out, "{}", serde_json::to_string_pretty(&v)?)?;
-        } else if batches.is_empty() {
-            writeln!(out, "next: no parallel tasks")?;
-        } else {
-            for (i, b) in batches.iter().enumerate() {
-                writeln!(out, "batch {}", i + 1)?;
-                for t in b {
-                    writeln!(out, "  {t}")?;
+        match next::parallel_change(&spec_root, change.as_deref())? {
+            None => {
+                writeln!(out, "next: no open tasks")?;
+                None
+            }
+            Some(name) => {
+                let batches = next::parallel(&root, &spec_root, &name)?;
+                if json {
+                    let v = serde_json::json!({ "change": name, "batches": batches });
+                    writeln!(out, "{}", serde_json::to_string_pretty(&v)?)?;
+                } else if batches.is_empty() {
+                    writeln!(out, "next: no parallel tasks")?;
+                } else {
+                    for (i, b) in batches.iter().enumerate() {
+                        writeln!(out, "batch {}", i + 1)?;
+                        for t in b {
+                            writeln!(out, "  {t}")?;
+                        }
+                    }
                 }
+                Some(name)
             }
         }
-        name
     } else {
         match next::next(&root, &spec_root, change.as_deref(), base.as_deref())? {
-            None if json => {
-                println!("null");
-                return Ok(ExitCode::SUCCESS);
-            }
             None => {
-                println!("next: no open tasks");
-                return Ok(ExitCode::SUCCESS);
+                writeln!(out, "{}", if json { "null" } else { "next: no open tasks" })?;
+                None
             }
             Some(n) => {
                 if json {
@@ -1775,11 +1775,17 @@ fn next_cmd(
                 } else {
                     out.push_str(&next::render(&n));
                 }
-                n.change
+                Some(n.change)
             }
         }
     };
-    let raw = sj_core::gain::dir_bytes(&sj_core::authoring::find_change(&spec_root, &name)?.dir);
+    // Raw is the change folder reported on; with no open task none was, so 0.
+    let raw = match &name {
+        Some(name) => {
+            sj_core::gain::dir_bytes(&sj_core::authoring::find_change(&spec_root, name)?.dir)
+        }
+        None => 0,
+    };
     let record = sj_core::gain::enabled(&root, false);
     print_and_record_gain(&root, record, "next", &out, raw);
     Ok(ExitCode::SUCCESS)
