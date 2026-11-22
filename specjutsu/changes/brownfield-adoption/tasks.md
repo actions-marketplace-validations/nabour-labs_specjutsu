@@ -29,4 +29,4 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 
 ## 5. Docs
 
-- [ ] 5.1 README and manual: adopting a baseline (with the exemption trailer) and the gate's `known gaps`, `stale` and `baseline-added` warnings; `sj ids prefixes` (with `--write`) and the long-prefix hint; `migrate --from openspec` pinning short prefixes; `migrate --diff` and `--undo`; replace the `git clean -fd` advice; CHANGELOG entry marking the rollback line as BREAKING (no-scenario: docs)
+- [x] 5.1 README and manual: adopting a baseline (with the exemption trailer) and the gate's `known gaps`, `stale` and `baseline-added` warnings; `sj ids prefixes` (with `--write`) and the long-prefix hint; `migrate --from openspec` pinning short prefixes; `migrate --diff` and `--undo`; replace the `git clean -fd` advice; CHANGELOG entry marking the rollback line as BREAKING (no-scenario: docs)
