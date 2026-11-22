@@ -16,6 +16,7 @@ pub mod hook;
 pub mod ids;
 pub mod import;
 pub mod ledger;
+pub mod linediff;
 pub mod migrate;
 pub mod registry;
 pub mod run;

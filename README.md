@@ -187,6 +187,7 @@ your `$PROFILE`.
 ```bash
 sj trace            # map scenario IDs in specjutsu/ to tests; list gaps
 sj trace --json     # machine-readable
+sj trace --write-baseline  # record today's gaps and orphans; later runs list only new ones
 sj gate --base origin/main   # CI: changed scenarios tested, red on base, green on head
 sj test             # run the tests; print failures only; record the run
 sj test GATE-004    # run only the tests mapped to one scenario (or pass a package name)
@@ -197,6 +198,7 @@ sj adopt --dry-run  # existing project: detect packages and runners, print the c
 sj doctor           # check the config, runner executables and spec folders
 sj ids              # list scenarios without IDs and the IDs they would get
 sj ids --write      # assign them in place
+sj ids prefixes     # suggest a short ID prefix per capability; --write adds them to specjutsu.toml
 sj spec new add-oauth-login  # scaffold a change; prints the next free ID per prefix
 sj spec list        # open changes: tasks done, scenarios added or modified
 sj spec show AUTH-003   # one scenario, change or capability; a scenario with its tests and evidence
@@ -215,6 +217,8 @@ sj update           # regenerate installed adapters; hand-edited files are kept
 sj update --dry-run # print what update would write, keep or remove; change nothing
 sj completions zsh  # print a shell completion script (bash, zsh, fish, powershell, elvish)
 sj import speckit   # preview converting Spec Kit's specs/NNN-*/ features; --write converts
+sj migrate --from openspec --diff  # preview replacing OpenSpec, with each file's diff
+sj migrate --undo   # put back what the last sj migrate --write changed
 ```
 
 ## How tracing works
@@ -272,11 +276,52 @@ test in `--json` carries its `package` and `suite`, and `skipped` for
 no suite gets a `warn    no test suite: <path>` line. Titles built at runtime
 (variables, `${}` templates) are not read. Use a `// spec:` comment for those.
 
+### Trace baseline
+
+A project that adopts specjutsu late may have thousands of scenarios without
+tests. `sj trace --write-baseline` records today's gaps and orphans in
+`<spec_root>/trace-baseline.txt`, one sorted entry per line, and replaces any
+earlier baseline:
+
+```
+$ sj trace --write-baseline
+baseline: 3 entries → ./specjutsu/trace-baseline.txt
+$ cat specjutsu/trace-baseline.txt
+gap AUTH-002
+gap AUTH-005
+orphan AUTH-009 tests/auth.rs auth_009_old
+```
+
+An orphan is keyed by its ID, test file and test name, so a new test that reuses a
+baselined unknown ID is still new. Test file paths with spaces aren't supported: such
+an orphan never matches its baseline line, so it always counts as new.
+
+With a baseline, `sj trace` prints a line only for entries it doesn't list, and the
+summary counts the known ones in parentheses:
+
+```
+$ sj trace --strict
+trace: 2 mapped, 2 gaps (1 known), 1 orphan (1 known), 1 without ID
+gap     AUTH-006 Expired  (specjutsu/specs/auth/spec.md:23)
+stale gap AUTH-002 (remove from trace-baseline.txt)
+no-id   Ships binaries  (specjutsu/specs/distribution/spec.md:11)
+```
+
+A **stale** entry is one that is no longer a gap or orphan, here because AUTH-002
+gained a test. `--strict` exits 1 only for entries the baseline doesn't list and for
+stale entries, so CI notices both new debt and lines left behind; known entries
+alone pass.
+`sj trace --write-baseline` drops stale entries. In `--json`, every gap and orphan
+carries `"known": true` or `false`, and a `stale` array lists stale entries as their
+baseline lines (`["gap AUTH-002"]`). See
+[Adopting a baseline](#adopting-a-baseline) for the gate's side.
+
 ## How the gate works
 
 `sj gate --base origin/main` fails a change when an added, modified or newly
 implemented scenario has no test, a test fails, or a test points at a missing
-scenario. Its core check is **red-on-base**: it checks out the base commit,
+scenario that the base branch's [baseline](#adopting-a-baseline) doesn't list.
+Its core check is **red-on-base**: it checks out the base commit,
 overlays only the change's test files, and requires each new test to fail
 there. It does this for every suite in `specjutsu.toml`: Cargo `tests/` files, and
 for other runners every changed file matching the suite's `tests` or `support`
@@ -327,6 +372,48 @@ imports a function that doesn't exist yet, counts as `red:compile`.
 When a package declares `sources`, only changed files matching them need a scenario,
 and files elsewhere in that package don't. A top-level `non_source = ["infra/**"]`
 adds globs to the built-in non-source list.
+
+### Adopting a baseline
+
+The gate reads `<spec_root>/trace-baseline.txt` (see [Trace
+baseline](#trace-baseline)) as it is on the merge base, not as the pull request
+leaves it:
+
+- **Known gaps collapse into one warning**, `known gaps: 2981 (trace-baseline.txt)`,
+  instead of a `gap <ID>` line each.
+- **Known orphans don't fail the gate.**
+- **Changed scenarios are still gated.** An added, modified or newly implemented
+  scenario needs its red-on-base test whether the baseline lists it or not.
+- **Stale entries only warn**, as `stale gap AUTH-002`, so adding a test to an old
+  scenario doesn't fail a pull request because of the baseline. Run
+  `sj trace --strict` in CI to make someone remove the line.
+- **Entries a change adds fail** as `baseline-added <entry>`, so a pull request
+  can't hide its own orphans. With a `config` exemption they are honoured and listed
+  as `baseline-added <entry>` warnings, for the reviewer to see.
+
+So the first baseline lands in its own commit, with a `config` exemption:
+
+```bash
+sj trace --write-baseline
+git add specjutsu/trace-baseline.txt
+git commit -m "chore: adopt trace baseline" -m "Specjutsu-Exempt: config — adopt trace baseline"
+```
+
+Its gate run passes and lists what it adopted:
+
+```
+gate: pass — no changed scenarios to prove
+warn    baseline-added gap AUTH-002
+warn    baseline-added gap AUTH-005
+warn    baseline-added orphan AUTH-009 tests/auth.rs auth_009_old
+warn    known gaps: 2 (trace-baseline.txt)
+warn    1 scenario without ID
+exempt  config — adopt trace baseline
+```
+
+Without the trailer, each added entry fails as `baseline-added gap AUTH-002`, and so
+on. Regenerating the baseline later, to drop stale entries, needs no exemption: only
+added entries do.
 
 ## The GitHub Action
 
@@ -570,7 +657,8 @@ wrote 2 IDs to 1 file
   other byte, line endings included, stays as it was. Running it again changes
   nothing.
 - **Prefixes come from the capability folder:** its letters, uppercased
-  (`user-auth` → `USERAUTH`). Set your own in the project file:
+  (`user-auth` → `USERAUTH`). Set your own in the project file, or let
+  `sj ids prefixes --write` do it (see [Short prefixes](#short-prefixes)):
 
   ```toml
   [ids.prefixes]
@@ -590,6 +678,57 @@ can land on its own: its scenarios show as `gap` warnings, not failures. Adding 
 test in the same change makes the scenario `implemented`, which still needs
 red-on-base. `sj gate --json` lists every scenario that isn't unchanged under
 `changes`.
+
+### Short prefixes
+
+A folder name longer than six letters gives a long prefix. `sj ids` then ends its
+listing with a hint per capability:
+
+```
+hint: distribution would use DISTRIBUTION; sj ids prefixes --write maps it to DIST
+```
+
+`sj ids prefixes` prints an `[ids.prefixes]` table with one line per capability
+folder, sorted, and writes nothing:
+
+```
+$ sj ids prefixes
+[ids.prefixes]
+auth = "AUTH"
+distribution = "DIST"
+payment-methods = "PAYM"
+transactions = "TRANSA"
+transfers = "TRANSF"
+```
+
+Each prefix is chosen in this order:
+
+1. A prefix already mapped in `[ids.prefixes]` is kept.
+2. A capability whose scenarios already carry IDs keeps the prefix they use, so
+   nothing is ever renamed.
+3. Otherwise its letters, uppercased: six letters or fewer are kept whole
+   (`gate` → `GATE`), and longer names are cut to four (`payment-methods` →
+   `PAYM`).
+
+Suggestions that clash with each other or with a kept prefix are lengthened together,
+one letter at a time, until all differ (`transactions` → `TRANSA`, `transfers` →
+`TRANSF`). When names run out of letters and still clash, as `bill` does with
+`billing = "BILL"`, it exits 2 without printing the table or writing anything:
+`` capabilities `bill` and `billing` both use prefix BILL ``. Map one of them in
+`[ids.prefixes]` by hand. `sj migrate --from openspec` refuses the same way before
+it changes anything.
+
+`sj ids prefixes --write` adds the capabilities missing from `[ids.prefixes]` to
+`specjutsu.toml` and prints `added 5 prefixes to specjutsu.toml`. It only appends
+lines: existing keys and every other byte stay as they were, and the table is
+created at the end of the file when there is none. Running it again changes
+nothing. Without a `specjutsu.toml` it exits 2 and asks for `sj init` first. When
+the prefixes are written in a layout it can't splice, such as an inline
+`prefixes = { … }` under `[ids]`, it exits 2, changes nothing, and prints the lines
+to add by hand. It has no `--json`, and `sj ids --write prefixes` or
+`sj ids --json prefixes` exits 2, pointing at `sj ids prefixes --write`.
+
+Run it before `sj ids --write`, so the new IDs come out short.
 
 ## Writing and archiving changes
 
@@ -771,7 +910,9 @@ takes `--json`, except `sj task done`.
 - **`sj verify [<change>]`** is the local check before a PR. It runs the
   change's scenario tests (recording them), and reports untested and failing
   scenarios, unproven ones, orphans, `sj spec check` problems, and the gate's
-  unspecified-change and exemption rules against the merge-base. Red-on-base
+  unspecified-change, exemption and trace baseline rules against the merge-base:
+  orphans the base's baseline lists aren't problems, and entries the branch adds
+  without a `config` exemption are `baseline-added <entry>` problems. Red-on-base
   stays in CI. It prints `verify: ok` or one line per problem, and exits 1 when
   there are any.
 
@@ -1038,16 +1179,23 @@ remove them once the import is in, use `sj migrate --from speckit`.
 
 ```bash
 sj migrate --from openspec --from superpowers           # print every planned change; writes nothing
+sj migrate --from openspec --from superpowers --diff    # the same, with a unified diff per file
 sj migrate --from openspec --from superpowers --write   # apply it (needs a clean git tree)
+sj migrate --undo                                       # put back what that write changed
 ```
 
 `sj migrate` replaces the old tool in one step, so two workflows don't compete
 for the agent. `--from` is repeatable: `openspec`, `speckit` or `superpowers`.
 
 - **openspec** keeps `openspec/` (specs, open changes and archive) as the spec
-  root and gives every scenario an ID. The `context`, `rules` and `operations`
-  guidance in `openspec/config.yaml` move to `openspec/principles.md`, and the
-  file is removed.
+  root and gives every scenario an ID. Before it assigns them, it maps every
+  capability without IDs or a mapping to the prefix `sj ids prefixes` suggests
+  (see [Short prefixes](#short-prefixes)), in `[ids.prefixes]` of
+  `specjutsu.toml`, so `distribution` gets `DIST-001` rather than
+  `DISTRIBUTION-001`. When `specjutsu.toml` already exists, the preview shows
+  this as `change specjutsu.toml (1 ID prefix)`. The `context`, `rules` and
+  `operations` guidance in `openspec/config.yaml` move to
+  `openspec/principles.md`, and the file is removed.
 
   It removes OpenSpec's skills and `/opsx` commands from every agent folder,
   such as `.claude/` and `.agents/`. A file is removed only when its metadata
@@ -1074,9 +1222,68 @@ Every run then:
 - prints `sj doctor` and `sj spec validate`
 
 It exits 0 when both are clean, and 1 with the problems listed otherwise. It
-exits 2, changing nothing, when the tree is dirty. The changes are left
-uncommitted. Review them with `git diff`, and undo them with
-`git restore . && git clean -fd`.
+exits 2, changing nothing, when the tree is dirty.
+
+The preview prints one line per file it would create, change or remove. The adapter's
+line for `.claude/settings.json` says how many of your hook entries it keeps:
+
+```
+change .claude/settings.json (adapter) (merged: 1 existing hook kept)
+```
+
+`--diff` adds a unified diff (`--- a/<path>`, `+++ b/<path>`, `@@` hunks) for every
+file it would create or change, a new file diffed against nothing. It is preview only
+and can't be combined with `--write`:
+
+```diff
+--- a/.claude/settings.json
++++ b/.claude/settings.json
+@@ -1,13 +1,14 @@
+ {
+-  "enabledPlugins": {
+-    "superpowers@superpowers-marketplace": true
+-  },
+   "hooks": {
+     "PreToolUse": [
+       {
+         "matcher": "Bash",
+         "hooks": [{ "type": "command", "command": "npm run lint" }]
+-      }
++      },
++      {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "sj hook claude pre-edit"}]}
+```
+
+The preview works on a copy of the project without its gitignored files, so a step
+that reads one, such as a gitignored `.claude/settings.json`, can preview differently
+from the real write.
+
+`--write` leaves the changes uncommitted and ends with the counts and the rollback
+command:
+
+```
+git: 20 created, 2 changed, 0 removed
+rollback: sj migrate --undo
+```
+
+Review them with `git diff`. The write records the commit it started from and every
+file it created, changed or removed, gitignored files included, with each file's hash
+and its content before the write, in
+`sj-migrate-undo.json` in the git directory (`git rev-parse --git-dir`), so it is
+never committed. `sj migrate --undo` then:
+
+- restores every changed or removed file to its content before the write, byte for
+  byte, line endings included, and deletes every file migrate created, along with any folder
+  that leaves empty;
+- touches no other file, so work you added since, such as a new `notes.txt`, stays;
+- deletes the manifest, and leaves the result uncommitted:
+  `migrate: undone (2 files restored, 20 deleted; left uncommitted)`.
+
+It works after you commit the migration too. It refuses, exiting 2 and changing
+nothing, when a recorded file was edited since, and names each one so you can
+put it back by hand first. With no manifest it exits 2 with `nothing to undo`.
+Only the last `--write` can be undone. Limits: a restored file doesn't get its
+executable bit back; and git doesn't track empty folders, so a folder left empty by
+the deleted files goes even if it existed, empty, before the migration.
 
 ## Roadmap
 

@@ -47,6 +47,37 @@ impl Git {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
+    /// Like `run`, writing `input` to git's stdin: for path lists too long for argv.
+    pub fn run_stdin(&self, args: &[&str], input: &str) -> Result<String> {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut child = Command::new("git")
+            .args(args)
+            .current_dir(&self.root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("running git (is it installed and on PATH?)")?;
+        let mut stdin = child.stdin.take().context("opening git's stdin")?;
+        let input = input.to_string();
+        // Written from a thread so a large input can't deadlock against a full stdout pipe.
+        let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+        let out = child.wait_with_output().context("running git")?;
+        writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("writing to git's stdin panicked"))?
+            .context("writing to git's stdin")?;
+        if !out.status.success() {
+            bail!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
     /// Resolve a ref to a commit SHA; errors name the ref and suggest a full fetch.
     pub fn resolve(&self, rev: &str) -> Result<String> {
         let spec = format!("{rev}^{{commit}}");
