@@ -65,3 +65,55 @@ fn adapt_019_generic_check_blocks_and_allows_by_exit_code() {
         .stdout("")
         .stderr("");
 }
+
+/// A guided vitest package whose next task names `ids`, with `scenarios` as the change's
+/// spec body and no red record (specjutsu/changes/fix-hook-keep).
+fn keep_project(scenarios: &str, ids: &str) -> tempfile::TempDir {
+    let dir = project();
+    let root = dir.path();
+    put(
+        root,
+        "openspec/changes/add-oauth-login/specs/auth/spec.md",
+        &format!(
+            "## ADDED Requirements\n\n### Requirement: Tokens\nThe system SHALL refresh tokens.\n\n{scenarios}"
+        ),
+    );
+    put(
+        root,
+        "openspec/changes/add-oauth-login/tasks.md",
+        &format!("- [ ] 2.1 Refresh tokens ({ids})\n"),
+    );
+    dir
+}
+
+const KEEP_005: &str = "#### Scenario: AUTH-005 [keep] Refresh\n- **WHEN** a token expires\n- **THEN** it is refreshed\n\n";
+const PLAIN_006: &str =
+    "#### Scenario: AUTH-006 Revoke\n- **WHEN** a token is revoked\n- **THEN** it is refused\n";
+
+#[test]
+fn adapt_043_task_naming_only_a_keep_scenario_allows_source_edits() {
+    let dir = keep_project(KEEP_005, "AUTH-005");
+    check_edit(dir.path(), "apps/api/src/auth.ts")
+        .assert()
+        .code(0)
+        .stdout("")
+        .stderr("");
+
+    let dir = keep_project(&format!("{KEEP_005}{PLAIN_006}"), "AUTH-005, AUTH-006");
+    check_edit(dir.path(), "apps/api/src/auth.ts")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("AUTH-005").not());
+}
+
+#[test]
+fn adapt_044_non_keep_scenario_without_a_red_run_still_blocks() {
+    let dir = keep_project(&format!("{KEEP_005}{PLAIN_006}"), "AUTH-005, AUTH-006");
+    check_edit(dir.path(), "apps/api/src/auth.ts")
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "write a failing test for AUTH-006 first (sj test AUTH-006)",
+        ));
+}
