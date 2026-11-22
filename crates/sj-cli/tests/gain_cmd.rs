@@ -371,3 +371,87 @@ fn loop_026_no_gain_record_from_status_outside_git() {
     assert_eq!(without.stdout, with.stdout);
     assert_eq!(without.status.code(), with.status.code());
 }
+
+fn gain_line(command: &str, printed: u64, raw: u64) -> String {
+    format!(
+        "{{\"v\":1,\"command\":\"{command}\",\"ts\":\"2026-11-22T10:00:00Z\",\"printed\":{printed},\"raw\":{raw}}}\n"
+    )
+}
+
+fn sj_gain(root: &Path) -> std::process::Output {
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["gain", "--root"])
+        .arg(root)
+        .output()
+        .unwrap()
+}
+
+/// Each stdout line split on whitespace, so column padding doesn't matter.
+fn tokens(stdout: &[u8]) -> Vec<Vec<String>> {
+    String::from_utf8_lossy(stdout)
+        .lines()
+        .map(|l| l.split_whitespace().map(String::from).collect())
+        .collect()
+}
+
+fn words(line: &str) -> Vec<String> {
+    line.split_whitespace().map(String::from).collect()
+}
+
+#[test]
+fn loop_027_gain_totals_per_command_and_overall() {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    let text = [
+        gain_line("test", 300, 40_000),
+        gain_line("next", 1_000, 4_000),
+        gain_line("test", 200, 10_000),
+    ]
+    .concat();
+    repo.write(".specjutsu/ledger/gain.jsonl", &text);
+    let out = sj_gain(repo.path());
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        tokens(&out.stdout),
+        vec![
+            words("test 2 500 50000 99%"),
+            words("next 1 1000 4000 75%"),
+            words("total 3 1500 54000 97% ~13125 tokens saved"),
+        ]
+    );
+    // In columns: the numbers end at the same place on every line.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let ends: Vec<usize> = stdout
+        .lines()
+        .map(|l| l.find('%').expect("a percent column"))
+        .collect();
+    assert!(ends.windows(2).all(|w| w[0] == w[1]), "{stdout}");
+}
+
+#[test]
+fn loop_031_damaged_gain_record_does_not_block_report() {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    let text = [
+        gain_line("test", 300, 40_000),
+        "{not json\n".to_string(),
+        gain_line("test", 200, 10_000),
+        gain_line("next", 1_000, 4_000),
+    ]
+    .concat();
+    repo.write(".specjutsu/ledger/gain.jsonl", &text);
+    let out = sj_gain(repo.path());
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        tokens(&out.stdout).last(),
+        Some(&words("total 3 1500 54000 97% ~13125 tokens saved")),
+        "{out:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("skipped 1 unreadable gain record"),
+        "{out:?}"
+    );
+}
