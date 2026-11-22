@@ -769,3 +769,100 @@ fn mig_014_preview_says_one_existing_hook_is_kept() {
         "{out}"
     );
 }
+
+/// Every file under the repo but `.git/`, with its content, keyed by its relative path.
+fn snapshot(repo: &support::Repo) -> std::collections::BTreeMap<String, Vec<u8>> {
+    fn walk(dir: &Path, root: &Path, out: &mut std::collections::BTreeMap<String, Vec<u8>>) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.file_name().is_some_and(|n| n == ".git") {
+                continue;
+            }
+            if p.is_dir() {
+                walk(&p, root, out);
+            } else {
+                let rel = p
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.insert(rel, std::fs::read(&p).unwrap());
+            }
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(repo.path(), repo.path(), &mut out);
+    out
+}
+
+fn undo_manifest(repo: &support::Repo) -> std::path::PathBuf {
+    let dir = repo.git(&["rev-parse", "--absolute-git-dir"]);
+    Path::new(dir.trim()).join("sj-migrate-undo.json")
+}
+
+#[test]
+fn mig_017_a_write_ends_with_the_undo_rollback_line() {
+    let repo = openspec_repo();
+    let out = migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .get_output()
+        .stdout
+        .clone();
+    let out = String::from_utf8(out).unwrap();
+    assert_eq!(
+        out.lines().last(),
+        Some("rollback: sj migrate --undo"),
+        "{out}"
+    );
+    assert!(!out.lines().any(|l| l.contains("git clean")), "{out}");
+}
+
+#[test]
+fn mig_015_undo_restores_migrates_files_and_keeps_new_ones() {
+    let repo = openspec_repo();
+    let before = snapshot(&repo);
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+    assert_ne!(snapshot(&repo), before);
+    assert!(undo_manifest(&repo).is_file());
+    repo.write("notes.txt", "my notes\n");
+
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["migrate", "--undo", "--root"])
+        .arg(repo.path())
+        .assert()
+        .success();
+
+    let mut expected = before;
+    expected.insert("notes.txt".into(), b"my notes\n".to_vec());
+    assert_eq!(snapshot(&repo), expected);
+    assert_eq!(status(&repo), "?? notes.txt\n");
+    assert!(!undo_manifest(&repo).exists());
+}
+
+#[test]
+fn mig_016_undo_refuses_when_a_migrated_file_was_edited_since() {
+    let repo = openspec_repo();
+    // The specs still lack IDs, so the write exits 1 on validate; its files are written.
+    migrate(repo.path(), &["--from", "superpowers", "--write"]).assert();
+    let settings = repo.path().join(".claude/settings.json");
+    let edited = std::fs::read_to_string(&settings)
+        .unwrap()
+        .replace('{', "{ ");
+    std::fs::write(&settings, edited).unwrap();
+    let before = snapshot(&repo);
+    let manifest = std::fs::read(undo_manifest(&repo)).unwrap();
+
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["migrate", "--undo", "--root"])
+        .arg(repo.path())
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(".claude/settings.json"));
+
+    assert_eq!(snapshot(&repo), before);
+    assert_eq!(std::fs::read(undo_manifest(&repo)).unwrap(), manifest);
+}
