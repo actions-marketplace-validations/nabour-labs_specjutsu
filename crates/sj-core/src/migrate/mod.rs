@@ -496,6 +496,10 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
         .into_iter()
         .map(|p| format!("{prefix}{p}"))
         .collect();
+    // `hash-object --stdin-paths` reads one path per line.
+    if let Some(bad) = paths.iter().find(|p| p.contains(['\n', '\r'])) {
+        bail!("cannot migrate {bad:?}: its name holds a line break; rename it first (nothing was changed)");
+    }
     // The prior content of every file the plan may change or remove, stored as blobs.
     let before = hashes(&top, &paths, true)?;
     // A failed write may have changed files already, so record them; its error comes first.
@@ -608,7 +612,9 @@ fn hashes(top: &Path, paths: &[String], store: bool) -> Result<Vec<Option<String
 }
 
 /// Write the undo manifest for every path of `paths` the write created, changed or removed,
-/// given each one's blob from `before`.
+/// given each one's blob from `before`. Paths `git status` lists that the plan didn't name
+/// are recorded too: the tree was clean before, so they are migrate's, and their prior
+/// content is the start commit's.
 fn record_undo(
     top: &Path,
     manifest: &Path,
@@ -616,10 +622,35 @@ fn record_undo(
     paths: &[String],
     before: &[Option<String>],
 ) -> Result<()> {
-    let after = hashes(top, paths, false)?;
+    let git = Git::new(top);
+    let mut paths = paths.to_vec();
+    let mut before = before.to_vec();
+    let status = git.run(&["status", "--porcelain", "-z", "--untracked-files=all"])?;
+    let extra: Vec<String> = status
+        .split('\0')
+        .filter(|e| e.len() > 3)
+        .map(|e| e[3..].to_string())
+        .filter(|p| !paths.contains(p))
+        .collect();
+    let mut unhashable = Vec::new();
+    if !extra.is_empty() {
+        let head = match &commit {
+            Some(c) => head_blobs(&git, c)?,
+            None => BTreeMap::new(),
+        };
+        for p in extra {
+            if p.contains(['\n', '\r']) {
+                unhashable.push(p);
+                continue;
+            }
+            before.push(head.get(&p).cloned());
+            paths.push(p);
+        }
+    }
+    let after = hashes(top, &paths, false)?;
     let files: Vec<UndoEntry> = paths
         .iter()
-        .zip(before)
+        .zip(&before)
         .zip(after)
         .filter_map(|((path, blob), hash)| {
             let action = match (blob, &hash) {
@@ -636,12 +667,32 @@ fn record_undo(
             })
         })
         .collect();
-    if files.is_empty() {
-        return Ok(());
+    if !files.is_empty() {
+        let json = serde_json::to_string_pretty(&Undo { commit, files })?;
+        std::fs::write(manifest, json + "\n")
+            .with_context(|| format!("cannot write {}", manifest.display()))?;
     }
-    let json = serde_json::to_string_pretty(&Undo { commit, files })?;
-    std::fs::write(manifest, json + "\n")
-        .with_context(|| format!("cannot write {}", manifest.display()))
+    if !unhashable.is_empty() {
+        bail!(
+            "undo can't record these files, whose names hold a line break; remove them by hand:\n{}",
+            unhashable.join("\n")
+        );
+    }
+    Ok(())
+}
+
+/// The blob of every file in `commit`'s tree, by path from the top level.
+fn head_blobs(git: &Git, commit: &str) -> Result<BTreeMap<String, String>> {
+    let tree = git.run(&["ls-tree", "-r", "-z", "--full-tree", commit])?;
+    Ok(tree
+        .split('\0')
+        .filter_map(|e| {
+            let (meta, path) = e.split_once('\t')?;
+            let mut f = meta.split(' ');
+            let (_mode, kind, id) = (f.next()?, f.next()?, f.next()?);
+            (kind == "blob").then(|| (path.to_string(), id.to_string()))
+        })
+        .collect())
 }
 
 /// What [`undo`] put back.
@@ -673,8 +724,9 @@ pub fn undo(root: &Path) -> Result<Undone> {
         .collect();
     if !edited.is_empty() {
         bail!(
-            "these files changed since the migration (nothing was changed); restore them \
-             (e.g. `git restore <file>`) and run `sj migrate --undo` again:\n{}",
+            "these files changed since the migration (nothing was changed); restore them to \
+             the content migrate wrote (e.g. `git restore <file>` for a tracked file) and \
+             run `sj migrate --undo` again:\n{}",
             edited.join("\n")
         );
     }
@@ -862,4 +914,76 @@ pub fn finish(root: &Path, plan: &Plan) -> Result<Finish> {
         changed,
         removed,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    /// Files the write touched that the plan's list missed are still recorded, from
+    /// `git status`, with the start commit's content, and undo puts them back.
+    #[test]
+    fn undo_records_files_only_git_status_lists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        git(root, &["init", "-q"]);
+        std::fs::write(root.join("kept.txt"), "old\n").unwrap();
+        std::fs::write(root.join("gone.txt"), "gone\n").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-qm", "start"]);
+        let g = Git::new(root);
+        let commit = g.run(&["rev-parse", "HEAD"]).unwrap().trim().to_string();
+        let (top, manifest) = undo_paths(&g).unwrap();
+
+        // A write the plan didn't list: one change, one removal, one new file.
+        std::fs::write(root.join("kept.txt"), "new\n").unwrap();
+        std::fs::remove_file(root.join("gone.txt")).unwrap();
+        std::fs::write(root.join("made.txt"), "made\n").unwrap();
+        record_undo(&top, &manifest, Some(commit), &[], &[]).unwrap();
+
+        let undo: Undo =
+            serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+        let actions: Vec<(&str, Action, bool)> = undo
+            .files
+            .iter()
+            .map(|f| (f.path.as_str(), f.action, f.blob.is_some()))
+            .collect();
+        assert_eq!(
+            actions,
+            [
+                ("gone.txt", Action::Removed, true),
+                ("kept.txt", Action::Changed, true),
+                ("made.txt", Action::Created, false),
+            ]
+        );
+
+        super::undo(root).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("kept.txt")).unwrap(),
+            "old\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("gone.txt")).unwrap(),
+            "gone\n"
+        );
+        assert!(!root.join("made.txt").exists());
+    }
 }
