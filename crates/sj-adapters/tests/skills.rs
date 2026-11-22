@@ -17,20 +17,20 @@ const SKILLS: [&str; 10] = [
     "sj-onboard",
 ];
 
-const COVERAGE: &str = "| Tool | Item | Skill |
-| --- | --- | --- |
-| Superpowers | brainstorming | sj-explore |
-| Superpowers | writing-plans | sj-propose |
-| Superpowers | executing-plans | sj-apply |
-| Superpowers | test-driven-development | sj-apply |
-| Superpowers | subagent-driven-development | sj-apply |
-| Superpowers | dispatching-parallel-agents | sj-apply |
-| Superpowers | systematic-debugging | sj-debug |
-| Superpowers | requesting-code-review | sj-review |
-| Superpowers | receiving-code-review | sj-review |
-| Superpowers | verification-before-completion | sj-verify |
-| Superpowers | finishing-a-development-branch | sj-finish |
-| Superpowers | using-git-worktrees | sj-finish |
+const COVERAGE: &str = "| Tool | Item | Skill | Depth |
+| --- | --- | --- | --- |
+| Superpowers | brainstorming | sj-explore | SKILL.md |
+| Superpowers | writing-plans | sj-propose | SKILL.md |
+| Superpowers | executing-plans | sj-apply | SKILL.md |
+| Superpowers | test-driven-development | sj-apply | writing-good-tests.md |
+| Superpowers | subagent-driven-development | sj-apply | task-reviewer-prompt.md |
+| Superpowers | dispatching-parallel-agents | sj-apply | implementer-prompt.md |
+| Superpowers | systematic-debugging | sj-debug | root-cause-tracing.md |
+| Superpowers | requesting-code-review | sj-review | SKILL.md |
+| Superpowers | receiving-code-review | sj-review | SKILL.md |
+| Superpowers | verification-before-completion | sj-verify | SKILL.md |
+| Superpowers | finishing-a-development-branch | sj-finish | SKILL.md |
+| Superpowers | using-git-worktrees | sj-finish | SKILL.md |
 | OpenSpec | explore | sj-explore |
 | OpenSpec | propose | sj-propose |
 | OpenSpec | apply | sj-apply |
@@ -151,7 +151,10 @@ fn skill_001_a_complete_fixture_checks_clean() {
 fn skill_001_coverage_is_complete() {
     let dir = valid();
     let coverage = COVERAGE
-        .replace("| Superpowers | brainstorming | sj-explore |\n", "")
+        .replace(
+            "| Superpowers | brainstorming | sj-explore | SKILL.md |\n",
+            "",
+        )
         .replace("| OpenSpec | onboard | sj-onboard |\n", "")
         .replace(
             "| OpenSpec | sync | sj-finish |",
@@ -800,4 +803,43 @@ fn skill_016_sj_verify_does_not_trust_a_subagents_report() {
     let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
     let got = messages(&shipped);
     assert!(!got.iter().any(|m| m.starts_with("sj-verify")), "{got:?}");
+}
+
+// spec: SKILL-017
+#[test]
+fn skill_017_a_depth_file_that_does_not_exist_fails_the_check() {
+    let dir = valid();
+    let coverage = COVERAGE
+        .replace(
+            "| systematic-debugging | sj-debug | root-cause-tracing.md |",
+            "| systematic-debugging | sj-debug | root-cause.md |",
+        )
+        .replace(
+            "| verification-before-completion | sj-verify | SKILL.md |",
+            "| verification-before-completion | sj-verify | |",
+        );
+    put(dir.path(), "COVERAGE.md", &coverage);
+    let got = messages(dir.path());
+    for want in [
+        "coverage: Superpowers systematic-debugging depth sj-debug/root-cause.md does not exist",
+        "coverage: Superpowers verification-before-completion has no depth",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+    assert!(
+        !got.iter()
+            .any(|m| m.contains("OpenSpec") || m.contains("Spec Kit")),
+        "OpenSpec and Spec Kit rows need no depth: {got:?}"
+    );
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let text = std::fs::read_to_string(shipped.join("COVERAGE.md")).unwrap();
+    assert!(
+        text.contains("| Tool | Item | Skill | Depth |"),
+        "shipped COVERAGE.md has no Depth column"
+    );
+    assert!(
+        text.contains("| Superpowers | systematic-debugging | sj-debug | root-cause-tracing.md |"),
+        "shipped COVERAGE.md lacks the debugging depth"
+    );
+    assert_eq!(messages(&shipped), Vec::<String>::new());
 }
