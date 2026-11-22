@@ -12,4 +12,4 @@
 
 ## 3. Migrate
 
-- [ ] 3.1 Ignore the ledger in `sj migrate --write`, list it in the preview, and check the migration commit passes the gate (MIG-011)
+- [x] 3.1 Ignore the ledger in `sj migrate --write`, list it in the preview, and check the migration commit passes the gate (MIG-011)

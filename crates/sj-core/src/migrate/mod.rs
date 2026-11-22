@@ -257,8 +257,12 @@ pub fn plan(root: &Path, tools: &[Tool], today: &str) -> Result<Plan> {
     // The local run ledger stays out of the migration commit (MIG-011).
     match config::ledger_ignore(root) {
         config::LedgerIgnore::Present => {}
-        config::LedgerIgnore::Change => p.lines.push("change .gitignore (ignore the ledger)".into()),
-        config::LedgerIgnore::Create => p.lines.push("create .gitignore (ignore the ledger)".into()),
+        config::LedgerIgnore::Change => {
+            p.lines.push("change .gitignore (ignore the ledger)".into())
+        }
+        config::LedgerIgnore::Create => {
+            p.lines.push("create .gitignore (ignore the ledger)".into())
+        }
     }
 
     if tools.contains(&Tool::OpenSpec) {

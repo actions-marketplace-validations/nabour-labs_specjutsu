@@ -64,7 +64,10 @@ fn conf_036_each_lockfile_picks_its_install_command() {
         setup("bun", Runner::Vitest).as_deref(),
         Some("bun install --frozen-lockfile")
     );
-    assert_eq!(setup("svc", Runner::Pytest).as_deref(), Some("uv sync --frozen"));
+    assert_eq!(
+        setup("svc", Runner::Pytest).as_deref(),
+        Some("uv sync --frozen")
+    );
 }
 
 #[test]

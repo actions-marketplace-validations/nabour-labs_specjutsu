@@ -42,9 +42,7 @@ fn gate_049_keep_a_nested_config_named_folder_is_still_source() {
     repo.branch("feature");
     repo.write("src/.claude/tool.rs", "pub fn tool() {}\n");
     repo.commit("tool");
-    gate(&repo)
-        .code(1)
-        .stdout(predicate::str::contains(
-            "unspecified change: src/.claude/tool.rs",
-        ));
+    gate(&repo).code(1).stdout(predicate::str::contains(
+        "unspecified change: src/.claude/tool.rs",
+    ));
 }

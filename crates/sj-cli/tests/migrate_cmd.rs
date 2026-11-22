@@ -483,9 +483,15 @@ fn mig_011_the_migration_commit_passes_the_gate() {
         "apps/api/package.json",
         r#"{"name":"api","devDependencies":{"vitest":"^3.0.0"}}"#,
     );
-    repo.write("apps/api/src/math.ts", "export const add = (a, b) => a + b\n");
+    repo.write(
+        "apps/api/src/math.ts",
+        "export const add = (a, b) => a + b\n",
+    );
     repo.write(".gitignore", "node_modules/\n");
-    repo.write(".claude/settings.json", "{\"permissions\":{\"allow\":[]}}\n");
+    repo.write(
+        ".claude/settings.json",
+        "{\"permissions\":{\"allow\":[]}}\n",
+    );
     repo.write("openspec/specs/math/spec.md", SPEC);
     repo.write("openspec/changes/.gitkeep", "");
     repo.write("openspec/config.yaml", CONFIG_YAML);
@@ -511,7 +517,10 @@ fn mig_011_the_migration_commit_passes_the_gate() {
         .assert()
         .success();
     let ignore = read(&repo, ".gitignore");
-    assert!(ignore.lines().any(|l| l == ".specjutsu/ledger/"), "{ignore}");
+    assert!(
+        ignore.lines().any(|l| l == ".specjutsu/ledger/"),
+        "{ignore}"
+    );
     let toml = read(&repo, "specjutsu.toml");
     assert!(
         toml.contains("setup = \"pnpm install --frozen-lockfile\""),

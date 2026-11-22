@@ -286,7 +286,9 @@ the full test suite.
 
 The gate fails closed. Any changed file counts as source, so it needs a scenario
 or an exemption, unless it is a test, a spec, documentation or media (`*.md`,
-`*.txt`, images), repository metadata (`.github/`, `.gitignore`, `LICENSE`), or a
+`*.txt`, images), repository metadata (`.github/`, `.gitignore`, `LICENSE`), tool
+configuration (`specjutsu.toml` and the root agent folders `.claude/`, `.agents/`,
+`.agent/`, `.codex/`, `.cursor/`, `.gemini/`, `.kiro/`, `.windsurf/`, `.clinerules/`), or a
 manifest or lockfile (`Cargo.toml`, `package.json`, `pyproject.toml`, …). A new
 or edited scenario without an ID fails as `unidentified`. Existing scenarios
 without IDs are counted in one warning. With no test suite configured (no
@@ -295,7 +297,11 @@ without IDs are counted in one warning. With no test suite configured (no
 
 A base checkout has no installed dependencies, so a suite that needs them declares
 `setup`. The gate runs it once in the base package directory before that suite's
-base run, and a failing setup exits 2 with its last 20 lines. A suite that can't run
+base run, and a failing setup exits 2 with its last 20 lines. A suite whose base run
+writes no report at all, because its runner couldn't start, also exits 2 rather than
+counting as red. `sj adopt` writes `setup` from the nearest lockfile (`pnpm install
+--frozen-lockfile`, `npm ci`, `yarn install --frozen-lockfile`, `bun install
+--frozen-lockfile`, `uv sync --frozen`) and notes suites it found none for. A suite that can't run
 on old code at all, such as end-to-end tests against a deployed API, says so:
 
 ```toml
