@@ -184,9 +184,11 @@ pub fn decide(root: &Path, target: &str) -> Result<Decision> {
         .filter(|r| r.result.is_red())
         .flat_map(|r| r.ids)
         .collect();
+    // A `[keep]` scenario passes on base, so it never has a red run (ADAPT-043).
+    let keep = crate::spec::keep_ids(&spec_root)?;
     let reasons: Vec<String> = ids
         .iter()
-        .filter(|id| !red.contains(*id))
+        .filter(|id| !red.contains(*id) && !keep.contains(*id))
         .map(|id| format!("write a failing test for {id} first (sj test {id})"))
         .collect();
     Ok(match (reasons.is_empty(), config.mode) {
