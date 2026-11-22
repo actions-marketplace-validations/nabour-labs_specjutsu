@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 
 /// specjutsu — make AI coding agents prove their work.
@@ -780,24 +780,21 @@ fn run() -> Result<ExitCode> {
             }
             let baseline_file = root.join(&spec_root).join(sj_core::trace::BASELINE_FILE);
             let baseline = if baseline_file.exists() {
-                Some(sj_core::trace::Baseline::parse(&std::fs::read_to_string(
-                    &baseline_file,
-                )?)?)
+                let text = std::fs::read_to_string(&baseline_file)
+                    .with_context(|| baseline_file.display().to_string())?;
+                Some(
+                    sj_core::trace::Baseline::parse(&text)
+                        .with_context(|| baseline_file.display().to_string())?,
+                )
             } else {
                 None
             };
             let known = Known::new(&report, baseline.as_ref());
-            if json {
-                let mut value = serde_json::to_value(&report)?;
-                if baseline.is_some() {
-                    for (key, flags) in [("gaps", &known.gaps), ("orphans", &known.orphans)] {
-                        for (entry, k) in value[key].as_array_mut().into_iter().flatten().zip(flags)
-                        {
-                            entry["known"] = (*k).into();
-                        }
-                    }
-                }
-                println!("{}", serde_json::to_string_pretty(&value)?);
+            if json && baseline.is_some() {
+                let view = KnownReport::new(&report, &known);
+                println!("{}", serde_json::to_string_pretty(&view)?);
+            } else if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
                 print_compact(&report, &root, &known, baseline.is_some());
             }
@@ -1930,6 +1927,43 @@ impl Known {
     /// A gap or orphan the baseline doesn't list.
     fn has_new(&self) -> bool {
         self.gaps.iter().chain(&self.orphans).any(|k| !k)
+    }
+}
+
+/// A report item with its `known` flag appended, its own fields kept in order.
+#[derive(serde::Serialize)]
+struct Flagged<'a, T> {
+    #[serde(flatten)]
+    item: &'a T,
+    known: bool,
+}
+
+/// `Report` as `--json` prints it when a baseline exists: same fields, same order.
+#[derive(serde::Serialize)]
+struct KnownReport<'a> {
+    mapped: &'a [sj_core::trace::Mapped],
+    gaps: Vec<Flagged<'a, sj_core::spec::Scenario>>,
+    orphans: Vec<Flagged<'a, sj_core::trace::Orphan>>,
+    unidentified: &'a [sj_core::spec::Scenario],
+    warnings: &'a [String],
+}
+
+impl<'a> KnownReport<'a> {
+    fn new(r: &'a sj_core::trace::Report, known: &Known) -> Self {
+        fn flag<'a, T>(items: &'a [T], flags: &[bool]) -> Vec<Flagged<'a, T>> {
+            items
+                .iter()
+                .zip(flags)
+                .map(|(item, &known)| Flagged { item, known })
+                .collect()
+        }
+        KnownReport {
+            mapped: &r.mapped,
+            gaps: flag(&r.gaps, &known.gaps),
+            orphans: flag(&r.orphans, &known.orphans),
+            unidentified: &r.unidentified,
+            warnings: &r.warnings,
+        }
     }
 }
 

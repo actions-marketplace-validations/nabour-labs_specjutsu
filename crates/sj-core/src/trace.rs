@@ -76,7 +76,8 @@ impl Baseline {
     }
 
     /// Read the format [`Baseline::render`] writes. Blank lines are skipped; an orphan's test
-    /// name is the rest of its line, since JS/TS test names contain spaces.
+    /// name is the rest of its line, since JS/TS test names contain spaces. Errors name the line;
+    /// the caller adds where the text came from.
     pub fn parse(text: &str) -> Result<Self> {
         let mut entries = BTreeSet::new();
         for (i, line) in text.lines().enumerate() {
@@ -89,7 +90,7 @@ impl Baseline {
                 ["orphan", id, file, test] => {
                     BaselineEntry::Orphan(id.to_string(), file.to_string(), test.to_string())
                 }
-                _ => bail!("{BASELINE_FILE}:{}: unrecognised line `{line}`", i + 1),
+                _ => bail!("line {}: unrecognised baseline entry `{line}`", i + 1),
             };
             entries.insert(entry);
         }

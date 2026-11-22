@@ -29,6 +29,7 @@ Pilot feedback, requests 7, 8 and 9. The current state:
 - **Format:** plain text at `<spec_root>/trace-baseline.txt`, one sorted entry per line: `gap <ID>`, or `orphan <ID> <file> <test>`. It diffs and merges cleanly, and a reviewer reads it directly.
   - *Rejected:* JSON, which is noisier in diffs and merge conflicts.
   - *Rejected:* a `[trace] ignore = [...]` list in `specjutsu.toml`, which bloats the config with 3,000 lines.
+- **No spaces in test file paths:** an orphan's file is the field before the test name, unquoted, so an entry whose file path contains a space doesn't read back as the same entry. That orphan counts as new and `--strict` fails, so nothing is hidden. Accepted: test paths with spaces are rare, and quoting would complicate a format meant to be read by eye.
 - **Orphan key:** an orphan is keyed by ID, file and test name. Keying by ID alone would let a new test reuse a baselined unknown ID unnoticed.
 
 ### Where the gate reads the baseline
