@@ -22,6 +22,16 @@ fn pkg<'a>(c: &'a Config, path: &str) -> &'a Package {
         .unwrap_or_else(|| panic!("no package {path} in {:?}", c.packages))
 }
 
+/// The `no runner detected` notes; these fixtures have no lockfiles, so they also get
+/// `no lockfile` notes (CONF-037).
+fn runner_notes(notes: &[String]) -> Vec<&str> {
+    notes
+        .iter()
+        .map(String::as_str)
+        .filter(|n| n.starts_with("no runner detected"))
+        .collect()
+}
+
 fn runners(p: &Package) -> Vec<Runner> {
     p.suites.iter().map(|s| s.runner).collect()
 }
@@ -176,7 +186,7 @@ fn conf_010_a_package_with_no_detectable_runner_is_reported() {
     support::monorepo(dir.path());
     let d = detect(dir.path()).unwrap();
     assert!(pkg(&d.config, "packages/ui").suites.is_empty());
-    assert_eq!(d.notes, ["no runner detected: packages/ui"]);
+    assert_eq!(runner_notes(&d.notes), ["no runner detected: packages/ui"]);
 }
 
 #[test]
@@ -210,5 +220,5 @@ fn conf_008_separate_packages_without_a_workspace() {
     let paths: Vec<_> = d.config.packages.iter().map(|p| p.path.as_str()).collect();
     assert_eq!(paths, ["backend", "infra", "pwa"]);
     assert_eq!(runners(pkg(&d.config, "pwa")), [Runner::Vitest]);
-    assert_eq!(d.notes, ["no runner detected: infra"]);
+    assert_eq!(runner_notes(&d.notes), ["no runner detected: infra"]);
 }

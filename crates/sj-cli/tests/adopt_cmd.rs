@@ -88,3 +88,33 @@ fn conf_034_adopt_creates_the_spec_folders() {
         .assert()
         .stdout(predicate::str::contains("missing spec root").not());
 }
+
+/// CONF-038 (specjutsu/changes/migrate-ready).
+#[test]
+fn conf_038_adopt_adds_the_ledger_to_gitignore_once() {
+    let cargo = "[package]\nname = \"x\"\nversion = \"0.1.0\"\nedition = \"2021\"\n";
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("Cargo.toml"), cargo).unwrap();
+    std::fs::write(dir.path().join(".gitignore"), "node_modules/\n").unwrap();
+    adopt(dir.path(), &[]).success();
+    adopt(dir.path(), &["--force"]).success();
+    let ignore = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+    let lines: Vec<&str> = ignore.lines().collect();
+    assert!(lines.contains(&"node_modules/"), "{ignore}");
+    assert_eq!(
+        lines.iter().filter(|l| **l == ".specjutsu/ledger/").count(),
+        1,
+        "{ignore}"
+    );
+
+    // `sj init` does the same, creating the file when there is none.
+    let fresh = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["init", "--root"])
+        .arg(fresh.path())
+        .assert()
+        .success();
+    let ignore = std::fs::read_to_string(fresh.path().join(".gitignore")).unwrap();
+    assert_eq!(ignore, ".specjutsu/ledger/\n");
+}

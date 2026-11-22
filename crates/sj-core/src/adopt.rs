@@ -74,6 +74,18 @@ pub fn detect(root: &Path) -> Result<Detected> {
             if suites.is_empty() {
                 notes.push(format!("no runner detected: {path}"));
             }
+            for s in &mut suites {
+                if s.runner == Runner::Cargo {
+                    continue;
+                }
+                s.setup = setup_for(root, &path, s.runner);
+                if s.setup.is_none() {
+                    notes.push(format!(
+                        "no lockfile: declare setup for {path}:{}",
+                        s.runner.as_str()
+                    ));
+                }
+            }
             let cargo_only = !suites.is_empty() && suites.iter().all(|s| s.runner == Runner::Cargo);
             let sources = match (path.as_str(), cargo_only) {
                 (".", true) => vec!["**/*.rs".to_string()],
@@ -103,6 +115,41 @@ pub fn detect(root: &Path) -> Result<Detected> {
         },
         notes,
     })
+}
+
+/// Lockfiles that name a JS package manager, with its frozen install command (CONF-035, 036).
+const JS_LOCKS: [(&str, &str); 5] = [
+    ("pnpm-lock.yaml", "pnpm install --frozen-lockfile"),
+    ("package-lock.json", "npm ci"),
+    ("yarn.lock", "yarn install --frozen-lockfile"),
+    ("bun.lock", "bun install --frozen-lockfile"),
+    ("bun.lockb", "bun install --frozen-lockfile"),
+];
+
+/// Lockfiles that name a Python environment manager, with its frozen sync command.
+const PY_LOCKS: [(&str, &str); 1] = [("uv.lock", "uv sync --frozen")];
+
+/// The base `setup` for a suite: the install command of the first lockfile in the package's
+/// folder or its nearest parent up to the root. A base worktree has no installed dependencies.
+fn setup_for(root: &Path, dir: &str, runner: Runner) -> Option<String> {
+    let locks: &[(&str, &str)] = match runner {
+        Runner::Vitest | Runner::Jest | Runner::Playwright => &JS_LOCKS,
+        Runner::Pytest => &PY_LOCKS,
+        Runner::Cargo | Runner::Junit => return None,
+    };
+    let mut cur = if dir == "." {
+        root.to_path_buf()
+    } else {
+        root.join(dir)
+    };
+    loop {
+        if let Some((_, cmd)) = locks.iter().find(|(f, _)| cur.join(f).is_file()) {
+            return Some((*cmd).to_string());
+        }
+        if cur == root || !cur.pop() {
+            return None;
+        }
+    }
 }
 
 /// Directories (relative, forward slashes, `.` for the root) holding each kind of manifest.
