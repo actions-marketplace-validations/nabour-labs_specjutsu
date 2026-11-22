@@ -1,4 +1,5 @@
-//! TRACE-017 from specjutsu/changes/brownfield-adoption: `sj trace --write-baseline`.
+//! TRACE-017..019 from specjutsu/changes/brownfield-adoption: `sj trace --write-baseline`, and
+//! `sj trace` reading the baseline.
 
 use std::path::Path;
 
@@ -25,6 +26,100 @@ sources = ["src/**"]
 runner = "cargo"
 tests = ["tests/**"]
 "#;
+
+/// A temp repo with `spec` as its only spec file and `tests` as tests/auth.rs.
+fn fixture(spec: &str, tests: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    write(r, "specjutsu.toml", CONFIG);
+    write(
+        r,
+        "Cargo.toml",
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    );
+    write(r, "src/lib.rs", "");
+    write(r, "specjutsu/specs/auth/spec.md", spec);
+    write(r, "tests/auth.rs", tests);
+    dir
+}
+
+fn sj_trace(root: &Path, args: &[&str]) -> std::process::Output {
+    Command::cargo_bin("sj")
+        .unwrap()
+        .arg("trace")
+        .args(args)
+        .arg("--root")
+        .arg(root)
+        .output()
+        .unwrap()
+}
+
+/// Output lines starting with `prefix` (e.g. `gap `).
+fn lines_with<'a>(stdout: &'a str, prefix: &str) -> Vec<&'a str> {
+    stdout.lines().filter(|l| l.starts_with(prefix)).collect()
+}
+
+#[test]
+fn trace_018_only_new_gaps_get_a_line() {
+    let spec = format!("{SPEC}\n#### Scenario: AUTH-006 Log out\n- **WHEN** x\n- **THEN** y\n");
+    let dir = fixture(&spec, "");
+    let r = dir.path();
+    write(
+        r,
+        "specjutsu/trace-baseline.txt",
+        "gap AUTH-002\ngap AUTH-005\n",
+    );
+
+    let out = sj_trace(r, &["--strict"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let gaps = lines_with(&stdout, "gap ");
+    assert_eq!(gaps.len(), 1, "{stdout}");
+    assert!(gaps[0].contains("AUTH-006"), "{stdout}");
+    assert!(stdout.contains("3 gaps (2 known)"), "{stdout}");
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+
+    let out = sj_trace(r, &["--strict", "--json"]);
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let known = |id: &str| {
+        json["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["id"] == id)
+            .unwrap_or_else(|| panic!("no gap {id}: {json}"))["known"]
+            .clone()
+    };
+    assert_eq!(known("AUTH-006"), serde_json::json!(false));
+    assert_eq!(known("AUTH-002"), serde_json::json!(true));
+}
+
+#[test]
+fn trace_019_known_entries_alone_pass_strict() {
+    let dir = fixture(
+        SPEC,
+        "#[test]\nfn auth_005_refresh() {}\n#[test]\nfn auth_009_old() {}\n",
+    );
+    let r = dir.path();
+    write(
+        r,
+        "specjutsu/trace-baseline.txt",
+        "gap AUTH-002\norphan AUTH-009 tests/auth.rs auth_009_old\n",
+    );
+
+    let out = sj_trace(r, &["--strict"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("1 gap"),
+        "fixture must have the gap: {stdout}"
+    );
+    assert!(
+        stdout.contains("1 orphan"),
+        "fixture must have the orphan: {stdout}"
+    );
+    assert!(lines_with(&stdout, "gap ").is_empty(), "{stdout}");
+    assert!(lines_with(&stdout, "orphan ").is_empty(), "{stdout}");
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
 
 #[test]
 fn trace_017_write_baseline_lists_every_gap_and_orphan() {
