@@ -28,7 +28,8 @@ All notable changes are recorded here. The format follows
   `baseline-added <entry>` is a problem without a `config` exemption.
 - `sj ids prefixes` prints a short, collision-free `[ids.prefixes]` table, keeping
   prefixes already mapped or in use (`distribution = "DIST"`). `--write` adds the
-  missing lines to `specjutsu.toml` and changes no other byte. `sj ids` ends with a
+  missing lines to `specjutsu.toml` and changes no other byte. A clash it can't
+  lengthen away exits 2 naming both capabilities and the prefix. `sj ids` ends with a
   `hint:` line when a derived prefix is longer than six letters.
 - `sj migrate --from openspec` pins those short prefixes in `specjutsu.toml` before it
   assigns IDs, so `distribution` gets `DIST-001`.

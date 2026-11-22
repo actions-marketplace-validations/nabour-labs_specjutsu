@@ -711,7 +711,11 @@ Each prefix is chosen in this order:
 
 Suggestions that clash with each other or with a kept prefix are lengthened together,
 one letter at a time, until all differ (`transactions` → `TRANSA`, `transfers` →
-`TRANSF`).
+`TRANSF`). When names run out of letters and still clash, as `bill` does with
+`billing = "BILL"`, it exits 2 without printing the table or writing anything:
+`` capabilities `bill` and `billing` both use prefix BILL ``. Map one of them in
+`[ids.prefixes]` by hand. `sj migrate --from openspec` refuses the same way before
+it changes anything.
 
 `sj ids prefixes --write` adds the capabilities missing from `[ids.prefixes]` to
 `specjutsu.toml` and prints `added 5 prefixes to specjutsu.toml`. It only appends

@@ -45,11 +45,12 @@ const SHORT: usize = 4;
 /// Suggested prefixes for `open` capabilities, beside the `kept` ones (capability to prefix).
 /// A capability's letters, uppercased, are kept whole up to six letters and cut to four
 /// beyond that; suggestions equal to each other or to a kept prefix lengthen together, one
-/// letter at a time, until distinct or out of letters. Returns `kept` plus the suggestions.
+/// letter at a time, until distinct or out of letters. Returns `kept` plus the suggestions,
+/// or an error naming two `open` capabilities and their prefix when a clash is left.
 pub fn suggest_prefixes(
     kept: &BTreeMap<String, String>,
     open: &[String],
-) -> BTreeMap<String, String> {
+) -> Result<BTreeMap<String, String>> {
     let letters: Vec<(&String, String)> = open
         .iter()
         .filter(|c| !kept.contains_key(*c))
@@ -85,9 +86,24 @@ pub fn suggest_prefixes(
     }
     let mut out = kept.clone();
     for ((cap, l), n) in letters.iter().zip(&len) {
-        out.insert((*cap).clone(), l[..*n].to_string());
+        let prefix = &l[..*n];
+        let other = out
+            .iter()
+            .find(|(c, p)| *p == prefix && *c != *cap && open.contains(c))
+            .map(|(c, _)| c.clone());
+        if let Some(other) = other {
+            let mut pair = [other.as_str(), cap.as_str()];
+            pair.sort();
+            bail!(
+                "capabilities `{}` and `{}` both use prefix {prefix}; \
+                 map one in [ids.prefixes] in specjutsu.toml",
+                pair[0],
+                pair[1]
+            );
+        }
+        out.insert((*cap).clone(), prefix.to_string());
     }
-    out
+    Ok(out)
 }
 
 /// The `[ids.prefixes]` table `sj ids prefixes` prints: one line per capability folder. A
@@ -126,7 +142,7 @@ fn table_with_use(
             }
         }
     }
-    let mut table = suggest_prefixes(&kept, &folders);
+    let mut table = suggest_prefixes(&kept, &folders)?;
     table.retain(|cap, _| folders.contains(cap));
     Ok(table)
 }
