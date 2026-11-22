@@ -366,7 +366,11 @@ enum SpecCommand {
 #[derive(Subcommand)]
 enum IdsCommand {
     /// Print an [ids.prefixes] table with a short prefix for every capability folder.
-    Prefixes,
+    Prefixes {
+        /// Add the capabilities missing from [ids.prefixes] to specjutsu.toml.
+        #[arg(long)]
+        write: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -613,11 +617,26 @@ fn run() -> Result<ExitCode> {
         } => adopt_cmd(&root, dry_run, force),
         Command::Spec { command } => spec_cmd(command),
         Command::Ids {
-            command: Some(IdsCommand::Prefixes),
+            command: Some(IdsCommand::Prefixes { .. }),
+            write: true,
+            ..
+        }
+        | Command::Ids {
+            command: Some(IdsCommand::Prefixes { .. }),
+            json: true,
+            ..
+        } => {
+            anyhow::bail!(
+                "`sj ids --write` and `--json` do not apply to `prefixes`; \
+                 use `sj ids prefixes --write`"
+            )
+        }
+        Command::Ids {
+            command: Some(IdsCommand::Prefixes { write }),
             root,
             spec_root,
             ..
-        } => ids_prefixes_cmd(&root, spec_root),
+        } => ids_prefixes_cmd(&root, spec_root, write),
         Command::Ids {
             command: None,
             write,
@@ -1847,13 +1866,34 @@ fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> 
     Ok(ExitCode::SUCCESS)
 }
 
-fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>) -> Result<ExitCode> {
+fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>, write: bool) -> Result<ExitCode> {
     let config = sj_core::config::load(root)?;
     let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
     let table = sj_core::ids::prefix_table(&root.join(&spec_root), &config.id_prefixes)?;
     println!("[ids.prefixes]");
     for (cap, prefix) in &table {
         println!("{cap} = \"{prefix}\"");
+    }
+    if write {
+        let missing: std::collections::BTreeMap<String, String> = table
+            .into_iter()
+            .filter(|(cap, _)| !config.id_prefixes.contains_key(cap))
+            .collect();
+        if !missing.is_empty() {
+            let path = root.join("specjutsu.toml");
+            let before = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+                Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+            };
+            let after = sj_core::ids::add_prefix_lines(&before, &missing);
+            std::fs::write(&path, after).with_context(|| format!("writing {}", path.display()))?;
+        }
+        let n = missing.len();
+        println!(
+            "added {n} {} to specjutsu.toml",
+            if n == 1 { "prefix" } else { "prefixes" }
+        );
     }
     Ok(ExitCode::SUCCESS)
 }

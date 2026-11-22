@@ -222,14 +222,23 @@ fn ids_011_writing_keeps_the_rest_of_the_file() {
             USER_AUTH,
         );
     }
-    let toml = "# project settings\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\n";
+    let toml =
+        "# project settings\nschema = 1\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\n";
     put(dir.path(), "specjutsu.toml", toml);
-    sj(dir.path()).arg("prefixes").arg("--write").assert().success();
+    sj(dir.path())
+        .arg("prefixes")
+        .arg("--write")
+        .assert()
+        .success();
     assert_eq!(
         read(dir.path(), "specjutsu.toml"),
-        "# project settings\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\ndistribution = \"DIST\"\n"
+        "# project settings\nschema = 1\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\ndistribution = \"DIST\"\n"
     );
     let after = read(dir.path(), "specjutsu.toml");
-    sj(dir.path()).arg("prefixes").arg("--write").assert().success();
+    sj(dir.path())
+        .arg("prefixes")
+        .arg("--write")
+        .assert()
+        .success();
     assert_eq!(read(dir.path(), "specjutsu.toml"), after);
 }

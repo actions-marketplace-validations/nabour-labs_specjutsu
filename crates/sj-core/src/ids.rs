@@ -138,6 +138,74 @@ pub fn prefix_table(
     Ok(table)
 }
 
+/// `toml` (the text of `specjutsu.toml`) with a `key = "VALUE"` line for each of `add`
+/// spliced into `[ids.prefixes]`, after the table's last key line; the table is appended at
+/// the end when absent. Every other byte is kept, and new lines use the file's line ending.
+pub fn add_prefix_lines(toml: &str, add: &BTreeMap<String, String>) -> String {
+    if add.is_empty() {
+        return toml.to_string();
+    }
+    let eol = if toml.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut new_lines = String::new();
+    for (cap, prefix) in add {
+        new_lines.push_str(&format!("{} = \"{prefix}\"{eol}", toml_key(cap)));
+    }
+    let lines: Vec<&str> = toml.split_inclusive('\n').collect();
+    let is_header = |l: &str| {
+        l.trim()
+            .strip_prefix("[ids.prefixes]")
+            .is_some_and(|rest| rest.trim().is_empty() || rest.trim().starts_with('#'))
+    };
+    let Some(header) = lines.iter().position(|l| is_header(l)) else {
+        let mut out = toml.to_string();
+        if !out.is_empty() {
+            if !out.ends_with('\n') {
+                out.push_str(eol);
+            }
+            out.push_str(eol);
+        }
+        out.push_str("[ids.prefixes]");
+        out.push_str(eol);
+        out.push_str(&new_lines);
+        return out;
+    };
+    // The last key line before the next table header, or the header itself.
+    let mut last = header;
+    for (i, l) in lines.iter().enumerate().skip(header + 1) {
+        let t = l.trim();
+        if t.starts_with('[') {
+            break;
+        }
+        if !t.is_empty() && !t.starts_with('#') {
+            last = i;
+        }
+    }
+    let mut out = String::with_capacity(toml.len() + new_lines.len() + eol.len());
+    for (i, l) in lines.iter().enumerate() {
+        out.push_str(l);
+        if i == last {
+            if !l.ends_with('\n') {
+                out.push_str(eol);
+            }
+            out.push_str(&new_lines);
+        }
+    }
+    out
+}
+
+/// `key` as a TOML key: bare when it may be, quoted otherwise.
+fn toml_key(key: &str) -> String {
+    let bare = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if bare {
+        key.to_string()
+    } else {
+        format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
 /// Where a spec file sits relative to the spec root.
 struct Place {
     capability: Option<String>,
