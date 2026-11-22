@@ -1238,6 +1238,7 @@ fn test_cmd(
 ) -> Result<ExitCode> {
     use sj_core::ledger::{self, Recorded};
     use sj_core::run::{run_tests, Scope};
+    use std::fmt::Write as _;
 
     let run = run_tests(&root, &spec_root, &Scope::parse(scope.as_deref()))?;
     if !no_ledger {
@@ -1247,17 +1248,19 @@ fn test_cmd(
             Err(e) => eprintln!("warn    run not recorded: {e:#}"),
         }
     }
+    // Built in full first so the bytes printed can be counted for the gain record.
+    let mut out = String::new();
     if json {
-        println!("{}", serde_json::to_string_pretty(&run)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&run)?)?;
     } else if run.build_failed {
         if run.suites.len() > 1 {
             let names: Vec<&str> = run.suites.iter().map(|s| s.name.as_str()).collect();
-            println!("test: fail — build failed ({})", names.join(", "));
+            writeln!(out, "test: fail — build failed ({})", names.join(", "))?;
         } else {
-            println!("test: fail — build failed");
+            writeln!(out, "test: fail — build failed")?;
         }
         for l in &run.build_errors {
-            println!("        {l}");
+            writeln!(out, "        {l}")?;
         }
     } else {
         let mut counts = Vec::new();
@@ -1280,38 +1283,50 @@ fn test_cmd(
         } else {
             String::new()
         };
-        println!("test: {verdict} — {}{suffix}", counts.join(", "));
+        writeln!(out, "test: {verdict} — {}{suffix}", counts.join(", "))?;
         for t in run
             .tests
             .iter()
             .filter(|t| t.result == sj_core::run::Outcome::Failed)
         {
             if t.ids.is_empty() {
-                println!("fail    {}", t.path);
+                writeln!(out, "fail    {}", t.path)?;
             } else {
-                println!("fail    {}  {}", t.path, t.ids.join(", "));
+                writeln!(out, "fail    {}  {}", t.path, t.ids.join(", "))?;
             }
             if let Some(ex) = &t.excerpt {
                 for l in &ex.lines {
-                    println!("        {l}");
+                    writeln!(out, "        {l}")?;
                 }
                 if ex.omitted > 0 {
-                    println!("        … {} more", plural(ex.omitted, "line"));
+                    writeln!(out, "        … {} more", plural(ex.omitted, "line"))?;
                 }
             }
         }
         for s in run.suites.iter().filter(|s| !s.build_errors.is_empty()) {
-            println!("build failed ({})", s.name);
+            writeln!(out, "build failed ({})", s.name)?;
             for l in &s.build_errors {
-                println!("        {l}");
+                writeln!(out, "        {l}")?;
             }
         }
     }
+    print_and_record_gain(&root, no_ledger, "test", &out, run.raw_bytes);
     Ok(if run.pass {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
     })
+}
+
+/// Print `out` to stdout as is, then record its length against `raw` in the gain records. A
+/// record that can't be written warns on stderr and the command carries on.
+fn print_and_record_gain(root: &Path, no_ledger: bool, command: &str, out: &str, raw: u64) {
+    use std::io::Write as _;
+    print!("{out}");
+    let _ = std::io::stdout().flush();
+    if let Err(e) = sj_core::gain::record(root, no_ledger, command, out.len() as u64, raw) {
+        eprintln!("warn    gain not recorded: {e:#}");
+    }
 }
 
 fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode> {

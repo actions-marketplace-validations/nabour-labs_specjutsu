@@ -111,6 +111,9 @@ pub struct TestRun {
     /// Selected tests that could not build while other suites ran (recorded as build-failed).
     #[serde(skip)]
     pub partial_build_failed: Vec<(String, Vec<String>)>,
+    /// Combined stdout and stderr bytes of every runner process.
+    #[serde(skip)]
+    pub raw_bytes: u64,
 }
 
 /// One suite's part of a run.
@@ -294,6 +297,7 @@ pub fn run_tests(root: &Path, spec_root: &Path, scope: &Scope) -> Result<TestRun
             run.passed += sub.passed;
             run.failed += sub.failed;
             run.ignored += sub.ignored;
+            run.raw_bytes += sub.raw_bytes;
             run.tests.extend(sub.tests);
             run.selected.extend(sub.selected.iter().cloned());
             if sub.build_failed {
@@ -335,6 +339,7 @@ pub fn run_tests(root: &Path, spec_root: &Path, scope: &Scope) -> Result<TestRun
             }
         }
         let res = suite::run_suite(root, pkg, s, &traced, &pick)?;
+        run.raw_bytes += res.output_bytes;
         let mut sr = SuiteRun {
             name,
             ..SuiteRun::default()
@@ -440,11 +445,13 @@ fn run_cargo(root: &Path, spec_root: &Path, scope: &Scope) -> Result<TestRun> {
             build_failed: true,
             build_errors: d.build_errors,
             selected,
+            raw_bytes: d.output_bytes,
             ..TestRun::default()
         });
     }
     let mut run = TestRun {
         selected,
+        raw_bytes: d.output_bytes,
         ..TestRun::default()
     };
     for r in &d.run.results {
