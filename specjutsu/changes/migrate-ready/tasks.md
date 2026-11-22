@@ -2,8 +2,8 @@
 
 ## 1. Gate: config is not source
 
-- [ ] 1.1 Treat `specjutsu.toml` and root agent-config folders as non-source (GATE-048)
-- [ ] 1.2 Keep a nested config-named folder as source (GATE-049)
+- [x] 1.1 Treat `specjutsu.toml` and root agent-config folders as non-source (GATE-048)
+- [x] 1.2 Keep a nested config-named folder as source (GATE-049)
 
 ## 2. Adopt: setup and ledger
 
