@@ -291,3 +291,24 @@ fn loop_026_no_gain_record_from_next_outside_git() {
     assert_eq!(without.stdout, with.stdout);
     assert_eq!(without.status.code(), with.status.code());
 }
+
+#[test]
+fn loop_024_sj_next_with_no_open_task_records_raw_zero() {
+    let repo = next_fixture(true);
+    repo.write(
+        "openspec/changes/add-oauth-login/tasks.md",
+        "- [x] 1.1 Log in (AUTH-001)\n",
+    );
+    let out = sj_next(repo.path());
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "next: no open tasks\n"
+    );
+    let records = gain_records(repo.path());
+    assert_eq!(records.len(), 1, "{records:?}");
+    let r = &records[0];
+    assert_eq!(r["command"], "next");
+    assert_eq!(r["printed"], out.stdout.len() as u64);
+    assert_eq!(r["raw"], 0);
+}
