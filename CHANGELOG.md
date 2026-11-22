@@ -75,6 +75,10 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- `sj audit` and `sj gate` no longer report a Rust test as `assertion-free-test` when
+  its body holds a string that spans lines, such as a raw `r#"{ … }"#` JSON fixture or
+  a `"…\` continued string. The test scanner now keeps string, raw string, char literal
+  and block comment state across lines when it looks for the test's closing brace.
 - `sj audit` and `sj gate` no longer report a pytest test as `assertion-free-test` when
   its body holds a triple-quoted string with lines at column 0, such as a TOML or INI
   fixture. In JS/TS test files, a `\`-continued string no longer shifts the line numbers
