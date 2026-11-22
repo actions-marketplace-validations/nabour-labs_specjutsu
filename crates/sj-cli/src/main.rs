@@ -1907,13 +1907,11 @@ fn next_cmd(
             }
         }
     };
-    // Raw is the change folder reported on; with no open task none was, so 0.
-    let raw = match &name {
-        Some(name) => {
-            sj_core::gain::dir_bytes(&sj_core::authoring::find_change(&spec_root, name)?.dir)
-        }
-        None => 0,
-    };
+    // Raw is the change folder reported on; with no open task none was, so 0. A failed
+    // lookup also counts 0, so recording never changes the output or the exit code.
+    let raw = name
+        .and_then(|name| sj_core::authoring::find_change(&spec_root, &name).ok())
+        .map_or(0, |c| sj_core::gain::dir_bytes(&c.dir));
     let record = sj_core::gain::enabled(&root, false);
     print_and_record_gain(&root, record, "next", &out, raw);
     Ok(ExitCode::SUCCESS)
