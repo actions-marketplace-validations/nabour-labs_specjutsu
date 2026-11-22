@@ -88,3 +88,25 @@ fn adapt_047_a_reference_no_longer_shipped_is_removed() {
         .unwrap_or_default();
     assert_eq!(left, Vec::<String>::new());
 }
+
+// spec: ADAPT-047
+#[test]
+fn adapt_047_remove_agents_clears_stale_files_without_an_update_first() {
+    let dir = project();
+    let root = dir.path();
+    let stale_ref = ".claude/skills/sj-debug/old-technique.md";
+    let stale_skill = ".claude/skills/sj-old/SKILL.md";
+    let mine = ".claude/skills/sj-debug/mine.md";
+    std::fs::create_dir_all(root.join(".claude/skills/sj-old")).unwrap();
+    for rel in [stale_ref, stale_skill] {
+        std::fs::write(root.join(rel), sj_adapters::claude::generated("# Old\n")).unwrap();
+    }
+    std::fs::write(root.join(mine), "# My notes\n").unwrap();
+
+    sj(root, &["init", "--remove-agents", "claude"])
+        .assert()
+        .stdout(predicate::str::contains(format!("removed {stale_ref}")))
+        .stdout(predicate::str::contains(format!("removed {stale_skill}")));
+    assert!(!root.join(".claude/skills/sj-old").exists());
+    assert_eq!(read(root, mine), "# My notes\n");
+}
