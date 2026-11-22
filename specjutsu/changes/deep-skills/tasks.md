@@ -26,7 +26,7 @@ every task.
 
 ## 5. Coverage depth
 
-- [ ] 5.1 `COVERAGE.md` `Depth` column: parse 4 columns, require depth for Superpowers rows, check the file exists, and fill the depths from design decision 4 (SKILL-017)
+- [x] 5.1 `COVERAGE.md` `Depth` column: parse 4 columns, require depth for Superpowers rows, check the file exists, and fill the depths from design decision 4 (SKILL-017)
 
 ## 6. Docs
 
