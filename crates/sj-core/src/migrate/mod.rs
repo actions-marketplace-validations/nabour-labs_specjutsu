@@ -474,6 +474,11 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
             dirty.join("\n")
         );
     }
+    write_plan(root, plan)
+}
+
+/// The writes of [`apply`], without its clean-tree check.
+fn write_plan(root: &Path, plan: &Plan) -> Result<()> {
     if let Some(import) = &plan.import {
         let conflicts = import.conflicts();
         if !conflicts.is_empty() {
@@ -518,6 +523,56 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
     // Planned again now: the Superpowers step above may have changed `.claude/settings.json`.
     sj_adapters::plan::apply(agents::plan(root, &plan.agents, false)?)?;
     Ok(())
+}
+
+/// The files a project's migration may read: every file but those `.gitignore` excludes and
+/// `.git/`, relative to `root`.
+fn project_files(root: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .require_git(false)
+        .filter_entry(|e| e.file_name() != ".git")
+        .build()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+        .filter_map(|e| e.path().strip_prefix(root).ok().map(Path::to_path_buf))
+        .collect();
+    out.sort();
+    out
+}
+
+/// A unified diff of every file the migration would create or change, without writing to
+/// `root`: the plan is carried out on a copy of the project and the copy compared with it.
+pub fn diff(root: &Path, tools: &[Tool], today: &str) -> Result<String> {
+    let tmp = tempfile::tempdir().context("creating a temporary copy of the project")?;
+    let copy = tmp.path();
+    for f in project_files(root) {
+        let dest = copy.join(&f);
+        if let Some(dir) = dest.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create {}", dir.display()))?;
+        }
+        std::fs::copy(root.join(&f), &dest)
+            .with_context(|| format!("cannot copy {}", f.display()))?;
+    }
+    write_plan(copy, &plan(copy, tools, today)?)?;
+    let mut out = String::new();
+    for f in project_files(copy) {
+        let new = std::fs::read(copy.join(&f))?;
+        let old = std::fs::read(root.join(&f)).unwrap_or_default();
+        if new == old {
+            continue;
+        }
+        let (Ok(old), Ok(new)) = (String::from_utf8(old), String::from_utf8(new)) else {
+            continue;
+        };
+        out.push_str(&crate::linediff::unified(
+            &rel(&f, Path::new("")),
+            &old,
+            &new,
+        ));
+    }
+    Ok(out)
 }
 
 /// The checks after a write, and what git sees.

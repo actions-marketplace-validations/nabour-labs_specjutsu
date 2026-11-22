@@ -206,6 +206,9 @@ enum Command {
         /// Apply the plan. Needs a clean git working tree.
         #[arg(long)]
         write: bool,
+        /// With the preview, print a unified diff of every file it would create or change.
+        #[arg(long, conflicts_with = "write")]
+        diff: bool,
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
@@ -653,7 +656,12 @@ fn run() -> Result<ExitCode> {
                     json,
                 },
         } => import_speckit_cmd(&args, write, force, json),
-        Command::Migrate { from, write, root } => migrate_cmd(&root, &from, write),
+        Command::Migrate {
+            from,
+            write,
+            diff,
+            root,
+        } => migrate_cmd(&root, &from, write, diff),
         Command::Status { change, args, json } => status_cmd(change, &args, json),
         Command::View { args, json } => view_cmd(&args, json),
         Command::Task {
@@ -1648,7 +1656,7 @@ fn import_speckit_cmd(args: &SpecArgs, write: bool, force: bool, json: bool) -> 
     Ok(ExitCode::SUCCESS)
 }
 
-fn migrate_cmd(root: &Path, from: &[String], write: bool) -> Result<ExitCode> {
+fn migrate_cmd(root: &Path, from: &[String], write: bool, diff: bool) -> Result<ExitCode> {
     use sj_core::migrate::{self, Tool};
     let tools: Vec<Tool> = from.iter().filter_map(|f| Tool::parse(f)).collect();
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -1665,6 +1673,9 @@ fn migrate_cmd(root: &Path, from: &[String], write: bool) -> Result<ExitCode> {
     }
     for l in &plan.lines {
         println!("{l}");
+    }
+    if diff {
+        print!("{}", migrate::diff(root, &tools, &today)?);
     }
     if !write {
         return Ok(ExitCode::SUCCESS);
