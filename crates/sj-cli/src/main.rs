@@ -1773,6 +1773,7 @@ fn verify_cmd(
     json: bool,
 ) -> Result<ExitCode> {
     use sj_core::agent_loop::verify;
+    use std::fmt::Write as _;
     let spec_root = spec_root_for(&args.root, args.spec_root.clone())?;
     let r = verify::verify(&verify::Options {
         root: args.root.clone(),
@@ -1783,16 +1784,20 @@ fn verify_cmd(
     for w in &r.warnings {
         eprintln!("warn    {w}");
     }
+    // Built in full first so the bytes printed can be counted for the gain record.
+    let mut out = String::new();
     if json {
-        println!("{}", serde_json::to_string_pretty(&r)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&r)?)?;
     } else if r.ok {
-        println!("verify: ok");
+        writeln!(out, "verify: ok")?;
     } else {
-        println!("verify: {}", plural(r.problems.len(), "problem"));
+        writeln!(out, "verify: {}", plural(r.problems.len(), "problem"))?;
         for p in &r.problems {
-            println!("{}", p.message);
+            writeln!(out, "{}", p.message)?;
         }
     }
+    // `verify` has already refused to run outside a git repository.
+    print_and_record_gain(&args.root, true, "verify", &out, r.raw_bytes);
     Ok(if r.ok {
         ExitCode::SUCCESS
     } else {
