@@ -133,3 +133,73 @@ fn ids_005_colliding_prefixes_stop_the_write() {
     assert_eq!(read(dir.path(), "openspec/specs/chat/spec.md"), USER_AUTH);
     assert_eq!(read(dir.path(), "openspec/specs/c-hat/spec.md"), USER_AUTH);
 }
+
+/// Every file under `root` with its content, to show a command wrote nothing.
+fn snapshot(root: &Path) -> Vec<(std::path::PathBuf, String)> {
+    let mut out = Vec::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                dirs.push(p);
+            } else {
+                out.push((p.clone(), std::fs::read_to_string(&p).unwrap()));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn ids_008_long_capability_names_get_four_letter_prefixes() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["distribution", "gate", "payment-methods"] {
+        put(dir.path(), &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+    }
+    let before = snapshot(dir.path());
+    sj(dir.path()).arg("prefixes").assert().success().stdout(
+        "[ids.prefixes]\n\
+         distribution = \"DIST\"\n\
+         gate = \"GATE\"\n\
+         payment-methods = \"PAYM\"\n",
+    );
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+#[test]
+fn ids_009_prefixes_already_in_use_are_pinned() {
+    let dir = tempfile::tempdir().unwrap();
+    put(
+        dir.path(),
+        "openspec/specs/user-auth/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: USERAUTH-001 Valid")
+            .replace("Scenario: Password", "Scenario: USERAUTH-002 Password"),
+    );
+    put(dir.path(), "openspec/specs/billing/spec.md", USER_AUTH);
+    put(
+        dir.path(),
+        "specjutsu.toml",
+        "schema = 1\n\n[ids.prefixes]\nbilling = \"BILL\"\n",
+    );
+    sj(dir.path()).arg("prefixes").assert().success().stdout(
+        "[ids.prefixes]\n\
+         billing = \"BILL\"\n\
+         user-auth = \"USERAUTH\"\n",
+    );
+}
+
+#[test]
+fn ids_010_clashing_suggestions_lengthen_until_distinct() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["transfers", "transactions"] {
+        put(dir.path(), &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+    }
+    sj(dir.path()).arg("prefixes").assert().success().stdout(
+        "[ids.prefixes]\n\
+         transactions = \"TRANSA\"\n\
+         transfers = \"TRANSF\"\n",
+    );
+}
