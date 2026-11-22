@@ -151,10 +151,14 @@ pub fn add_prefix_lines(toml: &str, add: &BTreeMap<String, String>) -> String {
         new_lines.push_str(&format!("{} = \"{prefix}\"{eol}", toml_key(cap)));
     }
     let lines: Vec<&str> = toml.split_inclusive('\n').collect();
+    // `[ids.prefixes]`, allowing spaces inside the brackets and a trailing comment.
     let is_header = |l: &str| {
-        l.trim()
-            .strip_prefix("[ids.prefixes]")
-            .is_some_and(|rest| rest.trim().is_empty() || rest.trim().starts_with('#'))
+        let Some((inner, rest)) = l.trim().strip_prefix('[').and_then(|t| t.split_once(']')) else {
+            return false;
+        };
+        let rest = rest.trim();
+        inner.split('.').map(str::trim).eq(["ids", "prefixes"])
+            && (rest.is_empty() || rest.starts_with('#'))
     };
     let Some(header) = lines.iter().position(|l| is_header(l)) else {
         let mut out = toml.to_string();

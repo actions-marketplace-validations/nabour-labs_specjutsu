@@ -1867,6 +1867,12 @@ fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> 
 }
 
 fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>, write: bool) -> Result<ExitCode> {
+    let path = root.join("specjutsu.toml");
+    if write && !path.exists() {
+        anyhow::bail!(
+            "specjutsu.toml not found; run `sj init` first, then `sj ids prefixes --write`"
+        );
+    }
     let config = sj_core::config::load(root)?;
     let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
     let table = sj_core::ids::prefix_table(&root.join(&spec_root), &config.id_prefixes)?;
@@ -1879,16 +1885,28 @@ fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>, write: bool) -> Res
             .into_iter()
             .filter(|(cap, _)| !config.id_prefixes.contains_key(cap))
             .collect();
-        if !missing.is_empty() {
-            let path = root.join("specjutsu.toml");
-            let before = match std::fs::read_to_string(&path) {
-                Ok(s) => s,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-                Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
-            };
-            let after = sj_core::ids::add_prefix_lines(&before, &missing);
-            std::fs::write(&path, after).with_context(|| format!("writing {}", path.display()))?;
+        if missing.is_empty() {
+            return Ok(ExitCode::SUCCESS);
         }
+        let before = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", path.display()))?;
+        let after = sj_core::ids::add_prefix_lines(&before, &missing);
+        // Write only when the result parses and holds exactly the old and new prefixes.
+        let mut expected = config.id_prefixes.clone();
+        expected.extend(missing.clone());
+        let spliced = sj_core::config::Config::parse(&after).map(|c| c.id_prefixes);
+        if !matches!(&spliced, Ok(p) if *p == expected) {
+            let lines: Vec<String> = missing
+                .iter()
+                .map(|(cap, prefix)| format!("{cap} = \"{prefix}\""))
+                .collect();
+            anyhow::bail!(
+                "specjutsu.toml: cannot find an `[ids.prefixes]` table to add to; \
+                 add these lines to it by hand:\n{}",
+                lines.join("\n")
+            );
+        }
+        std::fs::write(&path, after).with_context(|| format!("writing {}", path.display()))?;
         let n = missing.len();
         println!(
             "added {n} {} to specjutsu.toml",

@@ -229,7 +229,10 @@ fn ids_011_writing_keeps_the_rest_of_the_file() {
         .arg("prefixes")
         .arg("--write")
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::ends_with(
+            "distribution = \"DIST\"\nadded 1 prefix to specjutsu.toml\n",
+        ));
     assert_eq!(
         read(dir.path(), "specjutsu.toml"),
         "# project settings\nschema = 1\nmode = \"strict\"\n\n[ids.prefixes]\nbilling = \"BILL\"\ndistribution = \"DIST\"\n"
@@ -239,6 +242,81 @@ fn ids_011_writing_keeps_the_rest_of_the_file() {
         .arg("prefixes")
         .arg("--write")
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("added").not());
     assert_eq!(read(dir.path(), "specjutsu.toml"), after);
+}
+
+/// Two capability folders, `billing` and `distribution`, under `root`.
+fn two_capabilities(root: &Path) {
+    for cap in ["billing", "distribution"] {
+        put(root, &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+    }
+}
+
+#[test]
+fn ids_prefixes_write_without_a_project_file_points_to_sj_init() {
+    let dir = tempfile::tempdir().unwrap();
+    two_capabilities(dir.path());
+    sj(dir.path())
+        .arg("prefixes")
+        .arg("--write")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("sj init"));
+    assert!(!dir.path().join("specjutsu.toml").exists());
+}
+
+#[test]
+fn ids_prefixes_write_refuses_prefixes_it_cannot_splice() {
+    for toml in [
+        "schema = 1\n\n[ids]\nprefixes = { billing = \"BILL\" }\n",
+        "schema = 1\nids.prefixes.billing = \"BILL\"\n",
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        two_capabilities(dir.path());
+        put(dir.path(), "specjutsu.toml", toml);
+        sj(dir.path())
+            .arg("prefixes")
+            .arg("--write")
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("distribution = \"DIST\""));
+        assert_eq!(read(dir.path(), "specjutsu.toml"), toml);
+    }
+}
+
+#[test]
+fn ids_prefixes_write_finds_a_header_with_spaces() {
+    let dir = tempfile::tempdir().unwrap();
+    two_capabilities(dir.path());
+    put(
+        dir.path(),
+        "specjutsu.toml",
+        "schema = 1\n[ ids.prefixes ]\nbilling = \"BILL\"\n",
+    );
+    sj(dir.path())
+        .arg("prefixes")
+        .arg("--write")
+        .assert()
+        .success();
+    assert_eq!(
+        read(dir.path(), "specjutsu.toml"),
+        "schema = 1\n[ ids.prefixes ]\nbilling = \"BILL\"\ndistribution = \"DIST\"\n"
+    );
+}
+
+#[test]
+fn ids_parent_write_and_json_are_refused_with_prefixes() {
+    let dir = tempfile::tempdir().unwrap();
+    two_capabilities(dir.path());
+    for flag in ["--write", "--json"] {
+        sj(dir.path())
+            .arg(flag)
+            .arg("prefixes")
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("sj ids prefixes --write"));
+    }
+    assert!(!dir.path().join("specjutsu.toml").exists());
 }
