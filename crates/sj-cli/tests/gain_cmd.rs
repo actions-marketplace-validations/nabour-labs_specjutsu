@@ -207,6 +207,11 @@ fn loop_023_sj_verify_records_runner_output_as_raw() {
 
 #[test]
 fn loop_026_no_gain_record_from_verify_outside_git() {
+    // Control: inside git, the same project records one `verify` run.
+    let on = verify_fixture(true);
+    sj_verify(on.path());
+    assert_eq!(gain_records(on.path()).len(), 1);
+
     // `sj verify` needs git: outside a repository it stops with an error, as before, and
     // records nothing.
     let outside = verify_fixture(false);
