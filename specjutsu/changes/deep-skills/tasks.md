@@ -12,7 +12,7 @@ every task.
 
 ## 2. sj-apply review loop
 
-- [ ] 2.1 sj-apply loop rules and the implementer and task-reviewer prompt rules (design decision 3); rewrite `skills/sj-apply/SKILL.md` around the per-task review loop and write `implementer-prompt.md`, `task-reviewer-prompt.md` and `re-review-prompt.md` (SKILL-011..013)
+- [x] 2.1 sj-apply loop rules and the implementer and task-reviewer prompt rules (design decision 3); rewrite `skills/sj-apply/SKILL.md` around the per-task review loop and write `implementer-prompt.md`, `task-reviewer-prompt.md` and `re-review-prompt.md` (SKILL-011..013)
 
 ## 3. Shipping references (sj-adapters)
 
