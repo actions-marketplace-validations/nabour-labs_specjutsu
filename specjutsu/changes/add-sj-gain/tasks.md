@@ -9,7 +9,7 @@
 
 ## 2. Report
 
-- [ ] 2.1 `sj gain` totals and the damaged-line warning (LOOP-027, LOOP-031)
+- [x] 2.1 `sj gain` totals and the damaged-line warning (LOOP-027, LOOP-031)
 - [ ] 2.2 `sj gain --json` (LOOP-028)
 - [ ] 2.3 `sj gain --since` and `--reset` (LOOP-029, LOOP-030)
 
