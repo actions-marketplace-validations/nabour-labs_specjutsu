@@ -1,7 +1,9 @@
-//! LOOP-022 and LOOP-026 from specjutsu/changes/add-sj-gain: `sj test` records its gain.
+//! LOOP-022, LOOP-023 and LOOP-026 from specjutsu/changes/add-sj-gain: `sj test` and `sj verify`
+//! record their gain.
 //!
 //! The fixture uses the generic junit runner: its command copies a canned report and prints a
-//! 40,000-byte file with the OS shell, so the runner's output size is exact on every platform.
+//! payload file of a fixed size with the OS shell, so the runner's output size is exact on every
+//! platform.
 
 #[path = "../../sj-core/tests/support/mod.rs"]
 mod support;
@@ -18,6 +20,11 @@ const SPEC: &str = "## Requirements\n\n### Requirement: R\nThe system SHALL work
 
 /// A junit-suite project whose runner writes exactly `RUNNER_BYTES` bytes; a git repo if `git`.
 fn fixture(git: bool) -> Repo {
+    fixture_with(git, RUNNER_BYTES)
+}
+
+/// A junit-suite project whose runner writes exactly `bytes` bytes; a git repo if `git`.
+fn fixture_with(git: bool, bytes: usize) -> Repo {
     let repo = Repo {
         dir: tempfile::tempdir().unwrap(),
     };
@@ -42,7 +49,7 @@ fn fixture(git: bool) -> Repo {
         "svc/report.src.xml",
         "<testsuite><testcase classname=\"svc\" name=\"SVC-001 works\"/></testsuite>",
     );
-    repo.write("svc/payload.txt", &"x".repeat(RUNNER_BYTES));
+    repo.write("svc/payload.txt", &"x".repeat(bytes));
     repo
 }
 
@@ -134,4 +141,70 @@ fn loop_026_no_gain_record_outside_git() {
     assert!(!gain_path(outside.path()).exists());
     assert_eq!(without.stdout, with.stdout);
     assert_eq!(without.status.code(), with.status.code());
+}
+
+const VERIFY_RUNNER_BYTES: usize = 25_000;
+
+/// A project whose open change `add-svc` adds SVC-001, its runner writing 25,000 bytes. In git,
+/// `main` holds the project and the change sits on a `feature` branch.
+fn verify_fixture(git: bool) -> Repo {
+    let repo = fixture_with(git, VERIFY_RUNNER_BYTES);
+    if git {
+        repo.commit("base");
+        repo.branch("feature");
+    }
+    repo.write("openspec/changes/add-svc/proposal.md", "## Why\n\nTest.\n");
+    repo.write(
+        "openspec/changes/add-svc/specs/all/spec.md",
+        "## ADDED Requirements\n\n### Requirement: S\nThe system SHALL serve.\n\n\
+         #### Scenario: SVC-001 Service works\n- **WHEN** x\n- **THEN** y\n",
+    );
+    repo.write(
+        "openspec/changes/add-svc/tasks.md",
+        "- [ ] 1.1 Serve (SVC-001)\n",
+    );
+    if git {
+        repo.commit("change");
+    }
+    repo
+}
+
+fn sj_verify(root: &Path) -> std::process::Output {
+    Command::cargo_bin("sj")
+        .unwrap()
+        .arg("verify")
+        .arg("--root")
+        .arg(root)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn loop_023_sj_verify_records_runner_output_as_raw() {
+    let repo = verify_fixture(true);
+    let out = sj_verify(repo.path());
+    assert!(out.status.code().is_some(), "{out:?}");
+    let records = gain_records(repo.path());
+    assert_eq!(records.len(), 1, "{records:?}");
+    let r = &records[0];
+    assert_eq!(r["command"], "verify");
+    assert!(!out.stdout.is_empty());
+    assert_eq!(r["printed"], out.stdout.len() as u64);
+    assert_eq!(r["raw"], VERIFY_RUNNER_BYTES as u64);
+    assert!(out.stdout.len() < VERIFY_RUNNER_BYTES);
+}
+
+#[test]
+fn loop_026_no_gain_record_from_verify_outside_git() {
+    // `sj verify` needs git: outside a repository it stops with an error, as before, and
+    // records nothing.
+    let outside = verify_fixture(false);
+    let out = sj_verify(outside.path());
+    assert!(!gain_path(outside.path()).exists());
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("is not in a git repository"),
+        "{out:?}"
+    );
 }
