@@ -199,7 +199,15 @@ fn balance(s: &str) -> i32 {
 /// non-blank line before the first one indented at or under `indent`.
 fn block_end(content: &str, start: usize, indent: usize) -> usize {
     let mut end = start + 1;
+    let mut open: Option<u8> = None;
     for (i, line) in content.lines().enumerate().skip(start + 1) {
+        let inside = open.is_some();
+        open = triple_quote_after(line, open);
+        if inside {
+            // A line that starts inside a triple-quoted string never ends the block.
+            end = i + 1;
+            continue;
+        }
         if line.trim().is_empty() {
             continue;
         }
@@ -209,6 +217,49 @@ fn block_end(content: &str, start: usize, indent: usize) -> usize {
         end = i + 1;
     }
     end
+}
+
+/// The triple quote (`"` or `'`) still open at the end of `line`, given the one open at its start.
+/// Single-quoted strings are skipped within the line; a `#` outside a string ends the scan.
+fn triple_quote_after(line: &str, mut open: Option<u8>) -> Option<u8> {
+    let b = line.as_bytes();
+    let triple = |j: usize, q: u8| b.get(j..j + 3) == Some(&[q, q, q][..]);
+    let mut j = 0;
+    while j < b.len() {
+        let c = b[j];
+        if let Some(q) = open {
+            if c == b'\\' {
+                j += 2;
+                continue;
+            }
+            if triple(j, q) {
+                open = None;
+                j += 3;
+                continue;
+            }
+            j += 1;
+            continue;
+        }
+        match c {
+            b'#' => break,
+            b'"' | b'\'' if triple(j, c) => {
+                open = Some(c);
+                j += 3;
+            }
+            b'"' | b'\'' => {
+                j += 1;
+                while j < b.len() && b[j] != c {
+                    if b[j] == b'\\' {
+                        j += 1;
+                    }
+                    j += 1;
+                }
+                j += 1;
+            }
+            _ => j += 1,
+        }
+    }
+    open
 }
 
 fn indent_of(line: &str) -> usize {
