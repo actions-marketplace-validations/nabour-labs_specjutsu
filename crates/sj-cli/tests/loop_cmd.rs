@@ -565,8 +565,10 @@ fn loop_022_a_baselined_orphan_is_not_a_verify_problem() {
     repo.write("README.md", "# demo\n");
     repo.commit("docs: readme");
 
-    let out = stdout(&mut sj(repo.path(), &["verify"]));
-    assert!(!out.contains("orphan AUTH-009"), "{out}");
+    sj(repo.path(), &["verify"])
+        .assert()
+        .success()
+        .stdout("verify: ok\n");
 }
 
 #[test]
