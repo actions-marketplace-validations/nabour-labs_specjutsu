@@ -201,7 +201,7 @@ enum Command {
     /// Replace OpenSpec, Spec Kit or Superpowers with specjutsu (dry run unless --write).
     Migrate {
         /// The tool to migrate from: openspec, speckit or superpowers. Repeatable.
-        #[arg(long = "from", required = true, value_parser = ["openspec", "speckit", "superpowers"])]
+        #[arg(long = "from", required_unless_present = "undo", value_parser = ["openspec", "speckit", "superpowers"])]
         from: Vec<String>,
         /// Apply the plan. Needs a clean git working tree.
         #[arg(long)]
@@ -209,6 +209,9 @@ enum Command {
         /// With the preview, print a unified diff of every file it would create or change.
         #[arg(long, conflicts_with = "write")]
         diff: bool,
+        /// Put back what the last --write changed, from its undo manifest.
+        #[arg(long, conflicts_with_all = ["from", "write", "diff"])]
+        undo: bool,
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
@@ -660,8 +663,15 @@ fn run() -> Result<ExitCode> {
             from,
             write,
             diff,
+            undo,
             root,
-        } => migrate_cmd(&root, &from, write, diff),
+        } => {
+            if undo {
+                migrate_undo_cmd(&root)
+            } else {
+                migrate_cmd(&root, &from, write, diff)
+            }
+        }
         Command::Status { change, args, json } => status_cmd(change, &args, json),
         Command::View { args, json } => view_cmd(&args, json),
         Command::Task {
@@ -1656,6 +1666,16 @@ fn import_speckit_cmd(args: &SpecArgs, write: bool, force: bool, json: bool) -> 
     Ok(ExitCode::SUCCESS)
 }
 
+fn migrate_undo_cmd(root: &Path) -> Result<ExitCode> {
+    let done = sj_core::migrate::undo(root)?;
+    println!(
+        "migrate: undone ({} restored, {} deleted; left uncommitted)",
+        plural(done.restored, "file"),
+        done.deleted
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
 fn migrate_cmd(root: &Path, from: &[String], write: bool, diff: bool) -> Result<ExitCode> {
     use sj_core::migrate::{self, Tool};
     let tools: Vec<Tool> = from.iter().filter_map(|f| Tool::parse(f)).collect();
@@ -1707,7 +1727,7 @@ fn migrate_cmd(root: &Path, from: &[String], write: bool, diff: bool) -> Result<
         "git: {} created, {} changed, {} removed",
         f.created, f.changed, f.removed
     );
-    println!("rollback: git restore . && git clean -fd");
+    println!("rollback: sj migrate --undo");
     Ok(if f.is_clean() {
         ExitCode::SUCCESS
     } else {

@@ -359,9 +359,7 @@ fn mig_007_a_migrated_project_is_ready_to_work() {
     .stdout(predicate::str::contains("doctor  ok\n"))
     .stdout(predicate::str::contains("validate ok\n"))
     .stdout(predicate::str::is_match(r"\ngit: \d+ created, \d+ changed, \d+ removed\n").unwrap())
-    .stdout(predicate::str::ends_with(
-        "rollback: git restore . && git clean -fd\n",
-    ));
+    .stdout(predicate::str::ends_with("rollback: sj migrate --undo\n"));
     let root = repo.path();
     let toml = std::fs::read_to_string(root.join("specjutsu.toml")).unwrap();
     assert!(toml.contains("runner = \"cargo\""), "{toml}");
@@ -846,7 +844,7 @@ fn mig_015_undo_restores_migrates_files_and_keeps_new_ones() {
 fn mig_016_undo_refuses_when_a_migrated_file_was_edited_since() {
     let repo = openspec_repo();
     // The specs still lack IDs, so the write exits 1 on validate; its files are written.
-    migrate(repo.path(), &["--from", "superpowers", "--write"]).assert();
+    let _ = migrate(repo.path(), &["--from", "superpowers", "--write"]).assert();
     let settings = repo.path().join(".claude/settings.json");
     let edited = std::fs::read_to_string(&settings)
         .unwrap()

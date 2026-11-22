@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use sj_adapters::agents;
 use sj_adapters::claude::Change;
 use sj_adapters::superpowers;
@@ -484,7 +485,189 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
             dirty.join("\n")
         );
     }
-    write_plan(root, plan)
+    let git = Git::new(root);
+    let start = git
+        .run(&["rev-parse", "--verify", "--quiet", "HEAD"])
+        .ok()
+        .map(|s| s.trim().to_string());
+    let written = write_plan(root, plan);
+    record_undo(&git, start)?;
+    written
+}
+
+/// The undo manifest's name, inside the git directory.
+pub const UNDO_FILE: &str = "sj-migrate-undo.json";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Action {
+    Created,
+    Changed,
+    Removed,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UndoEntry {
+    path: String,
+    action: Action,
+    /// The content hash after the write; `None` for a removed file.
+    hash: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Undo {
+    /// The commit migrate started from; `None` in a repo without one.
+    commit: Option<String>,
+    files: Vec<UndoEntry>,
+}
+
+/// The repo's top level and the undo manifest's path.
+fn undo_paths(git: &Git) -> Result<(PathBuf, PathBuf)> {
+    let top = PathBuf::from(git.run(&["rev-parse", "--show-toplevel"])?.trim());
+    let dir = PathBuf::from(git.run(&["rev-parse", "--absolute-git-dir"])?.trim());
+    Ok((top, dir.join(UNDO_FILE)))
+}
+
+/// Git's hash of each of `paths` (relative to the top level) as it is now; `None` when
+/// missing.
+fn hashes(git: &Git, top: &Path, paths: &[&str]) -> Result<Vec<Option<String>>> {
+    let present: Vec<&str> = paths
+        .iter()
+        .copied()
+        .filter(|p| top.join(p).is_file())
+        .collect();
+    let mut found = BTreeMap::new();
+    if !present.is_empty() {
+        let mut args = vec!["hash-object", "--"];
+        let abs: Vec<String> = present
+            .iter()
+            .map(|p| top.join(p).to_string_lossy().into_owned())
+            .collect();
+        args.extend(abs.iter().map(String::as_str));
+        for (p, h) in present.iter().zip(git.run(&args)?.lines()) {
+            found.insert(*p, h.to_string());
+        }
+    }
+    Ok(paths.iter().map(|p| found.get(p).cloned()).collect())
+}
+
+/// Write the undo manifest for everything the write changed. The tree was clean before, so
+/// every path `git status` lists is migrate's.
+fn record_undo(git: &Git, commit: Option<String>) -> Result<()> {
+    let (top, manifest) = undo_paths(git)?;
+    let status = git.run(&["status", "--porcelain", "-z", "--untracked-files=all"])?;
+    let mut entries: Vec<(String, Action)> = status
+        .split('\0')
+        .filter(|e| e.len() > 3)
+        .map(|e| {
+            let action = match &e[..2] {
+                "??" | "A " => Action::Created,
+                s if s.contains('D') => Action::Removed,
+                _ => Action::Changed,
+            };
+            (e[3..].to_string(), action)
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let paths: Vec<&str> = entries.iter().map(|(p, _)| p.as_str()).collect();
+    let files = entries
+        .iter()
+        .zip(hashes(git, &top, &paths)?)
+        .map(|((path, action), hash)| UndoEntry {
+            path: path.clone(),
+            action: *action,
+            hash,
+        })
+        .collect();
+    let json = serde_json::to_string_pretty(&Undo { commit, files })?;
+    std::fs::write(&manifest, json + "\n")
+        .with_context(|| format!("cannot write {}", manifest.display()))
+}
+
+/// What [`undo`] put back.
+pub struct Undone {
+    pub restored: usize,
+    pub deleted: usize,
+}
+
+/// Put back what the last `--write` touched, from its undo manifest. Refuses, changing
+/// nothing, when a recorded file no longer has the content migrate left.
+pub fn undo(root: &Path) -> Result<Undone> {
+    let git = Git::new(root);
+    if !git.is_repo() {
+        bail!("{} is not a git work tree", root.display());
+    }
+    let (top, manifest) = undo_paths(&git)?;
+    let Ok(text) = std::fs::read_to_string(&manifest) else {
+        bail!("nothing to undo: no {UNDO_FILE} in the git directory");
+    };
+    let undo: Undo = serde_json::from_str(&text)
+        .with_context(|| format!("{} is not a valid undo manifest", manifest.display()))?;
+    let paths: Vec<&str> = undo.files.iter().map(|f| f.path.as_str()).collect();
+    let edited: Vec<&str> = undo
+        .files
+        .iter()
+        .zip(hashes(&git, &top, &paths)?)
+        .filter(|(f, now)| f.hash != *now)
+        .map(|(f, _)| f.path.as_str())
+        .collect();
+    if !edited.is_empty() {
+        bail!(
+            "these files changed since the migration; restore or commit them by hand, then \
+             run it again (nothing was changed):\n{}",
+            edited.join("\n")
+        );
+    }
+    let mut old = Vec::new();
+    for f in undo.files.iter().filter(|f| f.action != Action::Created) {
+        let Some(commit) = &undo.commit else {
+            bail!("the undo manifest names no start commit for {}", f.path);
+        };
+        let out = std::process::Command::new("git")
+            .args(["show", &format!("{commit}:{}", f.path)])
+            .current_dir(&top)
+            .output()
+            .context("running git (is it installed and on PATH?)")?;
+        if !out.status.success() {
+            bail!(
+                "git show {commit}:{} failed: {}",
+                f.path,
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        old.push((f, out.stdout));
+    }
+    let mut done = Undone {
+        restored: 0,
+        deleted: 0,
+    };
+    for (f, content) in old {
+        let path = top.join(&f.path);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create {}", dir.display()))?;
+        }
+        std::fs::write(&path, content)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+        done.restored += 1;
+    }
+    for f in undo.files.iter().filter(|f| f.action == Action::Created) {
+        let path = top.join(&f.path);
+        std::fs::remove_file(&path).with_context(|| format!("cannot remove {}", path.display()))?;
+        done.deleted += 1;
+        // Folders left empty by the created files go too; never one holding anything else.
+        for dir in path.ancestors().skip(1) {
+            if dir == top || std::fs::remove_dir(dir).is_err() {
+                break;
+            }
+        }
+    }
+    std::fs::remove_file(&manifest)
+        .with_context(|| format!("cannot remove {}", manifest.display()))?;
+    Ok(done)
 }
 
 /// The writes of [`apply`], without its clean-tree check.
