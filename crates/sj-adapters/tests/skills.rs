@@ -817,12 +817,17 @@ fn skill_017_a_depth_file_that_does_not_exist_fails_the_check() {
         .replace(
             "| verification-before-completion | sj-verify | SKILL.md |",
             "| verification-before-completion | sj-verify | |",
+        )
+        .replace(
+            "| brainstorming | sj-explore | SKILL.md |",
+            "| brainstorming | sj-explore | ../sj-apply/SKILL.md |",
         );
     put(dir.path(), "COVERAGE.md", &coverage);
     let got = messages(dir.path());
     for want in [
         "coverage: Superpowers systematic-debugging depth sj-debug/root-cause.md does not exist",
         "coverage: Superpowers verification-before-completion has no depth",
+        "coverage: Superpowers brainstorming depth sj-explore/../sj-apply/SKILL.md is not in the skill folder",
     ] {
         assert!(has(&got, want), "{want}: {got:?}");
     }
