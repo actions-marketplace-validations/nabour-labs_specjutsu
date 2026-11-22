@@ -525,9 +525,9 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj gain</h3>
         <p>Bytes saved. <code>sj test</code>, <code>sj verify</code>, <code>sj next</code> and <code>sj status</code> each record, per run, the bytes they printed and the raw bytes they stand in for (the runners' output, or the change files) in <code>.specjutsu/ledger/gain.jsonl</code>. Nothing is recorded with <code>--no-ledger</code> or outside a git repository, and recording never changes output or exit codes. <code>sj gain</code> prints one line per command (runs, printed bytes, raw bytes, % saved) and a total with the tokens saved, estimated as (raw − printed) / 4. specjutsu never calls a model; the numbers are bytes, a proxy.</p>
-        <pre><code>test   2   500  50000  99%
+<pre class="code">test   2   500  50000  99%
 next   1  1000   4000  75%
-total  3  1500  54000  97%  ~13125 tokens saved</code></pre>
+total  3  1500  54000  97%  ~13125 tokens saved</pre>
         <dl>
           <dt>--json</dt><dd><code>commands</code> (<code>command</code>, <code>runs</code>, <code>printed</code>, <code>raw</code>, <code>saved_pct</code>) and <code>total</code>, which adds <code>tokens_saved</code>.</dd>
           <dt>--since &lt;time&gt;</dt><dd>Only records at or after an RFC 3339 timestamp, e.g. one session.</dd>
