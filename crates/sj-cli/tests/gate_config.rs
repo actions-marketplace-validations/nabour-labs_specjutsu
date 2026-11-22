@@ -10,12 +10,12 @@ use support::Repo;
 
 const LIB: &str = "pub fn add(a: i32, b: i32) -> i32 { a + b }\n";
 
-fn gate(repo: &Repo) -> assert_cmd::assert::Assert {
-    Command::cargo_bin("sj")
-        .unwrap()
-        .args(["gate", "--base", "main", "--root"])
-        .arg(repo.path())
-        .assert()
+/// `sj gate --base main` in the repository.
+fn gate(repo: &Repo) -> Command {
+    let mut cmd = Command::cargo_bin("sj").unwrap();
+    cmd.args(["gate", "--base", "main", "--root"])
+        .arg(repo.path());
+    cmd
 }
 
 #[test]
@@ -31,9 +31,12 @@ fn gate_048_agent_and_project_config_changes_need_no_scenario() {
     repo.write(".agents/hooks.json", "{}\n");
     repo.write(".cursor/hooks.json", "{}\n");
     repo.commit("adapters");
-    gate(&repo).success().stdout(predicate::str::starts_with(
-        "gate: pass — no changed scenarios to prove\n",
-    ));
+    gate(&repo)
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "gate: pass — no changed scenarios to prove\n",
+        ));
 }
 
 #[test]
@@ -42,7 +45,10 @@ fn gate_049_keep_a_nested_config_named_folder_is_still_source() {
     repo.branch("feature");
     repo.write("src/.claude/tool.rs", "pub fn tool() {}\n");
     repo.commit("tool");
-    gate(&repo).code(1).stdout(predicate::str::contains(
-        "unspecified change: src/.claude/tool.rs",
-    ));
+    gate(&repo)
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "unspecified change: src/.claude/tool.rs",
+        ));
 }
