@@ -864,3 +864,28 @@ fn mig_016_undo_refuses_when_a_migrated_file_was_edited_since() {
     assert_eq!(snapshot(&repo), before);
     assert_eq!(std::fs::read(undo_manifest(&repo)).unwrap(), manifest);
 }
+
+/// Undo puts back a file's working-tree bytes, smudge and eol conversion included: a file
+/// checked out with CRLF endings comes back with CRLF.
+#[test]
+fn undo_restores_crlf_line_endings() {
+    let repo = openspec_repo();
+    repo.write(".gitattributes", "openspec/config.yaml text eol=crlf\n");
+    let crlf = CONFIG_YAML.replace('\n', "\r\n");
+    repo.write("openspec/config.yaml", &crlf);
+    repo.commit("crlf config");
+    assert_eq!(status(&repo), "");
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+    assert!(!repo.path().join("openspec/config.yaml").exists());
+
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["migrate", "--undo", "--root"])
+        .arg(repo.path())
+        .assert()
+        .success();
+
+    assert_eq!(read(&repo, "openspec/config.yaml"), crlf);
+}

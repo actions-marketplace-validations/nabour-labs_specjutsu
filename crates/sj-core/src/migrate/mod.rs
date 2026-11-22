@@ -490,9 +490,10 @@ pub fn apply(root: &Path, plan: &Plan) -> Result<()> {
         .run(&["rev-parse", "--verify", "--quiet", "HEAD"])
         .ok()
         .map(|s| s.trim().to_string());
+    // A failed write may have changed files already, so record them; its error comes first.
     let written = write_plan(root, plan);
-    record_undo(&git, start)?;
-    written
+    let recorded = record_undo(&git, start);
+    written.and(recorded)
 }
 
 /// The undo manifest's name, inside the git directory.
@@ -561,7 +562,7 @@ fn record_undo(git: &Git, commit: Option<String>) -> Result<()> {
         .filter(|e| e.len() > 3)
         .map(|e| {
             let action = match &e[..2] {
-                "??" | "A " => Action::Created,
+                "??" => Action::Created,
                 s if s.contains('D') => Action::Removed,
                 _ => Action::Changed,
             };
@@ -626,14 +627,16 @@ pub fn undo(root: &Path) -> Result<Undone> {
         let Some(commit) = &undo.commit else {
             bail!("the undo manifest names no start commit for {}", f.path);
         };
+        // `--filters` applies the working-tree conversions (eol, smudge), so the file comes
+        // back with the bytes it had on disk, CRLF endings included.
         let out = std::process::Command::new("git")
-            .args(["show", &format!("{commit}:{}", f.path)])
+            .args(["cat-file", "--filters", &format!("{commit}:{}", f.path)])
             .current_dir(&top)
             .output()
             .context("running git (is it installed and on PATH?)")?;
         if !out.status.success() {
             bail!(
-                "git show {commit}:{} failed: {}",
+                "git cat-file --filters {commit}:{} failed: {}",
                 f.path,
                 String::from_utf8_lossy(&out.stderr).trim()
             );

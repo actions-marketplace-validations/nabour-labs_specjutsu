@@ -69,7 +69,8 @@ Pilot feedback, requests 7, 8 and 9. The current state:
 
 - The manifest is `sj-migrate-undo.json` in the git directory. It is never committed, it works in linked worktrees (`git rev-parse --git-dir`), and it survives the user committing the migration.
 - It records the start commit and, for each path, its action and post-write hash (`null` for removed files).
-- Undo restores from the start commit with `git show <commit>:<path>`, so it works after the migration is committed too. The result is left uncommitted.
+- Undo restores from the start commit with `git cat-file --filters <commit>:<path>`, so it works after the migration is committed too. `--filters` applies the working-tree conversions (eol, smudge), so a CRLF file comes back with CRLF; plain `git show` would print the LF blob. The result is left uncommitted.
+- Undo also removes any folder left empty by deleting the files migrate created. Git doesn't track empty folders, so an empty folder that existed before the migration goes too.
   - *Rejected:* keeping `git clean -fd` with a warning, which still deletes untracked work.
   - *Rejected:* `git stash`, which is fragile once the user has committed.
 
