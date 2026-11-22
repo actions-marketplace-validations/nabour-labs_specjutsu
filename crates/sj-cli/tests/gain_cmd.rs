@@ -500,8 +500,29 @@ fn loop_028_gain_json_totals_for_a_harness() {
             "total": {
                 "runs": 3, "printed": 1500, "raw": 54000, "saved_pct": 97, "tokens_saved": 13125
             },
+            "skipped": 0,
         })
     );
+}
+
+#[test]
+fn loop_028_gain_json_reports_skipped_records() {
+    let repo = Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    let text = [
+        gain_line("test", 300, 40_000),
+        "{not json\n".to_string(),
+        gain_line("test", 200, 10_000),
+        gain_line("next", 1_000, 4_000),
+    ]
+    .concat();
+    repo.write(".specjutsu/ledger/gain.jsonl", &text);
+    let out = sj_gain_with(repo.path(), &["--json"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).expect("valid JSON");
+    assert_eq!(v["skipped"], 1, "{v}");
+    assert_eq!(v["total"]["tokens_saved"], 13125, "{v}");
 }
 
 #[test]
