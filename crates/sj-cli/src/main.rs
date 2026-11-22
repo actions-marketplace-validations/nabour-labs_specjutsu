@@ -1448,7 +1448,11 @@ fn gain_cmd(
             .collect();
         let mut total = totals(&summary.total);
         total["tokens_saved"] = summary.total.tokens_saved().into();
-        let report = serde_json::json!({ "commands": commands, "total": total });
+        let report = serde_json::json!({
+            "commands": commands,
+            "total": total,
+            "skipped": loaded.skipped,
+        });
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(ExitCode::SUCCESS);
     }
