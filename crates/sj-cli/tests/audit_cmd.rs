@@ -347,3 +347,51 @@ fn audit_011_an_allowed_removal_is_reported_not_failed() {
     assert!(out.contains("allow without reason"), "{out}");
     assert_eq!(code, Some(1));
 }
+
+/// Commit `body` as `tests/cfg.rs` on the change branch and run `sj audit`.
+fn audit_rust_test(body: &str) -> (Option<i32>, String) {
+    let f = Fixture::new(&[("tests/cfg.rs", "use std::fmt;\n")]);
+    f.write("tests/cfg.rs", &format!("use std::fmt;\n\n{body}"));
+    f.commit("add test");
+    f.audit(&[])
+}
+
+#[test]
+fn audit_015_a_multi_line_raw_string_fixture_keeps_the_tests_asserts() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn parses() {\n    let j = r#\"{\n  \"k\": \"v \\\" }\"\n}\"#;\n    assert!(j.contains(\"k\"));\n}\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_016_a_string_continued_with_a_backslash_keeps_the_tests_asserts() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn reads() {\n    let t = \"{\\\n    \\\"x\\\": 1\\\n}\";\n    assert!(t.contains(\"x\"));\n}\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_017_char_literals_of_braces_and_quotes_do_not_move_the_body_end() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn chars() {\n    let cs = ['{', '\"', '}'];\n    assert_eq!(cs.len(), 3);\n}\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_018_a_fixture_only_test_stays_assertion_free() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn only_fixture() {\n    let _j = r#\"{\n}\"#;\n}\n\n#[test]\nfn checks() { assert!(true); }\n",
+    );
+    assert!(
+        out.contains("assertion-free-test tests/cfg.rs › only_fixture"),
+        "{out}"
+    );
+    assert!(!out.contains("checks"), "{out}");
+    assert_eq!(code, Some(1));
+}

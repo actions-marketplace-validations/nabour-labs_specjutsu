@@ -75,6 +75,10 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- `sj audit` and `sj gate` no longer report a Rust test as `assertion-free-test` when
+  its body holds a string that spans lines, such as a raw `r#"{ … }"#` JSON fixture or
+  a `"…\` continued string. The test scanner now keeps string, raw string, char literal
+  and block comment state across lines when it looks for the test's closing brace.
 - The Antigravity hook goes under a `specjutsu` hook name in `.agents/hooks.json`,
   the shape Antigravity documents; the earlier `hooks.PreToolUse` entry was never
   read. Reinstalling or removing takes out the old entry.
