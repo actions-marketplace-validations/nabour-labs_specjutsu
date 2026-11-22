@@ -24,6 +24,8 @@ All notable changes are recorded here. The format follows
   stale entries are `stale <entry>` warnings. Changed scenarios are still gated.
   Entries a change adds fail as `baseline-added <entry>` unless it declares a `config`
   exemption, such as the trailer `Specjutsu-Exempt: config — adopt trace baseline`.
+- `sj verify` applies the same baseline rules: known orphans aren't problems, and
+  `baseline-added <entry>` is a problem without a `config` exemption.
 - `sj ids prefixes` prints a short, collision-free `[ids.prefixes]` table, keeping
   prefixes already mapped or in use (`distribution = "DIST"`). `--write` adds the
   missing lines to `specjutsu.toml` and changes no other byte. `sj ids` ends with a

@@ -414,18 +414,15 @@ pub fn evaluate(input: &Input) -> GateReport {
         });
     }
 
-    // GATE-053/054: entries added at head count only with a `config` exemption.
-    let mut baseline = input.baseline.clone();
-    let adopt = input.exemptions.iter().any(|e| e.kind == "config");
-    for e in &input.baseline_added {
-        let msg = format!("baseline-added {e}");
-        if adopt {
-            baseline.entries.insert(e.clone());
-            r.warnings.push(msg);
-        } else {
-            r.failures.push(msg);
-        }
-    }
+    let rules = baseline_rules(
+        &input.baseline,
+        &input.baseline_added,
+        &input.exemptions,
+        &input.trace,
+    );
+    r.failures.extend(rules.failures);
+    r.warnings.extend(rules.warnings);
+    let baseline = rules.baseline;
 
     // Unchanged gaps only warn; those the baseline lists are counted once (GATE-050).
     let mut known_gaps = 0;
@@ -461,13 +458,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         });
     }
 
-    // GATE-051: orphans the baseline lists don't fail.
-    for o in input
-        .trace
-        .orphans
-        .iter()
-        .filter(|o| !baseline.knows_orphan(o))
-    {
+    for o in &rules.orphans {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
 
@@ -485,6 +476,50 @@ pub fn evaluate(input: &Input) -> GateReport {
     } else {
         format!("gate: fail — {}", plural(r.failures.len(), "problem"))
     };
+    r
+}
+
+/// What the trace baseline rules make of a branch, shared by the gate and `sj verify`.
+#[derive(Debug, Clone, Default)]
+pub struct BaselineRules {
+    /// The base baseline, plus the entries a `config` exemption adopts.
+    pub baseline: Baseline,
+    /// `baseline-added <entry>` lines without a `config` exemption.
+    pub failures: Vec<String>,
+    /// `baseline-added <entry>` lines a `config` exemption adopts.
+    pub warnings: Vec<String>,
+    /// The orphans the effective baseline doesn't list.
+    pub orphans: Vec<trace::Orphan>,
+}
+
+/// GATE-051/053/054: entries added at head count only with a `config` exemption, and
+/// orphans the resulting baseline lists don't fail.
+pub fn baseline_rules(
+    base: &Baseline,
+    added: &BTreeSet<BaselineEntry>,
+    exemptions: &[Exemption],
+    trace: &Report,
+) -> BaselineRules {
+    let mut r = BaselineRules {
+        baseline: base.clone(),
+        ..BaselineRules::default()
+    };
+    let adopt = exemptions.iter().any(|e| e.kind == "config");
+    for e in added {
+        let msg = format!("baseline-added {e}");
+        if adopt {
+            r.baseline.entries.insert(e.clone());
+            r.warnings.push(msg);
+        } else {
+            r.failures.push(msg);
+        }
+    }
+    r.orphans = trace
+        .orphans
+        .iter()
+        .filter(|o| !r.baseline.knows_orphan(o))
+        .cloned()
+        .collect();
     r
 }
 

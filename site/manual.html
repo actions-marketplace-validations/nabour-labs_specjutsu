@@ -655,7 +655,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       </div>
       <div class="cmd">
         <h3>sj verify [change]</h3>
-        <p>The local check before a PR: the change's scenario tests, unproven scenarios, orphans, <code>sj spec check</code> problems, and the gate's rules against the merge-base, without red-on-base.</p>
+        <p>The local check before a PR: the change's scenario tests, unproven scenarios, orphans, <code>sj spec check</code> problems, and the gate's rules against the merge-base, without red-on-base. The gate's <a href="#baseline">baseline</a> rules apply too: orphans the base's baseline lists aren't problems, and entries the branch adds without a <code>config</code> exemption are <code>baseline-added &lt;entry&gt;</code> problems.</p>
         <dl><dt>--base &lt;ref&gt;</dt><dd>Base to compare against.</dd></dl>
       </div>
 

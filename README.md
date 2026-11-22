@@ -905,7 +905,9 @@ takes `--json`, except `sj task done`.
 - **`sj verify [<change>]`** is the local check before a PR. It runs the
   change's scenario tests (recording them), and reports untested and failing
   scenarios, unproven ones, orphans, `sj spec check` problems, and the gate's
-  unspecified-change and exemption rules against the merge-base. Red-on-base
+  unspecified-change, exemption and trace baseline rules against the merge-base:
+  orphans the base's baseline lists aren't problems, and entries the branch adds
+  without a `config` exemption are `baseline-added <entry>` problems. Red-on-base
   stays in CI. It prints `verify: ok` or one line per problem, and exits 1 when
   there are any.
 
