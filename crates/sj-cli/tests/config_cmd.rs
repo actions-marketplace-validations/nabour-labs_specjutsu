@@ -48,11 +48,12 @@ fn conf_001_trace_uses_the_spec_root_from_the_project_file() {
 fn assert_every_command_fails(file: &str, needle: &str) {
     let repo = Repo::with_lib("");
     repo.write("specjutsu.toml", file);
-    let commands: [&[&str]; 4] = [
+    let commands: [&[&str]; 5] = [
         &["trace"],
         &["gate", "--base", "main"],
         &["test"],
         &["ledger"],
+        &["gain"],
     ];
     for args in commands {
         sj().args(args)

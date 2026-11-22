@@ -446,8 +446,12 @@ fn loop_031_damaged_gain_record_does_not_block_report() {
     let out = sj_gain(repo.path());
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(
-        tokens(&out.stdout).last(),
-        Some(&words("total 3 1500 54000 97% ~13125 tokens saved")),
+        tokens(&out.stdout),
+        vec![
+            words("test 2 500 50000 99%"),
+            words("next 1 1000 4000 75%"),
+            words("total 3 1500 54000 97% ~13125 tokens saved"),
+        ],
         "{out:?}"
     );
     assert!(
