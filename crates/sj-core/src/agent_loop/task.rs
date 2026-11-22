@@ -71,9 +71,11 @@ pub fn done(
     }
 
     let ledger = Ledger::load(root)?;
+    // A `[keep]` scenario needs no red run (LOOP-020).
+    let keep = crate::spec::keep_ids(spec_root)?;
     let mut unproven = Vec::new();
     for id in blocks::task_ids(&task.text) {
-        if unproven.iter().any(|u: &Unproven| u.id == id) {
+        if keep.contains(&id) || unproven.iter().any(|u: &Unproven| u.id == id) {
             continue;
         }
         if let Some(why) = ledger.why_unproven(&id) {

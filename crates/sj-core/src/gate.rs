@@ -821,18 +821,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         .filter(|(_, c)| matches!(c, Change::Added | Change::Modified | Change::Implemented))
         .map(|(id, _)| id)
         .collect();
-    // GATE-039: keep scenarios at head. A change's delta comes after `specs/`, so its
-    // marker wins for an ID that appears in both.
-    let mut keep_by_id: BTreeMap<String, bool> = BTreeMap::new();
-    for s in spec::load_scenarios(&root.join(&opts.spec_root))? {
-        if let Some(id) = s.id {
-            keep_by_id.insert(id, s.keep);
-        }
-    }
-    let keep: BTreeSet<String> = keep_by_id
-        .into_iter()
-        .filter_map(|(id, k)| k.then_some(id))
-        .collect();
+    // GATE-039: keep scenarios at head.
+    let keep: BTreeSet<String> = spec::keep_ids(&root.join(&opts.spec_root))?;
     let refactor = exemptions.iter().any(|e| e.kind == "refactor");
     let skip_red = refactor || exemptions.iter().any(|e| e.kind == "spike");
     let touches_impl = changed_files.iter().any(|f| classifier.is_impl(f));

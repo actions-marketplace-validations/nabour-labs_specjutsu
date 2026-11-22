@@ -167,6 +167,21 @@ fn collect_spec_md(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// The IDs whose scenario carries `[keep]` (GATE-039). An open change's copy comes after
+/// `specs/`, so its marker wins for an ID that appears in both.
+pub fn keep_ids(spec_root: &Path) -> Result<std::collections::BTreeSet<String>> {
+    let mut keep_by_id = std::collections::BTreeMap::new();
+    for s in load_scenarios(spec_root)? {
+        if let Some(id) = s.id {
+            keep_by_id.insert(id, s.keep);
+        }
+    }
+    Ok(keep_by_id
+        .into_iter()
+        .filter_map(|(id, k)| k.then_some(id))
+        .collect())
+}
+
 /// Discover and parse every spec file under `spec_root`.
 pub fn load_scenarios(spec_root: &Path) -> Result<Vec<Scenario>> {
     let mut out = Vec::new();

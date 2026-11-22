@@ -124,8 +124,10 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
     }
 
     // Evidence, read after the runs above were recorded.
+    // A passing `[keep]` scenario never has a red run (LOOP-020).
     let ledger = Ledger::load(root)?;
-    for id in &passing {
+    let keep = crate::spec::keep_ids(&spec_root)?;
+    for id in passing.iter().filter(|id| !keep.contains(*id)) {
         if let Some(why) = ledger.why_unproven(id) {
             r.problems.push(problem(
                 "unproven",
