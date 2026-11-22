@@ -5,7 +5,7 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 ## 1. Trace baseline
 
 - [x] 1.1 Baseline parse and `sj trace --write-baseline` (TRACE-017)
-- [ ] 1.2 Known entries counted, JSON `known` flag, `--strict` on new entries only (TRACE-018, TRACE-019)
+- [x] 1.2 Known entries counted, JSON `known` flag, `--strict` on new entries only (TRACE-018, TRACE-019)
 - [ ] 1.3 Stale entries reported and dropped on rewrite (TRACE-020)
 
 ## 2. Gate and the baseline
