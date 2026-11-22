@@ -59,6 +59,12 @@ These are the projects I mapped to the three workflows. Correct me if a mapping 
 | Superpowers TDD discipline | ✔ | | | 🟡 hook + gate (v0.3) |
 | Superpowers debugging, code review, worktrees, verification skills | ✔ | | | ❌ out of scope by design ("coexist with Superpowers") |
 
+**Update (deep-skills change):** a pilot found the first `sj-*` skills too shallow to replace
+Superpowers' TDD, debugging, verification and subagent-driven skills. They now ship reference
+files and prompt templates, `sj-apply` reviews every task with a fresh reviewer subagent, and
+`skills/COVERAGE.md` names the file that carries each Superpowers technique. See
+`docs/skill-evals.md` for the manual pressure tests and the pilot re-run.
+
 ## Findings
 
 ### 1. The gate passes everything on non-Rust repos (bug, high)
