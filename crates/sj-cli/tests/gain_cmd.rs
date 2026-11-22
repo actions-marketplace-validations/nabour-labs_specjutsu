@@ -327,7 +327,10 @@ fn status_fixture(git: bool) -> Repo {
         let dir = format!("openspec/changes/{name}");
         let tasks = "- [ ] 1.1 Work (SVC-001)\n";
         repo.write(&format!("{dir}/tasks.md"), tasks);
-        repo.write(&format!("{dir}/proposal.md"), &"x".repeat(bytes - tasks.len()));
+        repo.write(
+            &format!("{dir}/proposal.md"),
+            &"x".repeat(bytes - tasks.len()),
+        );
     }
     repo
 }

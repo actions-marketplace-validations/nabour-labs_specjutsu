@@ -1711,19 +1711,29 @@ fn templates_cmd(args: &SpecArgs, json: bool) -> Result<ExitCode> {
 
 fn status_cmd(change: Option<String>, args: &SpecArgs, json: bool) -> Result<ExitCode> {
     use sj_core::agent_loop::status;
+    use std::fmt::Write as _;
     let (root, spec_root) = spec_paths(args)?;
-    let rows = status::status(&root, &spec_root, change.as_deref())?;
+    let changes = status::changes(&spec_root, change.as_deref())?;
+    let rows = status::status_of_changes(&root, &changes)?;
+    // Built in full first so the bytes printed can be counted against the change folders read.
+    let mut out = String::new();
     if json {
-        println!("{}", serde_json::to_string_pretty(&rows)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&rows)?)?;
     } else if rows.is_empty() {
-        println!("no open changes");
+        writeln!(out, "no open changes")?;
     } else {
         for r in &rows {
             for l in status::render(r) {
-                println!("{l}");
+                writeln!(out, "{l}")?;
             }
         }
     }
+    let raw = changes
+        .iter()
+        .map(|c| sj_core::gain::dir_bytes(&c.dir))
+        .sum();
+    let record = sj_core::gain::enabled(&root, false);
+    print_and_record_gain(&root, record, "status", &out, raw);
     Ok(ExitCode::SUCCESS)
 }
 
