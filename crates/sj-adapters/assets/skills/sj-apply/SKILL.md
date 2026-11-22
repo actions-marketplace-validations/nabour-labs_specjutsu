@@ -46,7 +46,9 @@ Every task gets a reviewer that has never seen the implementer's work or reasoni
 new subagent with `task-reviewer-prompt.md` and give it:
 
 - the scenario text from `sj next`,
-- the commit range `BASE..HEAD`,
+- the task's commits: `BASE..HEAD` for a task run on its own; for a `[P]` task, only its
+  own commits (`git log --format=%H --grep='(<ID>' BASE..HEAD`), since other tasks in the
+  batch commit to the same branch,
 - the principles file path.
 
 Don't give it the implementer's report, and don't tell it what to ignore or how serious a
@@ -55,9 +57,10 @@ finding may be. It runs `git diff` and `sj verify <change>` itself and answers `
 
 ### 4. The fix loop: at most 3 rounds
 
-On `CHANGES_REQUESTED`, send the findings, as written, to the implementer. When it reports
-back, start another fresh subagent with `re-review-prompt.md`, the earlier findings and the
-new commit range. It checks only those findings and the new diff.
+On `CHANGES_REQUESTED`, note `git rev-parse HEAD` (PREVIOUS_HEAD), then send the findings,
+as written, to the implementer. When it reports back, start another fresh subagent with
+`re-review-prompt.md`, the earlier findings and the new commits `PREVIOUS_HEAD..HEAD`. It
+checks only those findings and the new diff.
 
 The first review is round 1. If the third review still says `CHANGES_REQUESTED`, stop
 after 3 rounds without approval. Tell the user which findings are open and what each
@@ -68,11 +71,14 @@ next round; don't drop it quietly.
 
 ### 5. Close the task
 
-Only after `APPROVED`, run it yourself:
+Only after `APPROVED`, check the evidence yourself, then close the task:
 
 ```bash
+sj verify <change>                      # no problem line for this task's scenarios
 sj task done <change> <task-number>
 ```
+
+The reviewer's `APPROVED` is a judgment, not evidence; `sj verify` is the evidence.
 
 The implementer never runs it. In strict mode it refuses until each scenario is proven, and
 names the missing evidence. Don't edit the checkbox by hand.
@@ -95,8 +101,9 @@ test steps. Review it only if it changes behaviour or files other than its state
 ## Final review
 
 When every task is done, start a fresh subagent with `sj-review` over the whole change
-(`git diff <base>...HEAD`). Fix its blocking findings with the same loop, then continue
-with `sj-verify`.
+(`git diff <base>...HEAD`). Send its blocking and should-fix findings to an implementer
+and a fresh re-reviewer, as in the fix loop; there is no task to close. Put any finding
+you decide not to fix, with the reason, to the user. Then continue with `sj-verify`.
 
 ## Rationalizations
 

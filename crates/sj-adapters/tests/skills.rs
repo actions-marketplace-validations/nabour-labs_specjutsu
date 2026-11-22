@@ -522,9 +522,10 @@ fn skill_010_a_missing_unnamed_or_oversized_reference_fails_the_check() {
     );
 }
 
-// spec: SKILL-010
+/// Not linked to a scenario: it passes on the base branch too, and only guards SKILL-010's
+/// rule against false positives.
 #[test]
-fn skill_010_named_references_within_the_limit_check_clean() {
+fn named_references_within_the_limit_check_clean() {
     let dir = valid();
     put(
         dir.path(),
@@ -599,9 +600,10 @@ fn skill_011_sj_apply_names_the_per_task_review_loop() {
     assert!(shipped.join("sj-apply/re-review-prompt.md").is_file());
 }
 
-// spec: SKILL-011
+/// Not linked to a scenario: it passes on the base branch too, and only guards SKILL-011's
+/// phrase matching against line breaks and case.
 #[test]
-fn skill_011_phrases_match_across_line_breaks_and_case() {
+fn review_phrases_match_across_line_breaks_and_case() {
     let dir = valid();
     put(
         dir.path(),

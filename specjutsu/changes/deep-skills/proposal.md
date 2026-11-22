@@ -50,9 +50,10 @@ None.
 ## Impact
 
 - `crates/sj-adapters/src/skills.rs`: reference, review-loop, discipline and depth rules.
-- `crates/sj-adapters/src/claude.rs` and `shared_skills.rs`: `SKILLS` grows a list of
-  reference files per skill; `skills_plan`, `skills_remove` and stale-file cleanup handle them.
-- `skills/sj-apply`, `skills/sj-debug`, `skills/sj-verify`, `skills/sj-review`,
+- `crates/sj-adapters/src/claude.rs`: `REFERENCES` lists the reference files;
+  `skills_plan`, `skills_remove` and stale-file cleanup handle them. `shared_skills.rs` and
+  the global install reuse these functions unchanged.
+- `skills/sj-apply`, `skills/sj-debug`, `skills/sj-verify`, `skills/sj-onboard` (one line),
   `skills/COVERAGE.md`, and their copies under `crates/sj-adapters/assets/skills/`.
 - `crates/sj-adapters/tests/assets.rs`: compares reference files too.
 - Docs: README skills section, `docs/migration-readiness.md`, CHANGELOG, and a manual

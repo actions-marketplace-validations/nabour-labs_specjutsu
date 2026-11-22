@@ -90,13 +90,17 @@ The check matches fixed phrases, like the onboard check does, so the wording is 
 | sj-verify | `a subagent's report is not evidence` | `does not say a subagent's report is not evidence` |
 
 Phrases are matched case-insensitively with whitespace collapsed, so line wrapping doesn't
-break them.
+break them. Headings (`## Rationalizations`, `## Red flags`) and status tokens (`DONE`,
+`APPROVED`, …) are matched exactly, as whole words. These strings are the contract the
+scenarios name; a typographic apostrophe or a reworded heading fails the check on purpose.
 *Rejected:* only checking that the reference files exist. A file can exist and say nothing;
 the phrases pin the behaviours the pilot asked for.
 
 ### 4. Coverage depth column
-`COVERAGE.md` becomes `| Tool | Item | Skill | Depth |`. Depth is a file name relative to the
-skill folder. The parser still accepts the 3-column form for OpenSpec and Spec Kit rows
+`COVERAGE.md` becomes `| Tool | Item | Skill | Depth |`. Depth is a bare file name in the
+skill folder: a value with a folder, `..` or an absolute path is reported as
+`<tool> <item> depth <skill>/<depth> is not in the skill folder`, so a depth can't point at
+another skill's file. The parser still accepts the 3-column form for OpenSpec and Spec Kit rows
 (empty depth). Planned depth for the Superpowers rows:
 
 | Item | Skill | Depth |
@@ -128,7 +132,14 @@ each unmodified reference with its `SKILL.md` before `remove_if_empty`, so ADAPT
 install-then-remove still restores every byte once references ship. `shared_skills` and the global install
 reuse the same functions, so Codex, Gemini and `--global` get references for free.
 `tests/assets.rs` compares every file in each `skills/sj-*` folder with its embedded copy,
-and `scripts/sync-adapter-assets.sh` copies every `*.md` in each skill folder.
+and `scripts/sync-adapter-assets.sh` copies every `*.md` in each skill folder. The script
+also copies `adapters/agents-md/AGENTS.block.md`: it starts with `rm -rf` of the assets
+folder, so before this change it silently dropped an asset that `agents_md.rs` embeds.
+
+ADAPT-046 (a hand-edited reference is kept) needed no code of its own: 3.1 installs
+references through the same keep-if-edited path as `SKILL.md`. Its first local red run
+failed on test setup, not on missing behaviour; it is proven by red-on-base, since the base
+installs no references.
 
 ## Risks / Trade-offs
 
