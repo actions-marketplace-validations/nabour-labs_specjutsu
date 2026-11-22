@@ -45,7 +45,7 @@ A test that only checks the mock, and one that checks the result:
 #[test]
 fn auth_005_refreshes_token() {
     let clock = MockClock::new();
-    refresh(&clock, &token());
+    let _ = refresh(&clock, &token());
     assert!(clock.was_called());
 }
 
