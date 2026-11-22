@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::git::Git;
@@ -85,6 +85,33 @@ pub struct Loaded {
 pub fn load(root: &Path) -> Result<Loaded> {
     let (records, skipped) = crate::ledger::load_lines(&path(root), |r: &Record| r.v == FORMAT)?;
     Ok(Loaded { records, skipped })
+}
+
+/// Only the records at or after `since`. A record whose `ts` isn't RFC 3339 moves to `skipped`.
+pub fn since(loaded: Loaded, since: chrono::DateTime<chrono::FixedOffset>) -> Loaded {
+    let mut skipped = loaded.skipped;
+    let mut records = Vec::new();
+    for r in loaded.records {
+        match chrono::DateTime::parse_from_rfc3339(&r.ts) {
+            Ok(t) if t >= since => records.push(r),
+            Ok(_) => {}
+            Err(_) => skipped += 1,
+        }
+    }
+    Loaded { records, skipped }
+}
+
+/// Delete the records. Returns how many non-blank lines the file held, readable or not; 0 when
+/// there is no file.
+pub fn reset(root: &Path) -> Result<usize> {
+    let p = path(root);
+    let text = match std::fs::read_to_string(&p) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", p.display())),
+    };
+    std::fs::remove_file(&p).with_context(|| format!("removing {}", p.display()))?;
+    Ok(text.lines().filter(|l| !l.trim().is_empty()).count())
 }
 
 /// Runs and bytes for one command, or for all of them.

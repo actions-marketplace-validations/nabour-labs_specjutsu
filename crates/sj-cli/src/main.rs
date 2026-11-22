@@ -284,6 +284,12 @@ enum Command {
         root: PathBuf,
         #[arg(long)]
         json: bool,
+        /// Count only records at or after this RFC 3339 time, e.g. 2026-11-22T11:00:00Z.
+        #[arg(long, value_parser = parse_rfc3339)]
+        since: Option<chrono::DateTime<chrono::FixedOffset>>,
+        /// Delete the records and print how many were removed.
+        #[arg(long, conflicts_with_all = ["since", "json"])]
+        reset: bool,
     },
     /// Print a shell completion script to stdout, e.g. `sj completions zsh > ~/.zfunc/_sj`.
     Completions {
@@ -653,9 +659,22 @@ fn run() -> Result<ExitCode> {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
         }
-        Command::Gain { root, json } => {
+        Command::Gain {
+            root,
+            json,
+            since,
+            reset,
+        } => {
             sj_core::config::load(&root)?;
-            gain_cmd(&root, json)
+            if reset {
+                let n = sj_core::gain::reset(&root)?;
+                println!(
+                    "removed {n} gain {}",
+                    if n == 1 { "record" } else { "records" }
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
+            gain_cmd(&root, json, since)
         }
         Command::Audit {
             base,
@@ -1383,8 +1402,20 @@ fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode>
     Ok(ExitCode::SUCCESS)
 }
 
-fn gain_cmd(root: &Path, json: bool) -> Result<ExitCode> {
-    let loaded = sj_core::gain::load(root)?;
+fn parse_rfc3339(s: &str) -> Result<chrono::DateTime<chrono::FixedOffset>, String> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .map_err(|e| format!("not an RFC 3339 time, e.g. 2026-11-22T11:00:00Z ({e})"))
+}
+
+fn gain_cmd(
+    root: &Path,
+    json: bool,
+    since: Option<chrono::DateTime<chrono::FixedOffset>>,
+) -> Result<ExitCode> {
+    let mut loaded = sj_core::gain::load(root)?;
+    if let Some(t) = since {
+        loaded = sj_core::gain::since(loaded, t);
+    }
     if loaded.skipped > 0 {
         eprintln!(
             "warn    skipped {} unreadable gain {}",
@@ -1422,6 +1453,7 @@ fn gain_cmd(root: &Path, json: bool) -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
     if loaded.records.is_empty() {
+        println!("no gain records yet");
         return Ok(ExitCode::SUCCESS);
     }
     let rows: Vec<(&str, &sj_core::gain::Totals)> = summary
