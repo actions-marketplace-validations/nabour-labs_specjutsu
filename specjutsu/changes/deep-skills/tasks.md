@@ -22,7 +22,7 @@ every task.
 
 ## 4. Discipline depth
 
-- [ ] 4.1 Discipline-section rule and the sj-debug and sj-verify phrase rules; write `skills/sj-apply/writing-good-tests.md` with `## Rationalizations` and `## Red flags` in sj-apply; rewrite `skills/sj-debug/SKILL.md` in four phases with `root-cause-tracing.md`, `defense-in-depth.md` and `condition-based-waiting.md`; add the gate procedure, rationalizations and red flags to `skills/sj-verify/SKILL.md` (SKILL-014..016)
+- [x] 4.1 Discipline-section rule and the sj-debug and sj-verify phrase rules; write `skills/sj-apply/writing-good-tests.md` with `## Rationalizations` and `## Red flags` in sj-apply; rewrite `skills/sj-debug/SKILL.md` in four phases with `root-cause-tracing.md`, `defense-in-depth.md` and `condition-based-waiting.md`; add the gate procedure, rationalizations and red flags to `skills/sj-verify/SKILL.md` (SKILL-014..016)
 
 ## 5. Coverage depth
 
