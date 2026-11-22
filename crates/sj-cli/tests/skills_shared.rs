@@ -52,7 +52,14 @@ fn adapt_032_codex_and_gemini_share_one_skills_folder() {
         let files: Vec<_> = std::fs::read_dir(root.join(".agents/skills").join(name))
             .unwrap()
             .collect();
-        assert!(files.iter().filter(|e| e.as_ref().unwrap().file_name() == "SKILL.md").count() == 1, "{name}: one SKILL.md");
+        assert!(
+            files
+                .iter()
+                .filter(|e| e.as_ref().unwrap().file_name() == "SKILL.md")
+                .count()
+                == 1,
+            "{name}: one SKILL.md"
+        );
     }
     assert_eq!(
         std::fs::read(root.join(".agents/skills/sj-apply/SKILL.md")).unwrap(),

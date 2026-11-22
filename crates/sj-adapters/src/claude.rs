@@ -58,6 +58,25 @@ pub const SKILLS: [(&str, &str); 10] = [
     ),
 ];
 
+/// Reference files shipped next to a skill's `SKILL.md`, as (skill, file name, source text).
+pub const REFERENCES: [(&str, &str, &str); 3] = [
+    (
+        "sj-apply",
+        "implementer-prompt.md",
+        include_str!("../assets/skills/sj-apply/implementer-prompt.md"),
+    ),
+    (
+        "sj-apply",
+        "task-reviewer-prompt.md",
+        include_str!("../assets/skills/sj-apply/task-reviewer-prompt.md"),
+    ),
+    (
+        "sj-apply",
+        "re-review-prompt.md",
+        include_str!("../assets/skills/sj-apply/re-review-prompt.md"),
+    ),
+];
+
 const PRE_EDIT: &str = r#"{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "sj hook claude pre-edit"}]}"#;
 const SESSION_START: &str =
     r#"{"hooks": [{"type": "command", "command": "sj hook claude session-start"}]}"#;
@@ -517,8 +536,12 @@ pub fn plan(root: &Path, force: bool) -> Result<Vec<Step>> {
 /// kept when it was edited by hand and not `force`, and each stale generated skill removed.
 pub fn skills_plan(root: &Path, skills: &Path, force: bool) -> Result<Vec<Step>> {
     let mut out = Vec::new();
-    for (name, source) in SKILLS {
-        let path = skills.join(name).join("SKILL.md");
+    let files = SKILLS
+        .iter()
+        .map(|(name, source)| (*name, "SKILL.md", *source))
+        .chain(REFERENCES);
+    for (name, file, source) in files {
+        let path = skills.join(name).join(file);
         let old = read_opt(&path)?;
         let new = generated(&lf(source));
         match old.as_deref() {
@@ -611,16 +634,22 @@ pub fn skills_remove(root: &Path, skills: &Path) -> Result<Vec<Change>> {
     let mut out = Vec::new();
     for (name, _) in SKILLS {
         let dir = skills.join(name);
-        let p = dir.join("SKILL.md");
-        match read_opt(&p)? {
-            Some(t) if is_unmodified(&t) => {
-                std::fs::remove_file(&p)?;
-                remove_if_empty(&dir);
-                out.push(Change::Removed(rel(&p, root)));
+        let refs = REFERENCES
+            .iter()
+            .filter(|(s, _, _)| *s == name)
+            .map(|(_, f, _)| *f);
+        for file in refs.chain(["SKILL.md"]) {
+            let p = dir.join(file);
+            match read_opt(&p)? {
+                Some(t) if is_unmodified(&t) => {
+                    std::fs::remove_file(&p)?;
+                    out.push(Change::Removed(rel(&p, root)));
+                }
+                Some(_) => out.push(Change::Kept(rel(&p, root))),
+                None => {}
             }
-            Some(_) => out.push(Change::Kept(rel(&p, root))),
-            None => {}
         }
+        remove_if_empty(&dir);
     }
     remove_if_empty(skills);
     Ok(out)

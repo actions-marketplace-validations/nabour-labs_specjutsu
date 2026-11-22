@@ -113,7 +113,10 @@ fn mig_001_adapter_plan_writes_nothing() {
     let planned = claude::plan_install(dir.path(), false).unwrap();
     assert!(planned.contains(&Change::Created("CLAUDE.md".into())));
     assert!(planned.contains(&Change::Created(".claude/settings.json".into())));
-    assert_eq!(planned.len(), 2 + claude::SKILLS.len());
+    assert_eq!(
+        planned.len(),
+        2 + claude::SKILLS.len() + claude::REFERENCES.len()
+    );
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     assert_eq!(claude::install(dir.path(), false).unwrap(), planned);
 }

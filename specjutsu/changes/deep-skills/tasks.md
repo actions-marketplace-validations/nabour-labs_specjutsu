@@ -16,9 +16,9 @@ every task.
 
 ## 3. Shipping references (sj-adapters)
 
-- [ ] 3.1 `Skill { name, body, refs }` in `claude::SKILLS`; `skills_plan` installs references for Claude and the shared `.agents/skills`; `tests/assets.rs` compares every file in each skill folder (design decision 5) (ADAPT-045)
+- [ ] 3.1 `claude::REFERENCES`; `skills_plan` installs and `skills_remove` removes references for Claude and the shared `.agents/skills`; `tests/assets.rs` compares every file in each skill folder (design decision 5) (ADAPT-045)
 - [ ] 3.2 [P] Hand-edited references are kept on `sj update`, replaced with `--force` (ADAPT-046)
-- [ ] 3.3 [P] Stale references removed on update; `--remove-agents` removes references and empty folders (ADAPT-047)
+- [ ] 3.3 [P] Stale references removed on update, and `--remove-agents` leaves no `sj-*` folder (ADAPT-047)
 
 ## 4. Discipline depth
 

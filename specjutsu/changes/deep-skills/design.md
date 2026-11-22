@@ -115,14 +115,20 @@ skill folder. The parser still accepts the 3-column form for OpenSpec and Spec K
 | using-git-worktrees | sj-finish | SKILL.md |
 
 ### 5. Shipping references
-`claude::SKILLS` becomes `[Skill; 10]` with `Skill { name, body, refs: &[(&str, &str)] }`,
-each `refs` entry an `include_str!`. `skills_plan` writes each reference with the same
+`claude::SKILLS` keeps its `(name, body)` shape, so no caller changes. A new
+`claude::REFERENCES: [(skill, file, body); N]` lists every reference, each an `include_str!`;
+a test fails when an embedded reference is missing from it.
+*Rejected:* a `Skill { name, body, refs }` struct. It changes every caller of `SKILLS` for
+no behaviour gain.
+`skills_plan` writes each reference with the same
 `generated()` marker (an HTML comment at the end, as `SKILL.md` has); `is_unmodified`,
 `--force` and the keep path apply unchanged. `stale_skills` also lists marked, unmodified
 `*.md` files in an `sj-*` folder that the current `SKILLS` doesn't ship. `skills_remove` removes
-each unmodified reference before `remove_if_empty`. `shared_skills` and the global install
+each unmodified reference with its `SKILL.md` before `remove_if_empty`, so ADAPT-010's
+install-then-remove still restores every byte once references ship. `shared_skills` and the global install
 reuse the same functions, so Codex, Gemini and `--global` get references for free.
-`tests/assets.rs` compares every file in each `skills/sj-*` folder with its embedded copy.
+`tests/assets.rs` compares every file in each `skills/sj-*` folder with its embedded copy,
+and `scripts/sync-adapter-assets.sh` copies every `*.md` in each skill folder.
 
 ## Risks / Trade-offs
 
