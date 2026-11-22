@@ -282,6 +282,8 @@ enum Command {
     Gain {
         #[arg(long, default_value = ".")]
         root: PathBuf,
+        #[arg(long)]
+        json: bool,
     },
     /// Print a shell completion script to stdout, e.g. `sj completions zsh > ~/.zfunc/_sj`.
     Completions {
@@ -651,9 +653,9 @@ fn run() -> Result<ExitCode> {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
         }
-        Command::Gain { root } => {
+        Command::Gain { root, json } => {
             sj_core::config::load(&root)?;
-            gain_cmd(&root)
+            gain_cmd(&root, json)
         }
         Command::Audit {
             base,
@@ -1381,7 +1383,7 @@ fn ledger_cmd(id: Option<String>, root: PathBuf, json: bool) -> Result<ExitCode>
     Ok(ExitCode::SUCCESS)
 }
 
-fn gain_cmd(root: &Path) -> Result<ExitCode> {
+fn gain_cmd(root: &Path, json: bool) -> Result<ExitCode> {
     let loaded = sj_core::gain::load(root)?;
     if loaded.skipped > 0 {
         eprintln!(
@@ -1394,10 +1396,34 @@ fn gain_cmd(root: &Path) -> Result<ExitCode> {
             }
         );
     }
+    let summary = sj_core::gain::summarize(&loaded.records);
+    if json {
+        let totals = |t: &sj_core::gain::Totals| {
+            serde_json::json!({
+                "runs": t.runs,
+                "printed": t.printed,
+                "raw": t.raw,
+                "saved_pct": t.saved_percent(),
+            })
+        };
+        let commands: Vec<serde_json::Value> = summary
+            .commands
+            .iter()
+            .map(|(c, t)| {
+                let mut v = totals(t);
+                v["command"] = c.as_str().into();
+                v
+            })
+            .collect();
+        let mut total = totals(&summary.total);
+        total["tokens_saved"] = summary.total.tokens_saved().into();
+        let report = serde_json::json!({ "commands": commands, "total": total });
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(ExitCode::SUCCESS);
+    }
     if loaded.records.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
-    let summary = sj_core::gain::summarize(&loaded.records);
     let rows: Vec<(&str, &sj_core::gain::Totals)> = summary
         .commands
         .iter()
