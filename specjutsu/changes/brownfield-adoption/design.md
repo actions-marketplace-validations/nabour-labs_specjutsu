@@ -40,6 +40,10 @@ Pilot feedback, requests 7, 8 and 9. The current state:
 - An adopting project's first baseline pull request needs that exemption once (GATE-054).
 - A `config` exemption with no implementation files changed does not trigger the GATE-029 full-suite run, because the baseline lives under the spec root.
 
+### sj verify and the baseline
+
+- `sj verify` applies the gate's baseline rules through the same code, so a project with baselined orphans can reach `verify: ok`, and a `baseline-added` entry fails locally before CI.
+
 ### Stale entries
 
 - `sj trace --strict` fails on stale entries. This keeps the baseline from hiding a gap that comes back when its new test is later deleted.
@@ -51,6 +55,7 @@ Pilot feedback, requests 7, 8 and 9. The current state:
   - Six covers `gate`, `ledger` and `trace`. Four matches this repo's own `DIST` and `ADAPT`-style choices.
   - *Rejected:* word initials, which give `PM` for `payment-methods`: too short and clash-prone.
   - *Rejected:* a vowel-dropping abbreviation, which is less predictable.
+- When names run out of letters and still clash, `sj ids prefixes` refuses and names them; a user maps one by hand.
 - Prefixes already in use are pinned: from config first, then the most common prefix among a capability's existing IDs. So the generator never renames anything.
 
 ### specjutsu.toml editing
@@ -68,8 +73,9 @@ Pilot feedback, requests 7, 8 and 9. The current state:
 ### Undo manifest
 
 - The manifest is `sj-migrate-undo.json` in the git directory. It is never committed, it works in linked worktrees (`git rev-parse --git-dir`), and it survives the user committing the migration.
-- It records the start commit and, for each path, its action and post-write hash (`null` for removed files).
-- Undo restores from the start commit with `git cat-file --filters <commit>:<path>`, so it works after the migration is committed too. `--filters` applies the working-tree conversions (eol, smudge), so a CRLF file comes back with CRLF; plain `git show` would print the LF blob. The result is left uncommitted.
+- It records the start commit and, for each path migrate writes (taken from the plan, not from `git status`, so gitignored files count), its action, its post-write hash, and the blob ID of its content before the write (`git hash-object -w --stdin-paths`, which stores the blob in the object database; `null` for created files). Paths go to git on stdin, never as arguments, so a migration of thousands of files stays under Windows' command-line limit.
+- Undo restores each changed or removed file from its recorded blob with `git cat-file --filters --path=<path> <blob>`, so it works after the migration is committed and for files the commit never held. `--filters` applies the working-tree conversions (eol, smudge), so a CRLF file comes back with CRLF; plain `git show` would print the LF blob. The result is left uncommitted.
+  - *Rejected:* restoring from `<commit>:<path>`, which can't restore a gitignored file migrate changed.
 - Undo also removes any folder left empty by deleting the files migrate created. Git doesn't track empty folders, so an empty folder that existed before the migration goes too.
   - *Rejected:* keeping `git clean -fd` with a warning, which still deletes untracked work.
   - *Rejected:* `git stash`, which is fragile once the user has committed.

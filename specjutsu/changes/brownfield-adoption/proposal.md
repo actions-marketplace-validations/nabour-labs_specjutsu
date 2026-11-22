@@ -29,6 +29,7 @@ None.
 
 - `trace`: the baseline file, known and stale entries.
 - `gate`: baselined gaps and orphans, and entries added by a change.
+- `loop`: `sj verify` honours the baseline as the gate does.
 - `ids`: `sj ids prefixes` and the long-prefix hint.
 - `migration`: short prefixes, `--diff`, the merge note, the undo manifest and `--undo`.
 
@@ -36,6 +37,7 @@ None.
 
 - `crates/sj-core/src/trace.rs`: baseline parse, write and compare.
 - `crates/sj-core/src/gate.rs`: reads the baseline at base and at head.
+- `crates/sj-core/src/agent_loop/verify.rs`: the same baseline rules for `sj verify`.
 - `crates/sj-core/src/ids.rs`: suggestion rule, plus a small splice of the `[ids.prefixes]` table in `specjutsu.toml`.
 - `crates/sj-core/src/migrate/`: prefix pinning, the diff, the manifest and undo.
 - `crates/sj-cli/src/main.rs`: new flags and subcommand.

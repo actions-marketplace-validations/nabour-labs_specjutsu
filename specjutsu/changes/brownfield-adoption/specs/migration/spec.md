@@ -32,8 +32,8 @@ With `--diff`, the preview SHALL print a unified diff (`--- a/<path>`, `+++ b/<p
 - **THEN** the line for `.claude/settings.json` ends with `(merged: 1 existing hook kept)`
 
 ### Requirement: sj migrate --undo puts back only what migrate touched
-`sj migrate --write` SHALL record the commit it started from and every file it created, changed or removed, with each file's content hash after the write, in `sj-migrate-undo.json` inside the git directory (`git rev-parse --git-dir`), so it is never committed. `sj migrate --undo` SHALL:
-- restore every changed or removed file to its content at that commit;
+`sj migrate --write` SHALL record the commit it started from and every file it created, changed or removed, with each file's content hash after the write and its content before the write, in `sj-migrate-undo.json` inside the git directory (`git rev-parse --git-dir`), so it is never committed. `sj migrate --undo` SHALL:
+- restore every changed or removed file to its content before the write, including files git ignores;
 - delete every file migrate created;
 - delete the manifest;
 - touch no other file.
@@ -51,3 +51,7 @@ It SHALL refuse, exiting 2 and changing nothing, when any recorded file differs 
 #### Scenario: MIG-016 Undo refuses when a migrated file was edited since
 - **WHEN** `sj migrate --from superpowers --write` ran, `.claude/settings.json` was then edited by hand, and `sj migrate --undo` runs
 - **THEN** it exits 2 naming `.claude/settings.json`, and no file changes
+
+#### Scenario: MIG-018 Undo restores a gitignored file migrate changed
+- **WHEN** `.claude/settings.json` is gitignored and holds one project hook, `sj migrate --from superpowers --write` runs, and then `sj migrate --undo` runs
+- **THEN** `.claude/settings.json` has exactly its pre-migration content

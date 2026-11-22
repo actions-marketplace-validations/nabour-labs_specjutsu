@@ -6,7 +6,7 @@
 2. A capability whose scenarios already carry IDs keeps the prefix those IDs use.
 3. Otherwise the suggestion is the capability's letters, uppercased. Names of six letters or fewer are kept whole, and longer ones are cut to their first four letters.
 
-When two suggestions are equal, or a suggestion equals a prefix already kept, the suggestions SHALL be lengthened together, one letter at a time, until every prefix is distinct.
+When two suggestions are equal, or a suggestion equals a prefix already kept, the suggestions SHALL be lengthened together, one letter at a time, until every prefix is distinct. When a clash remains after every name has run out of letters, `sj ids prefixes` SHALL exit 2 naming the clashing capabilities and their prefix, and `--write` SHALL write nothing.
 
 #### Scenario: IDS-008 Long capability names get four-letter prefixes
 - **WHEN** capability folders `distribution`, `gate` and `payment-methods` exist, none of their scenarios has an ID, there is no `[ids.prefixes]`, and `sj ids prefixes` runs
@@ -19,6 +19,10 @@ When two suggestions are equal, or a suggestion equals a prefix already kept, th
 #### Scenario: IDS-010 Clashing suggestions lengthen until distinct
 - **WHEN** capability folders `transfers` and `transactions` have no IDs and no mapping, and `sj ids prefixes` runs
 - **THEN** it prints `transactions = "TRANSA"` and `transfers = "TRANSF"`
+
+#### Scenario: IDS-013 An unresolvable clash is refused
+- **WHEN** `[ids.prefixes]` maps `billing = "BILL"`, capability folders `bill` and `billing` exist with no IDs, and `sj ids prefixes --write` runs
+- **THEN** it exits 2 naming `bill` and `billing` and the prefix `BILL`, and `specjutsu.toml` is unchanged
 
 ### Requirement: sj ids prefixes --write adds the table to specjutsu.toml
 With `--write`, `sj ids prefixes` SHALL add every capability missing from `[ids.prefixes]` to that table in `specjutsu.toml`, creating the table at the end of the file if it is absent. It SHALL leave every other byte unchanged. Running it twice SHALL change nothing the second time.

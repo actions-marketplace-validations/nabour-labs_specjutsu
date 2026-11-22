@@ -30,3 +30,10 @@ Each task lands as two commits: the failing test first (`test(IDs): red`), then 
 ## 5. Docs
 
 - [x] 5.1 README and manual: adopting a baseline (with the exemption trailer) and the gate's `known gaps`, `stale` and `baseline-added` warnings; `sj ids prefixes` (with `--write`) and the long-prefix hint; `migrate --from openspec` pinning short prefixes; `migrate --diff` and `--undo`; replace the `git clean -fd` advice; CHANGELOG entry marking the rollback line as BREAKING (no-scenario: docs)
+
+## 6. Final review fixes
+
+- [ ] 6.1 `sj verify` honours the trace baseline like the gate (LOOP-022, LOOP-023)
+- [ ] 6.2 [P] Unresolvable prefix clashes are refused (IDS-013)
+- [ ] 6.3 [P] Undo records every file migrate writes, from the plan, with its prior content (MIG-018)
+
