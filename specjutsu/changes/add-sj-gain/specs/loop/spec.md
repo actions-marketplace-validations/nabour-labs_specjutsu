@@ -1,12 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Agent-loop commands record their gain
-Each run of `sj test`, `sj verify`, `sj next` and `sj status` SHALL append one record to
-`.specjutsu/ledger/gain.jsonl` holding the command name, a timestamp, the bytes the command printed
-to stdout, and the raw-equivalent bytes. For `sj test` and `sj verify` the raw-equivalent is the
-combined stdout and stderr bytes of the runner processes. For `sj next` it is the total size of every
-file in the change folder it read. For `sj status` it is the total size of every file in every open
-change folder. Recording SHALL NOT change the command's output or exit code.
+Each run of `sj test`, `sj verify`, `sj next` and `sj status` that prints its report SHALL append
+one record to `.specjutsu/ledger/gain.jsonl` holding the command name, a timestamp, the bytes the
+command printed to stdout, and the raw-equivalent bytes. A run that exits with an error before
+printing its report records nothing. For `sj test` and `sj verify` the raw-equivalent is the combined
+stdout and stderr bytes of the runner processes. For `sj next` it is the total size of every file in
+the change folder of the task it reports, and 0 when it reports no open task. For `sj status` it is
+the total size of every file in every change folder it reports on: the named one, or every open one.
+Recording SHALL NOT change the command's output or exit code.
 
 #### Scenario: LOOP-022 sj test records printed and raw bytes
 - **WHEN** `sj test` runs a suite whose runner writes 40,000 bytes of output and `sj test` prints 300 bytes
@@ -31,8 +33,9 @@ change folder. Recording SHALL NOT change the command's output or exit code.
 ### Requirement: sj gain reports the bytes and tokens saved
 `sj gain` SHALL print one line per recorded command with its run count, printed bytes, raw bytes and
 the share saved as a whole percent (rounded down), then a `total` line with the same columns and the
-estimated tokens saved, computed as (raw − printed) / 4 rounded down. `sj gain --json` SHALL print the
-same totals as one JSON object. `sj gain --since <RFC 3339 timestamp>` SHALL count only records at or
+estimated tokens saved, computed as (raw − printed) / 4 rounded down; when printed exceeds raw, the
+share and the tokens saved are 0. `sj gain --json` SHALL print the same totals as one JSON object,
+with the number of unreadable records skipped as `skipped`. `sj gain --since <RFC 3339 timestamp>` SHALL count only records at or
 after that time. `sj gain --reset` SHALL delete the records and print how many it removed.
 
 #### Scenario: LOOP-027 Totals per command and overall
@@ -41,7 +44,7 @@ after that time. `sj gain --reset` SHALL delete the records and print how many i
 
 #### Scenario: LOOP-028 JSON totals for a harness
 - **WHEN** the user runs `sj gain --json` over the records in LOOP-027
-- **THEN** stdout is one JSON object with a `commands` array holding `test` and `next`, each with `runs`, `printed`, `raw` and `saved_pct`, and a `total` object with the same fields plus `tokens_saved` 13125
+- **THEN** stdout is one JSON object with a `commands` array holding `test` and `next`, each with `runs`, `printed`, `raw` and `saved_pct`, a `total` object with the same fields plus `tokens_saved` 13125, and `skipped` 0
 
 #### Scenario: LOOP-029 Count one session with --since
 - **WHEN** one `test` record is at 2026-11-22T10:00:00Z and another at 2026-11-22T12:00:00Z, and the user runs `sj gain --since 2026-11-22T11:00:00Z`
