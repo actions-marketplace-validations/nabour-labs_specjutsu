@@ -1943,7 +1943,8 @@ struct Flagged<'a, T> {
     known: bool,
 }
 
-/// `Report` as `--json` prints it when a baseline exists: same fields, same order.
+/// `Report` as `--json` prints it when a baseline exists: same fields, same order, then the
+/// stale baseline entries.
 #[derive(serde::Serialize)]
 struct KnownReport<'a> {
     mapped: &'a [sj_core::trace::Mapped],
@@ -1951,10 +1952,11 @@ struct KnownReport<'a> {
     orphans: Vec<Flagged<'a, sj_core::trace::Orphan>>,
     unidentified: &'a [sj_core::spec::Scenario],
     warnings: &'a [String],
+    stale: &'a [String],
 }
 
 impl<'a> KnownReport<'a> {
-    fn new(r: &'a sj_core::trace::Report, known: &Known) -> Self {
+    fn new(r: &'a sj_core::trace::Report, known: &'a Known) -> Self {
         fn flag<'a, T>(items: &'a [T], flags: &[bool]) -> Vec<Flagged<'a, T>> {
             items
                 .iter()
@@ -1968,6 +1970,7 @@ impl<'a> KnownReport<'a> {
             orphans: flag(&r.orphans, &known.orphans),
             unidentified: &r.unidentified,
             warnings: &r.warnings,
+            stale: &known.stale,
         }
     }
 }
