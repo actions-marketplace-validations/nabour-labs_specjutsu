@@ -395,3 +395,48 @@ fn audit_018_a_fixture_only_test_stays_assertion_free() {
     assert!(!out.contains("checks"), "{out}");
     assert_eq!(code, Some(1));
 }
+
+/// Commit `content` at `rel` (which starts as `seed`) on the change branch and run `sj audit`.
+fn audit_new_test(rel: &str, seed: &str, content: &str) -> (Option<i32>, String) {
+    let f = Fixture::new(&[(rel, seed)]);
+    f.write(rel, content);
+    f.commit("add test");
+    f.audit(&[])
+}
+
+#[test]
+fn audit_019_a_column_0_triple_quoted_fixture_keeps_a_pytest_tests_asserts() {
+    let (code, out) = audit_new_test(
+        "tests/test_cfg.py",
+        "import os\n",
+        "import os\n\ndef test_parses():\n    data = \"\"\"\n[tool]\nname = \"x\"\n\"\"\"\n    assert \"x\" in data\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_020_a_backslash_continued_js_string_does_not_shift_later_tests() {
+    let (code, out) = audit_new_test(
+        "src/a.test.js",
+        "const x = 1\n",
+        "const x = 1\n\nit(\"first\", () => {\n  const s = \"a\\\nb\"\n  expect(s).toBe(\"ab\")\n})\n\nit(\"second\", () => {\n  const y = 2\n  expect(y).toBe(2) })\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_021_a_pytest_test_still_ends_at_the_next_top_level_def() {
+    let (code, out) = audit_new_test(
+        "tests/test_cfg.py",
+        "import os\n",
+        "import os\n\ndef test_a():\n    x = 1\n\ndef test_b():\n    assert True\n",
+    );
+    assert!(
+        out.contains("assertion-free-test tests/test_cfg.py › test_a"),
+        "{out}"
+    );
+    assert!(!out.contains("test_b"), "{out}");
+    assert_eq!(code, Some(1));
+}

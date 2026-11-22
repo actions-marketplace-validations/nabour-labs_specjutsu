@@ -317,7 +317,7 @@ fn tokenize(src: &str) -> Vec<Token> {
             }
             '\'' | '"' => {
                 let start_line = line;
-                let (text, next) = quoted(&chars, i + 1, c);
+                let (text, next) = quoted(&chars, i + 1, c, &mut line);
                 i = next;
                 toks.push(Token {
                     tok: Tok::Str { text, plain: true },
@@ -405,11 +405,15 @@ fn regex_allowed(prev: Option<&Token>) -> bool {
 
 /// A single- or double-quoted string from `i` (after the quote). Stops at a newline, which a JS
 /// string cannot contain, so a stray apostrophe in JSX text spoils at most one line.
-fn quoted(chars: &[char], mut i: usize, q: char) -> (String, usize) {
+/// A `\` before a newline continues the string; that newline is counted in `line`.
+fn quoted(chars: &[char], mut i: usize, q: char, line: &mut usize) -> (String, usize) {
     let mut text = String::new();
     while i < chars.len() && chars[i] != q && chars[i] != '\n' {
         if chars[i] == '\\' && i + 1 < chars.len() {
             i += 1;
+            if chars[i] == '\n' {
+                *line += 1;
+            }
         }
         text.push(chars[i]);
         i += 1;
