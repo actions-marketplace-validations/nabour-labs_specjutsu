@@ -30,5 +30,5 @@ every task.
 
 ## 6. Docs
 
-- [ ] 6.1 README skills section, `docs/migration-readiness.md` (Superpowers depth row), CHANGELOG entry (no-scenario: docs)
-- [ ] 6.2 `docs/skill-evals.md`: manual pressure tests for sj-apply, sj-debug and sj-verify, and the steps to re-run the pilot (no-scenario: docs)
+- [x] 6.1 README skills section, `docs/migration-readiness.md` (Superpowers depth row), CHANGELOG entry (no-scenario: docs)
+- [x] 6.2 `docs/skill-evals.md`: manual pressure tests for sj-apply, sj-debug and sj-verify, and the steps to re-run the pilot (no-scenario: docs)
