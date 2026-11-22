@@ -537,3 +537,57 @@ fn loop_021_a_passing_scenario_without_a_red_run_is_still_unproven() {
         "{done}"
     );
 }
+
+/// Base `main`: AUTH-001 specified, so AUTH is a known prefix and a test naming a missing
+/// AUTH ID is an orphan.
+fn auth_base() -> support::Repo {
+    let repo = support::Repo::with_lib("pub fn lib() {}\n");
+    repo.write(
+        "openspec/specs/auth/spec.md",
+        &support::spec_md(&[("AUTH-001", "Logs in")]),
+    );
+    repo
+}
+
+#[test]
+fn loop_022_a_baselined_orphan_is_not_a_verify_problem() {
+    let repo = auth_base();
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_009_old() { assert!(true); }\n",
+    );
+    repo.write(
+        "openspec/trace-baseline.txt",
+        "orphan AUTH-009 tests/auth.rs auth_009_old\n",
+    );
+    repo.commit("base with baselined orphan");
+    repo.branch("feature");
+    repo.write("README.md", "# demo\n");
+    repo.commit("docs: readme");
+
+    let out = stdout(&mut sj(repo.path(), &["verify"]));
+    assert!(!out.contains("orphan AUTH-009"), "{out}");
+}
+
+#[test]
+fn loop_023_a_baseline_entry_added_without_an_exemption_is_a_verify_problem() {
+    let repo = auth_base();
+    repo.commit("base");
+    repo.branch("feature");
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_010_x() { assert!(true); }\n",
+    );
+    repo.write(
+        "openspec/trace-baseline.txt",
+        "orphan AUTH-010 tests/auth.rs auth_010_x\n",
+    );
+    repo.commit("test: AUTH-010, baselined");
+
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "\nbaseline-added orphan AUTH-010 tests/auth.rs auth_010_x\n",
+        ));
+}
