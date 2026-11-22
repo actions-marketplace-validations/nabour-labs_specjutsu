@@ -94,6 +94,25 @@ fn base_with_baselined_auth_002() -> Repo {
 }
 
 #[test]
+fn gate_052_a_baselined_scenario_the_change_modifies_is_still_gated() {
+    let repo = base_with_baselined_auth_002();
+    repo.branch("feature");
+    repo.write(
+        "openspec/specs/auth/spec.md",
+        &AUTH_SPEC.replace("the session lasts\n", "the session lasts 30 days\n"),
+    );
+    repo.commit("spec: AUTH-002 lasts 30 days");
+
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    assert!(
+        r.failures.iter().any(|f| f == "untested AUTH-002"),
+        "{:?}",
+        r.failures
+    );
+}
+
+#[test]
 fn gate_055_a_stale_baseline_entry_only_warns() {
     let repo = base_with_baselined_auth_002();
     repo.branch("feature");
