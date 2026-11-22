@@ -429,6 +429,10 @@ pub fn evaluate(input: &Input) -> GateReport {
         r.warnings
             .push(format!("known gaps: {known_gaps} ({BASELINE_FILE})"));
     }
+    // GATE-055: stale entries only warn; `sj trace --strict` enforces the cleanup.
+    for e in input.baseline.stale(&input.trace) {
+        r.warnings.push(format!("stale {e}"));
+    }
 
     for u in &input.unidentified {
         r.failures.push(format!("unidentified {u}"));
