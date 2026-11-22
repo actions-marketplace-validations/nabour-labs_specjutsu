@@ -1200,7 +1200,20 @@ fn run_on_base(
             }
             let picked: Vec<testscan::TestFn> = job.jobs.iter().map(|(_, t)| t.clone()).collect();
             let res = suite::run_suite(&wt, pkg, s, &job.traced, &Pick::Tests(picked))?;
-            let failed_early = res.no_report || !res.exit_ok;
+            // No report means the runner never ran the tests (missing dependencies, executable
+            // or config), so it cannot show they fail on the old code (GATE-046). A test that
+            // fails to load still gets a report entry for its file (GATE-033, GATE-047).
+            if res.no_report {
+                anyhow::bail!(
+                    "{}:{} wrote no report on base, so red-on-base can't be checked; \
+                     declare `setup` for the suite (e.g. `setup = \"pnpm install --frozen-lockfile\"`) \
+                     or `red_on_base = \"skip\"` with a `reason`\n{}",
+                    pkg.path,
+                    s.runner.as_str(),
+                    res.build_errors.join("\n")
+                );
+            }
+            let failed_early = !res.exit_ok;
             for (id, t) in &job.jobs {
                 let joined = res.joined.iter().find(|j| {
                     j.test.is_some_and(|i| {
