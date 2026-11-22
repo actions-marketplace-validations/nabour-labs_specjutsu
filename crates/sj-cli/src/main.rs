@@ -781,6 +781,7 @@ fn init_cmd(root: &Path, force: bool) -> Result<ExitCode> {
     }
     let config = Config::default_for(root);
     std::fs::write(&file, config.to_toml())?;
+    sj_core::config::ignore_ledger(root)?;
     let spec_root = root.join(&config.spec_root);
     for dir in ["specs", "changes"] {
         std::fs::create_dir_all(spec_root.join(dir))?;
@@ -1196,6 +1197,7 @@ fn adopt_cmd(root: &Path, dry_run: bool, force: bool) -> Result<ExitCode> {
         print!("{}", config.to_toml());
     } else {
         std::fs::write(&file, config.to_toml())?;
+        sj_core::config::ignore_ledger(root)?;
         let spec_root = root.join(&config.spec_root);
         for dir in ["specs", "changes"] {
             std::fs::create_dir_all(spec_root.join(dir))?;
