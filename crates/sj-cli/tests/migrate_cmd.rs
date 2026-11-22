@@ -865,6 +865,41 @@ fn mig_016_undo_refuses_when_a_migrated_file_was_edited_since() {
     assert_eq!(std::fs::read(undo_manifest(&repo)).unwrap(), manifest);
 }
 
+#[test]
+fn mig_018_undo_restores_a_gitignored_file_migrate_changed() {
+    let repo = support::Repo::with_lib("");
+    repo.write("openspec/specs/math/spec.md", SPEC);
+    repo.write(".gitignore", ".claude/settings.json\n");
+    repo.commit("project");
+    let hook = r#"{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "npm run lint" }]
+      }
+    ]
+  }
+}
+"#;
+    repo.write(".claude/settings.json", hook);
+    assert_eq!(status(&repo), "");
+
+    // The specs still lack IDs, so the write may exit 1 on validate; its files are written.
+    let _ = migrate(repo.path(), &["--from", "superpowers", "--write"]).assert();
+    assert!(read(&repo, ".claude/settings.json").contains("sj hook claude pre-edit"));
+
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["migrate", "--undo", "--root"])
+        .arg(repo.path())
+        .assert()
+        .success();
+
+    let after = std::fs::read(repo.path().join(".claude/settings.json")).unwrap();
+    assert_eq!(String::from_utf8(after).unwrap(), hook);
+}
+
 /// Undo puts back a file's working-tree bytes, smudge and eol conversion included: a file
 /// checked out with CRLF endings comes back with CRLF.
 #[test]
