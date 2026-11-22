@@ -8,7 +8,7 @@ every task.
 
 ## 1. Reference files (sj-adapters)
 
-- [ ] 1.1 Reference rules in `skills::check`: missing, unnamed and oversized references, and foreign commands in references (design decision 2) (SKILL-002, SKILL-010)
+- [x] 1.1 Reference rules in `skills::check`: missing, unnamed and oversized references, and foreign commands in references (design decision 2) (SKILL-002, SKILL-010)
 - [ ] 1.2 `Skill { name, body, refs }` in `claude::SKILLS`; `skills_plan` installs references for Claude and the shared `.agents/skills`; `tests/assets.rs` compares every file in each skill folder (design decision 5) (ADAPT-045)
 - [ ] 1.3 [P] Hand-edited references are kept on `sj update`, replaced with `--force` (ADAPT-046)
 - [ ] 1.4 [P] Stale references removed on update; `--remove-agents` removes references and empty folders (ADAPT-047)
