@@ -562,6 +562,17 @@ fn check_coverage(dir: &Path, out: &mut Vec<Problem>) -> Result<()> {
                 format!("{tool} {item} maps to unknown skill {skill}"),
             ));
         }
+        // Each Superpowers technique names the file that carries it (SKILL-017).
+        if tool == "Superpowers" {
+            match cells.get(3).copied().filter(|d| !d.is_empty()) {
+                None => out.push(problem("coverage", format!("{tool} {item} has no depth"))),
+                Some(d) if !dir.join(skill).join(d).is_file() => out.push(problem(
+                    "coverage",
+                    format!("{tool} {item} depth {skill}/{d} does not exist"),
+                )),
+                Some(_) => {}
+            }
+        }
     }
     let lists: [(&str, &[&str]); 3] = [
         ("Superpowers", &SUPERPOWERS),
