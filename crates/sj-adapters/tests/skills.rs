@@ -24,7 +24,7 @@ const COVERAGE: &str = "| Tool | Item | Skill | Depth |
 | Superpowers | executing-plans | sj-apply | SKILL.md |
 | Superpowers | test-driven-development | sj-apply | writing-good-tests.md |
 | Superpowers | subagent-driven-development | sj-apply | task-reviewer-prompt.md |
-| Superpowers | dispatching-parallel-agents | sj-apply | implementer-prompt.md |
+| Superpowers | dispatching-parallel-agents | sj-apply | SKILL.md |
 | Superpowers | systematic-debugging | sj-debug | root-cause-tracing.md |
 | Superpowers | requesting-code-review | sj-review | SKILL.md |
 | Superpowers | receiving-code-review | sj-review | SKILL.md |

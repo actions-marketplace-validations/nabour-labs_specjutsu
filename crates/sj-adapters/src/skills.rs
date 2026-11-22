@@ -566,6 +566,18 @@ fn check_coverage(dir: &Path, out: &mut Vec<Problem>) -> Result<()> {
         if tool == "Superpowers" {
             match cells.get(3).copied().filter(|d| !d.is_empty()) {
                 None => out.push(problem("coverage", format!("{tool} {item} has no depth"))),
+                // A bare file name only: no `..`, no folder, no absolute path.
+                Some(d)
+                    if !matches!(
+                        Path::new(d).components().collect::<Vec<_>>().as_slice(),
+                        [std::path::Component::Normal(_)]
+                    ) =>
+                {
+                    out.push(problem(
+                        "coverage",
+                        format!("{tool} {item} depth {skill}/{d} is not in the skill folder"),
+                    ))
+                }
                 Some(d) if !dir.join(skill).join(d).is_file() => out.push(problem(
                     "coverage",
                     format!("{tool} {item} depth {skill}/{d} does not exist"),

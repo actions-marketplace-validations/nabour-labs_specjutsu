@@ -106,7 +106,7 @@ skill folder. The parser still accepts the 3-column form for OpenSpec and Spec K
 | executing-plans | sj-apply | SKILL.md |
 | test-driven-development | sj-apply | writing-good-tests.md |
 | subagent-driven-development | sj-apply | task-reviewer-prompt.md |
-| dispatching-parallel-agents | sj-apply | implementer-prompt.md |
+| dispatching-parallel-agents | sj-apply | SKILL.md |
 | systematic-debugging | sj-debug | root-cause-tracing.md |
 | requesting-code-review | sj-review | SKILL.md |
 | receiving-code-review | sj-review | SKILL.md |
