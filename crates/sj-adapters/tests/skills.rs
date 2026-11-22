@@ -69,12 +69,21 @@ const REVIEWER: &str = "Read the scenario text. Don't trust the implementer's re
 `git diff` and `sj verify`. Say whether the test would fail without the change. Answer \
 APPROVED or CHANGES_REQUESTED.\n";
 
+/// The sections every discipline skill has (SKILL-014).
+const DISCIPLINE: &str = "\n## Rationalizations\n\nNone.\n\n## Red flags\n\nNone.\n";
+
 /// A body that satisfies every per-skill rule.
 fn body(name: &str) -> String {
     let needs = match name {
-        "sj-apply" => APPLY,
-        "sj-debug" => "Reproduce it with `sj test AUTH-001`.",
-        "sj-verify" => "Run `sj verify`.",
+        "sj-apply" => &format!("{APPLY} Read `writing-good-tests.md`.\n{DISCIPLINE}"),
+        "sj-debug" => &format!(
+            "Reproduce it with `sj test AUTH-001`. Trace it with `root-cause-tracing.md`, \
+             guard it with `defense-in-depth.md`, and wait with `condition-based-waiting.md`. \
+             After 3 failed fixes, question the design.\n{DISCIPLINE}"
+        ),
+        "sj-verify" => &format!(
+            "Run `sj verify`. A subagent's report is not evidence.\n{DISCIPLINE}"
+        ),
         "sj-finish" => "Run `sj verify`, then `sj spec archive`.",
         "sj-propose" => "Run `sj spec new`, then `sj spec validate` and `sj spec check`. Read principles.md and record each deviation in design.md.",
         "sj-clarify" => "Run `sj spec check`.",
@@ -108,6 +117,18 @@ fn valid() -> tempfile::TempDir {
         "sj-apply/re-review-prompt.md",
         "Check each finding.\n",
     );
+    put(
+        dir.path(),
+        "sj-apply/writing-good-tests.md",
+        "# Good tests\n",
+    );
+    for f in [
+        "root-cause-tracing.md",
+        "defense-in-depth.md",
+        "condition-based-waiting.md",
+    ] {
+        put(dir.path(), &format!("sj-debug/{f}"), "# Technique\n");
+    }
     put(dir.path(), "COVERAGE.md", COVERAGE);
     dir
 }
@@ -477,6 +498,7 @@ fn skill_010_a_missing_unnamed_or_oversized_reference_fails_the_check() {
             ),
         ),
     );
+    std::fs::remove_file(dir.path().join("sj-debug/root-cause-tracing.md")).unwrap();
     put(dir.path(), "sj-debug/notes.md", "# Notes\n");
     put(
         dir.path(),
@@ -583,7 +605,7 @@ fn skill_011_phrases_match_across_line_breaks_and_case() {
         "sj-apply/SKILL.md",
         &skill_md(
             "sj-apply",
-            &APPLY.replace("fresh reviewer subagent", "Fresh\n  reviewer\nsubagent"),
+            &body("sj-apply").replace("fresh reviewer subagent", "Fresh\n  reviewer\nsubagent"),
         ),
     );
     assert_eq!(messages(dir.path()), Vec::<String>::new());
@@ -681,4 +703,101 @@ fn skill_013_the_implementer_reports_a_status_and_never_closes_the_task() {
             "shipped implementer prompt lacks {want}"
         );
     }
+}
+
+fn with_body(dir: &Path, name: &str, body: &str) {
+    put(dir, &format!("{name}/SKILL.md"), &skill_md(name, body));
+}
+
+// spec: SKILL-014
+#[test]
+fn skill_014_a_discipline_skill_without_its_sections_fails_the_check() {
+    let dir = valid();
+    with_body(
+        dir.path(),
+        "sj-debug",
+        &body("sj-debug").replace("## Red flags", "## Flags"),
+    );
+    with_body(
+        dir.path(),
+        "sj-verify",
+        &body("sj-verify").replace("## Rationalizations", "## Excuses"),
+    );
+    with_body(
+        dir.path(),
+        "sj-apply",
+        &body("sj-apply").replace(" Read `writing-good-tests.md`.", ""),
+    );
+    std::fs::remove_file(dir.path().join("sj-apply/writing-good-tests.md")).unwrap();
+    let got = messages(dir.path());
+    for want in [
+        "sj-debug: has no ## Red flags section",
+        "sj-verify: has no ## Rationalizations section",
+        "sj-apply: does not name writing-good-tests.md",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got = messages(&shipped);
+    assert!(
+        !got.iter()
+            .any(|m| m.contains("section") || m.contains("writing-good-tests")),
+        "{got:?}"
+    );
+}
+
+// spec: SKILL-015
+#[test]
+fn skill_015_sj_debug_names_its_techniques_and_the_three_fix_rule() {
+    let dir = valid();
+    with_body(
+        dir.path(),
+        "sj-debug",
+        &body("sj-debug")
+            .replace(", and wait with `condition-based-waiting.md`", "")
+            .replace("After 3 failed fixes, question the design.", "Keep trying."),
+    );
+    std::fs::remove_file(dir.path().join("sj-debug/condition-based-waiting.md")).unwrap();
+    let got = messages(dir.path());
+    for want in [
+        "sj-debug: does not name condition-based-waiting.md",
+        "sj-debug: does not question the design after 3 failed fixes",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got = messages(&shipped);
+    assert!(!got.iter().any(|m| m.starts_with("sj-debug")), "{got:?}");
+    for f in [
+        "root-cause-tracing.md",
+        "defense-in-depth.md",
+        "condition-based-waiting.md",
+    ] {
+        assert!(
+            shipped.join("sj-debug").join(f).is_file(),
+            "{f} is not shipped"
+        );
+    }
+}
+
+// spec: SKILL-016
+#[test]
+fn skill_016_sj_verify_does_not_trust_a_subagents_report() {
+    let dir = valid();
+    with_body(
+        dir.path(),
+        "sj-verify",
+        &body("sj-verify").replace(" A subagent's report is not evidence.", ""),
+    );
+    let got = messages(dir.path());
+    assert!(
+        has(
+            &got,
+            "sj-verify: does not say a subagent's report is not evidence"
+        ),
+        "{got:?}"
+    );
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got = messages(&shipped);
+    assert!(!got.iter().any(|m| m.starts_with("sj-verify")), "{got:?}");
 }
