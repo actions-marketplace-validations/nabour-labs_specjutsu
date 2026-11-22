@@ -12,6 +12,61 @@ use serde::{Deserialize, Serialize};
 /// The project file's name, at the repository root.
 pub const FILE: &str = "specjutsu.toml";
 
+/// The `.gitignore` line that keeps the local run ledger out of commits (CONF-038).
+pub const LEDGER_IGNORE: &str = ".specjutsu/ledger/";
+
+/// What [`ignore_ledger`] would do, or did, to the root `.gitignore`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LedgerIgnore {
+    /// A line already ignores the ledger.
+    Present,
+    /// The line is appended to an existing file.
+    Change,
+    /// The file is created with the line.
+    Create,
+}
+
+/// What adding the ledger line to `<root>/.gitignore` involves, without writing.
+pub fn ledger_ignore(root: &Path) -> LedgerIgnore {
+    match std::fs::read_to_string(root.join(".gitignore")) {
+        Err(_) => LedgerIgnore::Create,
+        Ok(text) => {
+            let covered = text.lines().map(str::trim).any(|l| {
+                matches!(
+                    l.strip_prefix('/').unwrap_or(l),
+                    ".specjutsu/ledger/" | ".specjutsu/ledger" | ".specjutsu/" | ".specjutsu"
+                )
+            });
+            if covered {
+                LedgerIgnore::Present
+            } else {
+                LedgerIgnore::Change
+            }
+        }
+    }
+}
+
+/// Add [`LEDGER_IGNORE`] to `<root>/.gitignore` unless a line already covers it, keeping the
+/// file's other lines (CONF-038).
+pub fn ignore_ledger(root: &Path) -> Result<LedgerIgnore> {
+    let action = ledger_ignore(root);
+    let path = root.join(".gitignore");
+    match action {
+        LedgerIgnore::Present => {}
+        LedgerIgnore::Create => std::fs::write(&path, format!("{LEDGER_IGNORE}\n"))?,
+        LedgerIgnore::Change => {
+            let mut text = std::fs::read_to_string(&path)?;
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(LEDGER_IGNORE);
+            text.push('\n');
+            std::fs::write(&path, text)?;
+        }
+    }
+    Ok(action)
+}
+
 /// The only schema version this build reads and writes.
 pub const SCHEMA: u32 = 1;
 

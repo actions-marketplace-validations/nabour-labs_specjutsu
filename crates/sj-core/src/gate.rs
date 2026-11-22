@@ -497,6 +497,20 @@ const DOC_EXTS: [&str; 11] = [
     "md", "mdx", "txt", "rst", "png", "jpg", "jpeg", "gif", "svg", "webp", "ico",
 ];
 
+/// Root folders holding CI and agent configuration rather than product code.
+const TOOL_DIRS: [&str; 10] = [
+    ".github",
+    ".claude",
+    ".agents",
+    ".agent",
+    ".codex",
+    ".cursor",
+    ".gemini",
+    ".kiro",
+    ".windsurf",
+    ".clinerules",
+];
+
 /// Package manifests and lockfiles, by file name.
 const MANIFESTS: [&str; 12] = [
     "Cargo.toml",
@@ -527,7 +541,14 @@ pub fn is_impl_file(rel: &str, spec_root: &str) -> bool {
     {
         return false;
     }
-    if rel.starts_with(".github/") {
+    // Repository metadata and tool configuration: CI, the project file, and the root agent
+    // folders specjutsu's adapters write (GATE-048). Nested folders of the same name stay
+    // source (GATE-049).
+    if rel == crate::config::FILE {
+        return false;
+    }
+    let top = rel.split('/').next().unwrap_or(rel);
+    if rel.contains('/') && TOOL_DIRS.contains(&top) {
         return false;
     }
     let name = rel.rsplit('/').next().unwrap_or(rel);

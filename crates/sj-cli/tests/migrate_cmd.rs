@@ -467,3 +467,72 @@ fn mig_010_detected_agents_get_their_adapters() {
         .is_file());
     assert!(read(&repo, "CLAUDE.md").contains("sj next"));
 }
+
+/// MIG-011 (specjutsu/changes/migrate-ready): a pnpm + vitest OpenSpec project with Claude
+/// settings, whose migration commit must pass the gate.
+#[test]
+fn mig_011_the_migration_commit_passes_the_gate() {
+    let repo = support::Repo {
+        dir: tempfile::tempdir().unwrap(),
+    };
+    repo.git(&["init", "-q", "-b", "main"]);
+    repo.write("package.json", r#"{"name":"root","private":true}"#);
+    repo.write("pnpm-workspace.yaml", "packages:\n  - apps/*\n");
+    repo.write("pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+    repo.write(
+        "apps/api/package.json",
+        r#"{"name":"api","devDependencies":{"vitest":"^3.0.0"}}"#,
+    );
+    repo.write(
+        "apps/api/src/math.ts",
+        "export const add = (a, b) => a + b\n",
+    );
+    repo.write(".gitignore", "node_modules/\n");
+    repo.write(
+        ".claude/settings.json",
+        "{\"permissions\":{\"allow\":[]}}\n",
+    );
+    repo.write("openspec/specs/math/spec.md", SPEC);
+    repo.write("openspec/changes/.gitkeep", "");
+    repo.write("openspec/config.yaml", CONFIG_YAML);
+    repo.commit("openspec project");
+    // Installed (ignored) dependencies, so `sj doctor` finds vitest.
+    let bin = repo.path().join("node_modules/.bin/vitest");
+    repo.write("node_modules/.bin/vitest", "#!/bin/sh\nexit 0\n");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    #[cfg(not(unix))]
+    let _ = bin;
+
+    migrate(repo.path(), &["--from", "openspec"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "change .gitignore (ignore the ledger)\n",
+        ));
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .success();
+    let ignore = read(&repo, ".gitignore");
+    assert!(
+        ignore.lines().any(|l| l == ".specjutsu/ledger/"),
+        "{ignore}"
+    );
+    let toml = read(&repo, "specjutsu.toml");
+    assert!(
+        toml.contains("setup = \"pnpm install --frozen-lockfile\""),
+        "{toml}"
+    );
+
+    let base = repo.git(&["rev-parse", "HEAD"]);
+    repo.commit("chore: migrate to specjutsu");
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["gate", "--base", base.trim(), "--root"])
+        .arg(repo.path())
+        .assert()
+        .success();
+}
