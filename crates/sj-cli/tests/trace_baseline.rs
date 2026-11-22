@@ -14,11 +14,23 @@ const SPEC: &str = "## Requirements\n\n### Requirement: Auth\nThe system SHALL a
                     #### Scenario: AUTH-005 Refresh token\n- **WHEN** x\n- **THEN** y\n\n\
                     #### Scenario: AUTH-002 Log in\n- **WHEN** x\n- **THEN** y\n";
 
+const CONFIG: &str = r#"schema = 1
+spec_root = "specjutsu"
+
+[[package]]
+path = "."
+sources = ["src/**"]
+
+[[package.suite]]
+runner = "cargo"
+tests = ["tests/**"]
+"#;
+
 #[test]
 fn trace_017_write_baseline_lists_every_gap_and_orphan() {
     let dir = tempfile::tempdir().unwrap();
     let r = dir.path();
-    write(r, "specjutsu.toml", "schema = 1\nspec_root = \"specjutsu\"\n");
+    write(r, "specjutsu.toml", CONFIG);
     write(
         r,
         "Cargo.toml",

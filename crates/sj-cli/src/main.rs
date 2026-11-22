@@ -28,6 +28,9 @@ enum Command {
         /// Exit 1 when there are gaps or orphans.
         #[arg(long)]
         strict: bool,
+        /// Write every current gap and orphan to <spec root>/trace-baseline.txt.
+        #[arg(long)]
+        write_baseline: bool,
     },
     /// Check the change's tests for removals, skips, focus and lost assertions; works without specs.
     Audit {
@@ -747,6 +750,7 @@ fn run() -> Result<ExitCode> {
             spec_root,
             json,
             strict,
+            write_baseline,
         } => {
             let config = sj_core::config::load(&root)?;
             let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
@@ -758,6 +762,22 @@ fn run() -> Result<ExitCode> {
                 .iter()
                 .map(|p| format!("no test suite: {p}"))
                 .collect();
+            if write_baseline {
+                let baseline = sj_core::trace::Baseline::from_report(&report);
+                let file = root.join(&spec_root).join(sj_core::trace::BASELINE_FILE);
+                std::fs::write(&file, baseline.render())?;
+                println!(
+                    "baseline: {} {} → {}",
+                    baseline.entries.len(),
+                    if baseline.entries.len() == 1 {
+                        "entry"
+                    } else {
+                        "entries"
+                    },
+                    file.display()
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {

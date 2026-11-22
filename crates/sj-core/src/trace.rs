@@ -48,6 +48,57 @@ impl Report {
     }
 }
 
+/// File name of the accepted-debt list, kept in the spec root.
+pub const BASELINE_FILE: &str = "trace-baseline.txt";
+
+/// One accepted gap or orphan in the baseline.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BaselineEntry {
+    Gap(String),
+    /// ID, test file relative to the repo root with forward slashes, test name.
+    Orphan(String, String, String),
+}
+
+/// The gaps and orphans a repository has accepted, sorted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Baseline {
+    pub entries: BTreeSet<BaselineEntry>,
+}
+
+impl Baseline {
+    pub fn from_report(report: &Report) -> Self {
+        let gaps = report
+            .gaps
+            .iter()
+            .filter_map(|s| s.id.clone())
+            .map(BaselineEntry::Gap);
+        let orphans = report.orphans.iter().map(|o| {
+            let file = o
+                .test
+                .file
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            BaselineEntry::Orphan(o.id.clone(), file, o.test.name.clone())
+        });
+        Baseline {
+            entries: gaps.chain(orphans).collect(),
+        }
+    }
+
+    /// One entry per line, with a trailing newline.
+    pub fn render(&self) -> String {
+        self.entries
+            .iter()
+            .map(|e| match e {
+                BaselineEntry::Gap(id) => format!("gap {id}\n"),
+                BaselineEntry::Orphan(id, file, test) => format!("orphan {id} {file} {test}\n"),
+            })
+            .collect()
+    }
+}
+
 /// Link tests to scenarios. A name-embedded ID counts as an orphan only when its prefix is one the
 /// specs use (avoids noise like `v_2`); `// spec:` comment IDs are explicit and always count.
 pub fn build_report(scenarios: &[Scenario], tests: &[TestFn]) -> Report {
