@@ -709,10 +709,7 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     let mut base_paths = git.ls_tree(&mb)?;
     let base_root = base_spec_root(&git, &mb, &spec_root, &base_paths);
     // The baseline as it is on the merge base, never the head copy (GATE-050/051).
-    let baseline_path = match base_root.trim_end_matches('/') {
-        "" | "." => BASELINE_FILE.to_string(),
-        r => format!("{r}/{BASELINE_FILE}"),
-    };
+    let baseline_path = under_root(&base_root, BASELINE_FILE);
     let baseline = if base_paths.contains(&baseline_path) {
         let text = git.show(&mb, &baseline_path)?;
         Baseline::parse(&text).with_context(|| format!("{baseline_path} on {base}"))?
@@ -721,10 +718,7 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     };
     // Head's order: `specs/` first, then the open changes, so the last copy of a scenario,
     // which `classify` keeps, is the open change's on both sides (GATE-045).
-    let specs_dir = match base_root.trim_end_matches('/') {
-        "" | "." => "specs/".to_string(),
-        r => format!("{r}/specs/"),
-    };
+    let specs_dir = under_root(&base_root, "specs/");
     base_paths.sort_by_key(|p| (!p.starts_with(&specs_dir), p.clone()));
     for path in base_paths {
         if spec::is_spec_path(&path, &base_root) {
@@ -1125,6 +1119,14 @@ struct SuiteJob {
     traced: Vec<testscan::TestFn>,
     /// (scenario ID, target test).
     jobs: Vec<(String, testscan::TestFn)>,
+}
+
+/// `name` under the repo-relative spec root `root` (`""` or `"."` is the repo root).
+fn under_root(root: &str, name: &str) -> String {
+    match root.trim_end_matches('/') {
+        "" | "." => name.to_string(),
+        r => format!("{r}/{name}"),
+    }
 }
 
 /// Scenario IDs that already had a linked test at `rev`, read from git objects.
