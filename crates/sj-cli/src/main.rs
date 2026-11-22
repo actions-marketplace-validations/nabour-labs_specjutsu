@@ -778,12 +778,30 @@ fn run() -> Result<ExitCode> {
                 );
                 return Ok(ExitCode::SUCCESS);
             }
-            if json {
-                println!("{}", serde_json::to_string_pretty(&report)?);
+            let baseline_file = root.join(&spec_root).join(sj_core::trace::BASELINE_FILE);
+            let baseline = if baseline_file.exists() {
+                Some(sj_core::trace::Baseline::parse(&std::fs::read_to_string(
+                    &baseline_file,
+                )?)?)
             } else {
-                print_compact(&report, &root);
+                None
+            };
+            let known = Known::new(&report, baseline.as_ref());
+            if json {
+                let mut value = serde_json::to_value(&report)?;
+                if baseline.is_some() {
+                    for (key, flags) in [("gaps", &known.gaps), ("orphans", &known.orphans)] {
+                        for (entry, k) in value[key].as_array_mut().into_iter().flatten().zip(flags)
+                        {
+                            entry["known"] = (*k).into();
+                        }
+                    }
+                }
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                print_compact(&report, &root, &known, baseline.is_some());
             }
-            Ok(if strict && !report.is_clean() {
+            Ok(if strict && known.has_new() {
                 ExitCode::from(1)
             } else {
                 ExitCode::SUCCESS
@@ -1887,18 +1905,54 @@ fn rel(path: &Path, root: &Path) -> String {
         .replace('\\', "/")
 }
 
-fn print_compact(r: &sj_core::trace::Report, root: &Path) {
+/// Per gap and per orphan of a report, whether the baseline lists it (all false without one).
+struct Known {
+    gaps: Vec<bool>,
+    orphans: Vec<bool>,
+}
+
+impl Known {
+    fn new(r: &sj_core::trace::Report, baseline: Option<&sj_core::trace::Baseline>) -> Self {
+        Known {
+            gaps: r
+                .gaps
+                .iter()
+                .map(|g| baseline.is_some_and(|b| b.knows_gap(g)))
+                .collect(),
+            orphans: r
+                .orphans
+                .iter()
+                .map(|o| baseline.is_some_and(|b| b.knows_orphan(o)))
+                .collect(),
+        }
+    }
+
+    /// A gap or orphan the baseline doesn't list.
+    fn has_new(&self) -> bool {
+        self.gaps.iter().chain(&self.orphans).any(|k| !k)
+    }
+}
+
+fn print_compact(r: &sj_core::trace::Report, root: &Path, known: &Known, has_baseline: bool) {
+    let count = |flags: &[bool], word: &str| {
+        let total = plural(flags.len(), word);
+        if has_baseline {
+            format!("{total} ({} known)", flags.iter().filter(|k| **k).count())
+        } else {
+            total
+        }
+    };
     println!(
         "trace: {} mapped, {}, {}, {} without ID",
         r.mapped.len(),
-        plural(r.gaps.len(), "gap"),
-        plural(r.orphans.len(), "orphan"),
+        count(&known.gaps, "gap"),
+        count(&known.orphans, "orphan"),
         r.unidentified.len()
     );
     for w in &r.warnings {
         println!("warn    {w}");
     }
-    for g in &r.gaps {
+    for (g, _) in r.gaps.iter().zip(&known.gaps).filter(|(_, k)| !**k) {
         println!(
             "gap     {} {}  ({}:{})",
             g.id.as_deref().unwrap_or_default(),
@@ -1907,7 +1961,7 @@ fn print_compact(r: &sj_core::trace::Report, root: &Path) {
             g.line
         );
     }
-    for o in &r.orphans {
+    for (o, _) in r.orphans.iter().zip(&known.orphans).filter(|(_, k)| !**k) {
         println!(
             "orphan  {} {}  ({}:{})",
             o.id,

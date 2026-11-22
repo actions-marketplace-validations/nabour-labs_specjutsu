@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use anyhow::{bail, Result};
 use serde::Serialize;
 
 use crate::config::Runner;
@@ -67,24 +68,43 @@ pub struct Baseline {
 
 impl Baseline {
     pub fn from_report(report: &Report) -> Self {
-        let gaps = report
-            .gaps
-            .iter()
-            .filter_map(|s| s.id.clone())
-            .map(BaselineEntry::Gap);
-        let orphans = report.orphans.iter().map(|o| {
-            let file = o
-                .test
-                .file
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/");
-            BaselineEntry::Orphan(o.id.clone(), file, o.test.name.clone())
-        });
+        let gaps = report.gaps.iter().filter_map(gap_entry);
+        let orphans = report.orphans.iter().map(orphan_entry);
         Baseline {
             entries: gaps.chain(orphans).collect(),
         }
+    }
+
+    /// Read the format [`Baseline::render`] writes. Blank lines are skipped; an orphan's test
+    /// name is the rest of its line, since JS/TS test names contain spaces.
+    pub fn parse(text: &str) -> Result<Self> {
+        let mut entries = BTreeSet::new();
+        for (i, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let entry = match line.splitn(4, ' ').collect::<Vec<_>>()[..] {
+                ["gap", id] => BaselineEntry::Gap(id.to_string()),
+                ["orphan", id, file, test] => {
+                    BaselineEntry::Orphan(id.to_string(), file.to_string(), test.to_string())
+                }
+                _ => bail!("{BASELINE_FILE}:{}: unrecognised line `{line}`", i + 1),
+            };
+            entries.insert(entry);
+        }
+        Ok(Baseline { entries })
+    }
+
+    /// A gap is known when the entry [`Baseline::from_report`] would write for it is listed:
+    /// a set comparison, so order and duplicates in the file don't matter.
+    pub fn knows_gap(&self, gap: &Scenario) -> bool {
+        gap_entry(gap).is_some_and(|e| self.entries.contains(&e))
+    }
+
+    /// An orphan is known when the entry [`Baseline::from_report`] would write for it is listed.
+    pub fn knows_orphan(&self, orphan: &Orphan) -> bool {
+        self.entries.contains(&orphan_entry(orphan))
     }
 
     /// One entry per line, with a trailing newline.
@@ -97,6 +117,22 @@ impl Baseline {
             })
             .collect()
     }
+}
+
+fn gap_entry(gap: &Scenario) -> Option<BaselineEntry> {
+    gap.id.clone().map(BaselineEntry::Gap)
+}
+
+/// The test file is written with forward slashes so the baseline reads the same on every OS.
+fn orphan_entry(orphan: &Orphan) -> BaselineEntry {
+    let file = orphan
+        .test
+        .file
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    BaselineEntry::Orphan(orphan.id.clone(), file, orphan.test.name.clone())
 }
 
 /// Link tests to scenarios. A name-embedded ID counts as an orphan only when its prefix is one the
