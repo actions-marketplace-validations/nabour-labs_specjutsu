@@ -37,6 +37,107 @@ pub fn derive_prefix(capability: &str) -> String {
         .collect()
 }
 
+/// The longest derived prefix a suggestion keeps whole; longer ones are cut to [`SHORT`].
+const WHOLE: usize = 6;
+/// The length a long derived prefix is cut to before clashes lengthen it.
+const SHORT: usize = 4;
+
+/// Suggested prefixes for `open` capabilities, beside the `kept` ones (capability to prefix).
+/// A capability's letters, uppercased, are kept whole up to six letters and cut to four
+/// beyond that; suggestions equal to each other or to a kept prefix lengthen together, one
+/// letter at a time, until distinct or out of letters. Returns `kept` plus the suggestions.
+pub fn suggest_prefixes(
+    kept: &BTreeMap<String, String>,
+    open: &[String],
+) -> BTreeMap<String, String> {
+    let letters: Vec<(&String, String)> = open
+        .iter()
+        .filter(|c| !kept.contains_key(*c))
+        .map(|c| (c, derive_prefix(c)))
+        .filter(|(_, l)| !l.is_empty())
+        .collect();
+    let mut len: Vec<usize> = letters
+        .iter()
+        .map(|(_, l)| if l.len() <= WHOLE { l.len() } else { SHORT })
+        .collect();
+    loop {
+        let current: Vec<&str> = letters
+            .iter()
+            .zip(&len)
+            .map(|((_, l), n)| &l[..*n])
+            .collect();
+        let clashing: Vec<usize> = (0..letters.len())
+            .filter(|&i| {
+                len[i] < letters[i].1.len()
+                    && (kept.values().any(|p| p == current[i])
+                        || current
+                            .iter()
+                            .enumerate()
+                            .any(|(j, s)| j != i && *s == current[i]))
+            })
+            .collect();
+        if clashing.is_empty() {
+            break;
+        }
+        for i in clashing {
+            len[i] += 1;
+        }
+    }
+    let mut out = kept.clone();
+    for ((cap, l), n) in letters.iter().zip(&len) {
+        out.insert((*cap).clone(), l[..*n].to_string());
+    }
+    out
+}
+
+/// The `[ids.prefixes]` table `sj ids prefixes` prints: one line per capability folder. A
+/// configured prefix is kept, then the most common prefix among a capability's IDs (the
+/// alphabetically first on a tie), and the rest get [`suggest_prefixes`].
+pub fn prefix_table(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>> {
+    let mut folders = Vec::new();
+    for file in spec::discover_spec_files(spec_root)? {
+        if let Some(cap) = place(spec_root, &file).capability {
+            if !folders.contains(&cap) {
+                folders.push(cap);
+            }
+        }
+    }
+    // Prefix use per capability, archive included.
+    let mut used: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    for file in all_spec_files(spec_root)? {
+        let Some(cap) = place(spec_root, &file).capability else {
+            continue;
+        };
+        for s in spec::parse_scenarios(&file, &read(&file)?) {
+            if let Some((prefix, _)) = s.id.as_deref().and_then(|id| id.rsplit_once('-')) {
+                *used
+                    .entry(cap.clone())
+                    .or_default()
+                    .entry(prefix.to_string())
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+    let mut kept = configured.clone();
+    for cap in &folders {
+        if kept.contains_key(cap) {
+            continue;
+        }
+        if let Some(counts) = used.get(cap) {
+            let top = counts.values().max().copied().unwrap_or(0);
+            if let Some((prefix, _)) = counts.iter().find(|(_, n)| **n == top) {
+                kept.insert(cap.clone(), prefix.clone());
+            }
+        }
+    }
+    let mut table = suggest_prefixes(&kept, &folders);
+    table.retain(|cap, _| folders.contains(cap));
+    Ok(table)
+}
+
 /// Where a spec file sits relative to the spec root.
 struct Place {
     capability: Option<String>,

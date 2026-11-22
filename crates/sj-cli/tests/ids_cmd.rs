@@ -156,7 +156,11 @@ fn snapshot(root: &Path) -> Vec<(std::path::PathBuf, String)> {
 fn ids_008_long_capability_names_get_four_letter_prefixes() {
     let dir = tempfile::tempdir().unwrap();
     for cap in ["distribution", "gate", "payment-methods"] {
-        put(dir.path(), &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
     }
     let before = snapshot(dir.path());
     sj(dir.path()).arg("prefixes").assert().success().stdout(
@@ -195,7 +199,11 @@ fn ids_009_prefixes_already_in_use_are_pinned() {
 fn ids_010_clashing_suggestions_lengthen_until_distinct() {
     let dir = tempfile::tempdir().unwrap();
     for cap in ["transfers", "transactions"] {
-        put(dir.path(), &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
     }
     sj(dir.path()).arg("prefixes").assert().success().stdout(
         "[ids.prefixes]\n\

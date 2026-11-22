@@ -181,6 +181,8 @@ enum Command {
     },
     /// List scenarios without IDs and the IDs they would get; --write assigns them in place.
     Ids {
+        #[command(subcommand)]
+        command: Option<IdsCommand>,
         /// Insert the IDs into the spec files.
         #[arg(long)]
         write: bool,
@@ -359,6 +361,12 @@ enum SpecCommand {
         #[arg(long)]
         force: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum IdsCommand {
+    /// Print an [ids.prefixes] table with a short prefix for every capability folder.
+    Prefixes,
 }
 
 #[derive(Subcommand)]
@@ -605,6 +613,13 @@ fn run() -> Result<ExitCode> {
         } => adopt_cmd(&root, dry_run, force),
         Command::Spec { command } => spec_cmd(command),
         Command::Ids {
+            command: Some(IdsCommand::Prefixes),
+            root,
+            spec_root,
+            ..
+        } => ids_prefixes_cmd(&root, spec_root),
+        Command::Ids {
+            command: None,
             write,
             root,
             spec_root,
@@ -1828,6 +1843,17 @@ fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> 
             }
             return Ok(ExitCode::from(1));
         }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>) -> Result<ExitCode> {
+    let config = sj_core::config::load(root)?;
+    let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
+    let table = sj_core::ids::prefix_table(&root.join(&spec_root), &config.id_prefixes)?;
+    println!("[ids.prefixes]");
+    for (cap, prefix) in &table {
+        println!("{cap} = \"{prefix}\"");
     }
     Ok(ExitCode::SUCCESS)
 }
