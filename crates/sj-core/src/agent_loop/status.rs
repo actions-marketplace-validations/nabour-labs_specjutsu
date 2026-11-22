@@ -66,10 +66,19 @@ pub fn status_of(change: &Change, ledger: &Ledger) -> Result<Status> {
 
 /// Status of the named change, or of every open change in name order.
 pub fn status(root: &Path, spec_root: &Path, change: Option<&str>) -> Result<Vec<Status>> {
-    let changes = match change {
+    status_of_changes(root, &changes(spec_root, change)?)
+}
+
+/// The named change, or every open change in name order: what `status` reports on.
+pub fn changes(spec_root: &Path, change: Option<&str>) -> Result<Vec<Change>> {
+    Ok(match change {
         Some(name) => vec![authoring::find_change(spec_root, name)?],
         None => authoring::open_changes(spec_root)?,
-    };
+    })
+}
+
+/// Status of each of `changes`, in order.
+pub fn status_of_changes(root: &Path, changes: &[Change]) -> Result<Vec<Status>> {
     let ledger = Ledger::load(root)?;
     changes.iter().map(|c| status_of(c, &ledger)).collect()
 }

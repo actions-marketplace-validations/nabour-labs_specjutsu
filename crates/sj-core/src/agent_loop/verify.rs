@@ -30,6 +30,9 @@ pub struct VerifyReport {
     /// Problems writing the ledger; reported, never failing.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// Combined stdout and stderr of every runner process verify started.
+    #[serde(skip)]
+    pub raw_bytes: u64,
 }
 
 pub struct Options {
@@ -89,6 +92,7 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
             continue;
         }
         let run = run::run_tests(root, &opts.spec_root, &Scope::Scenario(id.clone()))?;
+        r.raw_bytes += run.raw_bytes;
         if let Err(e) = ledger::record(root, &run) {
             r.warnings.push(format!("run not recorded: {e:#}"));
         }
