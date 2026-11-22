@@ -104,18 +104,23 @@ pub fn append(root: &Path, records: &[Record]) -> Result<()> {
     if records.is_empty() {
         return Ok(());
     }
-    let p = path(root);
-    std::fs::create_dir_all(p.parent().unwrap())
-        .with_context(|| format!("creating {}", p.parent().unwrap().display()))?;
     let mut buf = String::new();
     for r in records {
         buf.push_str(&serde_json::to_string(r)?);
         buf.push('\n');
     }
+    append_lines(&path(root), &buf)
+}
+
+/// Append `buf` (whole JSON lines) to the file at `p` with a single write, creating its folder.
+/// Shared by the evidence ledger and the gain records.
+pub(crate) fn append_lines(p: &Path, buf: &str) -> Result<()> {
+    std::fs::create_dir_all(p.parent().unwrap())
+        .with_context(|| format!("creating {}", p.parent().unwrap().display()))?;
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&p)
+        .open(p)
         .with_context(|| format!("opening {}", p.display()))?;
     f.write_all(buf.as_bytes())
         .with_context(|| format!("writing {}", p.display()))

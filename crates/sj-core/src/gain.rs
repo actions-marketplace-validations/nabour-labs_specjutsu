@@ -1,10 +1,9 @@
 //! Gain records: per run of an agent-loop command, the bytes it printed against the raw bytes it
 //! replaces. JSON Lines in `.specjutsu/ledger/gain.jsonl`, next to the evidence ledger.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::git::Git;
@@ -50,51 +49,10 @@ pub fn enabled(root: &Path, no_ledger: bool) -> bool {
     !no_ledger && Git::new(root).is_repo()
 }
 
-/// Append one record with a single write.
+/// Append one record with a single write. Callers check [`enabled`] first, or reuse what the
+/// evidence ledger already found (see `sj test`).
 pub fn append(root: &Path, record: &Record) -> Result<()> {
-    let p = path(root);
-    std::fs::create_dir_all(p.parent().unwrap())
-        .with_context(|| format!("creating {}", p.parent().unwrap().display()))?;
     let mut line = serde_json::to_string(record)?;
     line.push('\n');
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&p)
-        .with_context(|| format!("opening {}", p.display()))?;
-    f.write_all(line.as_bytes())
-        .with_context(|| format!("writing {}", p.display()))
-}
-
-/// Record one run when [`enabled`]; returns whether a record was written.
-pub fn record(root: &Path, no_ledger: bool, command: &str, printed: u64, raw: u64) -> Result<bool> {
-    if !enabled(root, no_ledger) {
-        return Ok(false);
-    }
-    append(root, &Record::now(command, printed, raw))?;
-    Ok(true)
-}
-
-/// Records in file order, plus the number of lines that could not be read.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Loaded {
-    pub records: Vec<Record>,
-    pub skipped: usize,
-}
-
-pub fn load(root: &Path) -> Result<Loaded> {
-    let p = path(root);
-    let text = match std::fs::read_to_string(&p) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Loaded::default()),
-        Err(e) => return Err(e).with_context(|| format!("reading {}", p.display())),
-    };
-    let mut out = Loaded::default();
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        match serde_json::from_str::<Record>(line) {
-            Ok(r) if r.v == FORMAT => out.records.push(r),
-            _ => out.skipped += 1,
-        }
-    }
-    Ok(out)
+    crate::ledger::append_lines(&path(root), &line)
 }

@@ -1241,13 +1241,19 @@ fn test_cmd(
     use std::fmt::Write as _;
 
     let run = run_tests(&root, &spec_root, &Scope::parse(scope.as_deref()))?;
-    if !no_ledger {
-        match ledger::record(&root, &run) {
-            Ok(Recorded::Records(_)) => {}
-            Ok(Recorded::NotGit) => eprintln!("warn    not a git repository; run not recorded"),
-            Err(e) => eprintln!("warn    run not recorded: {e:#}"),
-        }
-    }
+    // The ledger's answer settles "in a git repository" for the gain record too.
+    let record_gain = !no_ledger
+        && match ledger::record(&root, &run) {
+            Ok(Recorded::Records(_)) => true,
+            Ok(Recorded::NotGit) => {
+                eprintln!("warn    not a git repository; run not recorded");
+                false
+            }
+            Err(e) => {
+                eprintln!("warn    run not recorded: {e:#}");
+                true
+            }
+        };
     // Built in full first so the bytes printed can be counted for the gain record.
     let mut out = String::new();
     if json {
@@ -1310,7 +1316,7 @@ fn test_cmd(
             }
         }
     }
-    print_and_record_gain(&root, no_ledger, "test", &out, run.raw_bytes);
+    print_and_record_gain(&root, record_gain, "test", &out, run.raw_bytes);
     Ok(if run.pass {
         ExitCode::SUCCESS
     } else {
@@ -1318,13 +1324,18 @@ fn test_cmd(
     })
 }
 
-/// Print `out` to stdout as is, then record its length against `raw` in the gain records. A
-/// record that can't be written warns on stderr and the command carries on.
-fn print_and_record_gain(root: &Path, no_ledger: bool, command: &str, out: &str, raw: u64) {
+/// Print `out` to stdout as is, then, if `record`, record its length against `raw` in the gain
+/// records (`sj_core::gain::enabled` decides `record` for commands without a ledger). A record
+/// that can't be written warns on stderr and the command carries on.
+fn print_and_record_gain(root: &Path, record: bool, command: &str, out: &str, raw: u64) {
     use std::io::Write as _;
     print!("{out}");
     let _ = std::io::stdout().flush();
-    if let Err(e) = sj_core::gain::record(root, no_ledger, command, out.len() as u64, raw) {
+    if !record {
+        return;
+    }
+    let r = sj_core::gain::Record::now(command, out.len() as u64, raw);
+    if let Err(e) = sj_core::gain::append(root, &r) {
         eprintln!("warn    gain not recorded: {e:#}");
     }
 }
