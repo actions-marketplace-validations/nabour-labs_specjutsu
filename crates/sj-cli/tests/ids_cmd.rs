@@ -374,3 +374,16 @@ fn ids_013_a_clash_with_a_mapping_without_a_folder_is_refused() {
         ));
     assert_eq!(read(dir.path(), "specjutsu.toml"), toml);
 }
+
+#[test]
+fn ids_prefixes_takes_root_after_the_subcommand() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/gate/spec.md", USER_AUTH);
+    Command::cargo_bin("sj")
+        .unwrap()
+        .args(["ids", "prefixes", "--root"])
+        .arg(dir.path())
+        .assert()
+        .success()
+        .stdout("[ids.prefixes]\ngate = \"GATE\"\n");
+}

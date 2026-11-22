@@ -29,7 +29,7 @@ enum Command {
         #[arg(long)]
         strict: bool,
         /// Write every current gap and orphan to <spec root>/trace-baseline.txt.
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["json", "strict"])]
         write_baseline: bool,
     },
     /// Check the change's tests for removals, skips, focus and lost assertions; works without specs.
@@ -186,9 +186,9 @@ enum Command {
         /// Insert the IDs into the spec files.
         #[arg(long)]
         write: bool,
-        #[arg(long, default_value = ".")]
+        #[arg(long, default_value = ".", global = true)]
         root: PathBuf,
-        #[arg(long)]
+        #[arg(long, global = true)]
         spec_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,

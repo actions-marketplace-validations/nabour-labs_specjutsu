@@ -39,6 +39,7 @@ Pilot feedback, requests 7, 8 and 9. The current state:
   - *Rejected:* recomputing base orphans by scanning base tests, which is more machinery than one exemption line.
 - An adopting project's first baseline pull request needs that exemption once (GATE-054).
 - A `config` exemption with no implementation files changed does not trigger the GATE-029 full-suite run, because the baseline lives under the spec root.
+- Any `config` exemption, whatever its reason, also approves baseline additions. Each added entry is still listed as a `baseline-added` warning, so a reviewer sees it.
 
 ### sj verify and the baseline
 
@@ -69,6 +70,7 @@ Pilot feedback, requests 7, 8 and 9. The current state:
 - An in-house LCS line diff that prints unified hunks with three lines of context. The files involved are small (settings.json, hook files, CLAUDE.md, skills).
   - *Rejected:* the `similar` crate, a new dependency that the audit would also flag for review.
 - The merge note comes from the count of the existing entries `hooks_install` already walks.
+- `--diff` skips files that aren't UTF-8, and symlinks.
 
 ### Undo manifest
 

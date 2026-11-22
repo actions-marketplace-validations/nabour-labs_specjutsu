@@ -674,7 +674,7 @@ fn record_undo(
     }
     if !unhashable.is_empty() {
         bail!(
-            "undo can't record these files, whose names hold a line break; remove them by hand:\n{}",
+            "undo can't record these files, whose names hold a line break; restore or remove them by hand (e.g. `git restore <file>` for a tracked file):\n{}",
             unhashable.join("\n")
         );
     }

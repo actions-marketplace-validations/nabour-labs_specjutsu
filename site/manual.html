@@ -541,7 +541,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
         <p>Map spec scenario IDs to tests; list gaps and orphans. Each test in <code>--json</code> carries its package, suite and whether it's skipped.</p>
         <dl>
           <dt>--strict</dt><dd>Exit 1 when there are gaps or orphans. With a <a href="#baseline">baseline</a>, only entries it doesn't list and stale entries count.</dd>
-          <dt>--write-baseline</dt><dd>Write every current gap and orphan to <code>&lt;spec_root&gt;/trace-baseline.txt</code>, dropping stale entries, and print <code>baseline: N entries → &lt;path&gt;</code>.</dd>
+          <dt>--write-baseline</dt><dd>Write every current gap and orphan to <code>&lt;spec_root&gt;/trace-baseline.txt</code>, dropping stale entries, and print <code>baseline: N entries → &lt;path&gt;</code>. With <code>--json</code> or <code>--strict</code> it exits 2 and writes nothing.</dd>
         </dl>
       </div>
       <div class="cmd">

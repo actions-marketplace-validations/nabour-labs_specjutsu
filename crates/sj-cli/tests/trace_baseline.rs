@@ -211,3 +211,21 @@ fn an_orphan_that_lost_its_test_is_stale() {
     let baseline = std::fs::read_to_string(r.join("specjutsu/trace-baseline.txt")).unwrap();
     assert_eq!(baseline, "");
 }
+
+#[test]
+fn write_baseline_with_json_is_a_usage_error() {
+    let dir = fixture(SPEC, "#[test]\nfn auth_002_log_in() {}\n");
+    let r = dir.path();
+    let out = sj_trace(r, &["--write-baseline", "--json"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(!r.join("specjutsu/trace-baseline.txt").exists());
+}
+
+#[test]
+fn write_baseline_with_strict_is_a_usage_error() {
+    let dir = fixture(SPEC, "#[test]\nfn auth_002_log_in() {}\n");
+    let r = dir.path();
+    let out = sj_trace(r, &["--write-baseline", "--strict"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(!r.join("specjutsu/trace-baseline.txt").exists());
+}
