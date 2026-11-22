@@ -333,3 +333,26 @@ fn ids_012_a_long_derived_prefix_gets_a_hint() {
         Some("hint: distribution would use DISTRIBUTION; sj ids prefixes --write maps it to DIST")
     );
 }
+
+#[test]
+fn ids_013_an_unresolvable_clash_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["bill", "billing"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    let toml = "schema = 1\n\n[ids.prefixes]\nbilling = \"BILL\"\n";
+    put(dir.path(), "specjutsu.toml", toml);
+    sj(dir.path())
+        .arg("prefixes")
+        .arg("--write")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "capabilities `bill` and `billing` both use prefix BILL",
+        ));
+    assert_eq!(read(dir.path(), "specjutsu.toml"), toml);
+}

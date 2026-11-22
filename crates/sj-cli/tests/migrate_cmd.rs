@@ -889,3 +889,25 @@ fn undo_restores_crlf_line_endings() {
 
     assert_eq!(read(&repo, "openspec/config.yaml"), crlf);
 }
+
+/// IDS-013 through `sj migrate`: a prefix clash that cannot be lengthened away stops the
+/// migration before it writes anything.
+#[test]
+fn migrate_refuses_an_unresolvable_prefix_clash() {
+    let repo = openspec_repo();
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\nspec_root = \"openspec\"\n\n[ids.prefixes]\nbilling = \"BILL\"\n",
+    );
+    for cap in ["bill", "billing"] {
+        repo.write(&format!("openspec/specs/{cap}/spec.md"), SPEC);
+    }
+    repo.commit("config and clashing capabilities");
+    migrate(repo.path(), &["--from", "openspec", "--write"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "capabilities `bill` and `billing` both use prefix BILL",
+        ));
+    assert_eq!(status(&repo), "");
+}
