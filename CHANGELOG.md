@@ -6,7 +6,36 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Breaking (output only):** `sj migrate --write` ends with `rollback: sj migrate --undo`
+  instead of `rollback: git restore . && git clean -fd`, which also deleted untracked
+  files made after the migration. Scripts that parse the line need updating.
+
 ### Added
+- `sj trace --write-baseline` records every current gap and orphan in
+  `<spec_root>/trace-baseline.txt`, one sorted `gap <ID>` or
+  `orphan <ID> <file> <test>` line each. With a baseline, `sj trace` lists only new
+  entries and counts the rest (`3 gaps (2 known)`), reports entries that are no longer
+  true as `stale <entry> (remove from trace-baseline.txt)`, and `--strict` fails only
+  on new or stale entries. `--json` marks each gap and orphan `"known"` and lists a
+  `stale` array.
+- `sj gate` reads the baseline from the merge base: known gaps collapse into one
+  `known gaps: N (trace-baseline.txt)` warning, known orphans no longer fail, and
+  stale entries are `stale <entry>` warnings. Changed scenarios are still gated.
+  Entries a change adds fail as `baseline-added <entry>` unless it declares a `config`
+  exemption, such as the trailer `Specjutsu-Exempt: config — adopt trace baseline`.
+- `sj ids prefixes` prints a short, collision-free `[ids.prefixes]` table, keeping
+  prefixes already mapped or in use (`distribution = "DIST"`). `--write` adds the
+  missing lines to `specjutsu.toml` and changes no other byte. `sj ids` ends with a
+  `hint:` line when a derived prefix is longer than six letters.
+- `sj migrate --from openspec` pins those short prefixes in `specjutsu.toml` before it
+  assigns IDs, so `distribution` gets `DIST-001`.
+- `sj migrate --diff` prints a unified diff of every file the preview would create or
+  change. The `.claude/settings.json` preview line says how many existing hooks it
+  keeps, as `(merged: 1 existing hook kept)`.
+- `sj migrate --undo` puts back what the last `sj migrate --write` touched, from an
+  undo manifest in the git directory, and keeps every other file. It works after the
+  migration is committed and refuses, naming the files, when one was edited since.
 - One-line installers: `curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh`
   on macOS and Linux, `irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex` on
   Windows. Both verify the download against `SHA256SUMS`; `SJ_VERSION` pins a release.
