@@ -14,7 +14,7 @@ use crate::git::Git;
 use crate::run::suite::{self, JoinedOutcome, Pick};
 use crate::spec::{self, Fingerprint};
 use crate::testscan;
-use crate::trace::{self, Report};
+use crate::trace::{self, Baseline, Report, BASELINE_FILE};
 
 /// How a scenario changed between base and head.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -142,6 +142,8 @@ pub struct Input {
     pub reasons: BTreeMap<(String, String), String>,
     /// IDs of `[keep]` scenarios at head: their tests must pass on base, not fail (GATE-039).
     pub keep: BTreeSet<String>,
+    /// The trace baseline as it is on the merge base (GATE-050/051).
+    pub baseline: Baseline,
 }
 
 /// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
@@ -409,13 +411,23 @@ pub fn evaluate(input: &Input) -> GateReport {
         });
     }
 
-    // Unchanged gaps only warn.
+    // Unchanged gaps only warn; those the base baseline lists are counted once (GATE-050).
+    let mut known_gaps = 0;
     for g in &input.trace.gaps {
         if let Some(id) = &g.id {
-            if !targets.contains(&id) {
+            if targets.contains(&id) {
+                continue;
+            }
+            if input.baseline.knows_gap(g) {
+                known_gaps += 1;
+            } else {
                 r.warnings.push(format!("gap {id} {}", g.name));
             }
         }
+    }
+    if known_gaps > 0 {
+        r.warnings
+            .push(format!("known gaps: {known_gaps} ({BASELINE_FILE})"));
     }
 
     for u in &input.unidentified {
@@ -429,7 +441,13 @@ pub fn evaluate(input: &Input) -> GateReport {
         });
     }
 
-    for o in &input.trace.orphans {
+    // GATE-051: orphans the base baseline lists don't fail.
+    for o in input
+        .trace
+        .orphans
+        .iter()
+        .filter(|o| !input.baseline.knows_orphan(o))
+    {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
 
@@ -661,6 +679,8 @@ pub struct Prepared {
     pub report: Report,
     pub changed_files: Vec<String>,
     pub exemptions: Vec<Exemption>,
+    /// The trace baseline on the merge base; empty when base has none.
+    pub baseline: Baseline,
 }
 
 /// Gather the gate's inputs against the merge-base of `base` and `HEAD`, without running tests.
@@ -684,6 +704,17 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     let mut base_unidentified: BTreeSet<String> = BTreeSet::new();
     let mut base_paths = git.ls_tree(&mb)?;
     let base_root = base_spec_root(&git, &mb, &spec_root, &base_paths);
+    // The baseline as it is on the merge base, never the head copy (GATE-050/051).
+    let baseline_path = match base_root.trim_end_matches('/') {
+        "" | "." => BASELINE_FILE.to_string(),
+        r => format!("{r}/{BASELINE_FILE}"),
+    };
+    let baseline = if base_paths.contains(&baseline_path) {
+        let text = git.show(&mb, &baseline_path)?;
+        Baseline::parse(&text).with_context(|| format!("{baseline_path} on {base}"))?
+    } else {
+        Baseline::default()
+    };
     // Head's order: `specs/` first, then the open changes, so the last copy of a scenario,
     // which `classify` keeps, is the open change's on both sides (GATE-045).
     let specs_dir = match base_root.trim_end_matches('/') {
@@ -794,6 +825,7 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
         report,
         changed_files,
         exemptions,
+        baseline,
     })
 }
 
@@ -835,6 +867,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         report,
         changed_files,
         exemptions,
+        baseline,
     } = prepare(root, &opts.spec_root, &config, &opts.base)?;
 
     let targets: Vec<&String> = changes
@@ -1013,6 +1046,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_build_failed,
         reasons,
         keep,
+        baseline,
     });
     // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
     let audit = crate::audit::run(&crate::audit::Options {
