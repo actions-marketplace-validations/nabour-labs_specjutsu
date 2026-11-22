@@ -651,7 +651,10 @@ fn run() -> Result<ExitCode> {
             sj_core::config::load(&root)?;
             ledger_cmd(id, root, json)
         }
-        Command::Gain { root } => gain_cmd(&root),
+        Command::Gain { root } => {
+            sj_core::config::load(&root)?;
+            gain_cmd(&root)
+        }
         Command::Audit {
             base,
             root,

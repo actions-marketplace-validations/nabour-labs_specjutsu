@@ -97,9 +97,9 @@ pub struct Totals {
 
 impl Totals {
     fn add(&mut self, r: &Record) {
-        self.runs += 1;
-        self.printed += r.printed;
-        self.raw += r.raw;
+        self.runs = self.runs.saturating_add(1);
+        self.printed = self.printed.saturating_add(r.printed);
+        self.raw = self.raw.saturating_add(r.raw);
     }
 
     /// Share of `raw` not printed, as a whole percent rounded down; 0 when `raw` is 0.
