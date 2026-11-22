@@ -173,6 +173,11 @@ fn trace_020_a_gap_that_gained_a_test_is_stale() {
     );
     assert_eq!(out.status.code(), Some(1), "{stdout}");
 
+    let out = sj_trace(r, &["--strict", "--json"]);
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["stale"], serde_json::json!(["gap AUTH-002"]), "{json}");
+    assert_eq!(out.status.code(), Some(1), "{json}");
+
     let out = sj_trace(r, &["--write-baseline"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let baseline = std::fs::read_to_string(r.join("specjutsu/trace-baseline.txt")).unwrap();
