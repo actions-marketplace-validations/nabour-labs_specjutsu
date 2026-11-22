@@ -108,15 +108,28 @@ impl Baseline {
         self.entries.contains(&orphan_entry(orphan))
     }
 
-    /// One entry per line, with a trailing newline.
-    pub fn render(&self) -> String {
+    /// Entries the report no longer has as a gap or orphan, sorted.
+    pub fn stale(&self, report: &Report) -> Vec<&BaselineEntry> {
+        let current = Baseline::from_report(report).entries;
         self.entries
             .iter()
-            .map(|e| match e {
-                BaselineEntry::Gap(id) => format!("gap {id}\n"),
-                BaselineEntry::Orphan(id, file, test) => format!("orphan {id} {file} {test}\n"),
-            })
+            .filter(|e| !current.contains(e))
             .collect()
+    }
+
+    /// One entry per line, with a trailing newline.
+    pub fn render(&self) -> String {
+        self.entries.iter().map(|e| format!("{e}\n")).collect()
+    }
+}
+
+/// An entry as its baseline line, without the newline.
+impl std::fmt::Display for BaselineEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BaselineEntry::Gap(id) => write!(f, "gap {id}"),
+            BaselineEntry::Orphan(id, file, test) => write!(f, "orphan {id} {file} {test}"),
+        }
     }
 }
 

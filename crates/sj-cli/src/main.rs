@@ -798,7 +798,7 @@ fn run() -> Result<ExitCode> {
             } else {
                 print_compact(&report, &root, &known, baseline.is_some());
             }
-            Ok(if strict && known.has_new() {
+            Ok(if strict && known.fails_strict() {
                 ExitCode::from(1)
             } else {
                 ExitCode::SUCCESS
@@ -1902,10 +1902,12 @@ fn rel(path: &Path, root: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// Per gap and per orphan of a report, whether the baseline lists it (all false without one).
+/// Per gap and per orphan of a report, whether the baseline lists it (all false without one),
+/// and the baseline entries the report no longer has, rendered.
 struct Known {
     gaps: Vec<bool>,
     orphans: Vec<bool>,
+    stale: Vec<String>,
 }
 
 impl Known {
@@ -1921,12 +1923,15 @@ impl Known {
                 .iter()
                 .map(|o| baseline.is_some_and(|b| b.knows_orphan(o)))
                 .collect(),
+            stale: baseline.map_or_else(Vec::new, |b| {
+                b.stale(r).iter().map(|e| e.to_string()).collect()
+            }),
         }
     }
 
-    /// A gap or orphan the baseline doesn't list.
-    fn has_new(&self) -> bool {
-        self.gaps.iter().chain(&self.orphans).any(|k| !k)
+    /// A gap or orphan the baseline doesn't list, or a stale baseline entry.
+    fn fails_strict(&self) -> bool {
+        self.gaps.iter().chain(&self.orphans).any(|k| !k) || !self.stale.is_empty()
     }
 }
 
@@ -2003,6 +2008,9 @@ fn print_compact(r: &sj_core::trace::Report, root: &Path, known: &Known, has_bas
             rel(&o.test.file, root),
             o.test.line
         );
+    }
+    for e in &known.stale {
+        println!("stale {e} (remove from {})", sj_core::trace::BASELINE_FILE);
     }
     for u in &r.unidentified {
         println!("no-id   {}  ({}:{})", u.name, rel(&u.file, root), u.line);
