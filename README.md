@@ -1221,8 +1221,8 @@ and can't be combined with `--write`:
 ```
 
 The preview works on a copy of the project without its gitignored files, so a step
-that reads one, such as `.claude/settings.local.json`, can preview differently from
-the real write.
+that reads one, such as a gitignored `.claude/settings.json`, can preview differently
+from the real write.
 
 `--write` leaves the changes uncommitted and ends with the counts and the rollback
 command:
@@ -1233,11 +1233,12 @@ rollback: sj migrate --undo
 ```
 
 Review them with `git diff`. The write records the commit it started from and every
-file it created, changed or removed, with each file's hash, in
+file it created, changed or removed, gitignored files included, with each file's hash
+and its content before the write, in
 `sj-migrate-undo.json` in the git directory (`git rev-parse --git-dir`), so it is
 never committed. `sj migrate --undo` then:
 
-- restores every changed or removed file to its content at that commit, line
+- restores every changed or removed file to its content before the write, line
   endings included, and deletes every file migrate created, along with any folder
   that leaves empty;
 - touches no other file, so work you added since, such as a new `notes.txt`, stays;
@@ -1247,8 +1248,7 @@ never committed. `sj migrate --undo` then:
 It works after you commit the migration too. It refuses, exiting 2 and changing
 nothing, when a recorded file was edited since, and names each one so you can
 put it back by hand first. With no manifest it exits 2 with `nothing to undo`.
-Only the last `--write` can be undone. Limits: a created file that `.gitignore`
-excludes isn't recorded, so undo leaves it; a restored file doesn't get its
+Only the last `--write` can be undone. Limits: a restored file doesn't get its
 executable bit back; and git doesn't track empty folders, so a folder left empty by
 the deleted files goes even if it existed, empty, before the migration.
 
