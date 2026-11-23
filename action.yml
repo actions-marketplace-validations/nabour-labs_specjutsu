@@ -11,7 +11,7 @@ inputs:
     default: gate
   version:
     description: sj release to install (without the leading v).
-    default: "0.5.0"
+    default: "0.5.1"
   base:
     description: Ref to compare against. Default is the pull request's base branch.
     default: ""
