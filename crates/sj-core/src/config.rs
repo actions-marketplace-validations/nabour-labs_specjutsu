@@ -86,6 +86,25 @@ pub fn default_spec_root(root: &Path) -> String {
     }
 }
 
+/// Folder names that hold test helpers and fixtures rather than product code. `sj adopt`
+/// declares them as `support` globs (CONF-039) and the gate treats files under them as test
+/// support.
+pub const HELPER_DIRS: [&str; 8] = [
+    "testing",
+    "test-utils",
+    "test-helpers",
+    "testutils",
+    "fixtures",
+    "__fixtures__",
+    "mocks",
+    "__mocks__",
+];
+
+/// Whether a path segment names a helper folder (see [`HELPER_DIRS`]).
+pub fn is_helper_dir(segment: &str) -> bool {
+    HELPER_DIRS.contains(&segment)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
