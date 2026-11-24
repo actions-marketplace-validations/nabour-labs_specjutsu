@@ -75,12 +75,18 @@ pub fn detect(root: &Path) -> Result<Detected> {
             if suites.is_empty() {
                 notes.push(format!("no runner detected: {path}"));
             }
-            let helpers = helper_dirs(root, &path, &package_paths);
+            let helpers = helper_dirs(root, &path, &package_paths)?;
             for s in &mut suites {
                 if s.runner == Runner::Cargo {
                     continue;
                 }
                 s.support = support_for(&helpers, &s.tests)?;
+                // CONF-041: support files skip the scenario check, so say so.
+                for g in &s.support {
+                    notes.push(format!(
+                        "support: {g} (not source; overlaid on base; remove it if this folder holds product code)"
+                    ));
+                }
                 s.setup = setup_for(root, &path, s.runner);
                 if s.setup.is_none() {
                     notes.push(format!(
@@ -121,8 +127,9 @@ pub fn detect(root: &Path) -> Result<Detected> {
 }
 
 /// Helper folders (root-relative, sorted) inside package `dir`, outside its nested packages.
-/// A helper folder inside another one is covered by the outer one and not listed.
-fn helper_dirs(root: &Path, dir: &str, packages: &[String]) -> Vec<String> {
+/// A helper folder inside another one is covered by the outer one and not listed, and so is
+/// one under a `tests/` folder, which the gate always overlays.
+fn helper_dirs(root: &Path, dir: &str, packages: &[String]) -> Result<Vec<String>> {
     let base = if dir == "." {
         root.to_path_buf()
     } else {
@@ -145,17 +152,19 @@ fn helper_dirs(root: &Path, dir: &str, packages: &[String]) -> Vec<String> {
         })
         .build();
     let mut out: Vec<String> = Vec::new();
-    for entry in walker.flatten() {
+    for entry in walker {
+        let entry = entry?;
         let is_helper = entry.depth() > 0
             && entry.file_type().is_some_and(|t| t.is_dir())
             && entry.file_name().to_str().is_some_and(is_helper_dir);
         let rel = rel(root, entry.path());
-        if is_helper && !out.iter().any(|o| owns(o, &rel)) {
+        let under_tests = rel.split('/').any(|p| p == "tests");
+        if is_helper && !under_tests && !out.iter().any(|o| owns(o, &rel)) {
             out.push(rel);
         }
     }
     out.sort();
-    out
+    Ok(out)
 }
 
 /// `<folder>/**` for each helper folder the suite's `tests` globs do not already cover (CONF-039).
