@@ -46,7 +46,11 @@ fn conf_039_helper_folders_become_support_globs() {
     let dir = tempfile::tempdir().unwrap();
     let r = dir.path();
     write(r, "apps/api/package.json", VITEST_PKG);
-    write(r, "apps/api/src/testing/admin.ts", "export const admin = 1;\n");
+    write(
+        r,
+        "apps/api/src/testing/admin.ts",
+        "export const admin = 1;\n",
+    );
     write(r, "apps/api/src/__fixtures__/user.json", "{}\n");
     let suite = dry_run_suite(r, "apps/api", "vitest");
     let support: Vec<&str> = suite
