@@ -249,7 +249,7 @@ sj migrate --undo                                       <span class="c-m"># put 
 
 <span class="c-m"># then check it</span>
 sj doctor</pre>
-      <p><code>sj adopt</code> reads Cargo, pnpm, npm and yarn workspaces and <code>pyproject.toml</code>, and detects <code>cargo</code>, <code>vitest</code>, <code>jest</code>, <code>pytest</code> and <code>playwright</code> without running anything. <code>sj doctor</code> lists config errors, packages without a runner, runners that aren't installed and missing spec folders.</p>
+      <p><code>sj adopt</code> reads Cargo, pnpm, npm and yarn workspaces and <code>pyproject.toml</code>, and detects <code>cargo</code>, <code>vitest</code>, <code>jest</code>, <code>pytest</code> and <code>playwright</code> without running anything. For each non-Cargo suite it declares the package's test helper folders as <code>support</code> globs, such as <code>support = ["apps/api/src/__fixtures__/**", "apps/api/src/testing/**"]</code>, so the gate overlays them on base, and notes each glob it adds. Support files aren't source and are overlaid on base, so don't mark product code as support. <code>sj doctor</code> lists config errors, packages without a runner, runners that aren't installed and missing spec folders.</p>
 <pre class="code"><span class="c-m"># specjutsu.toml, as sj adopt writes it for a pnpm app with a uv worker</span>
 schema = 1
 spec_root = "specjutsu"
@@ -297,7 +297,7 @@ The system SHALL reject tokens older than 24 hours.
 <span class="c-k">#### Scenario:</span> <span class="c-s">AUTH-003</span> Reject expired token
 - <span class="c-k">**WHEN**</span> the client calls GET /me with a token issued 25 hours ago
 - <span class="c-k">**THEN**</span> the response is 401 with code TOKEN_EXPIRED</pre>
-      <p>Existing specs don't need editing by hand. <code>sj ids --write</code> adds IDs to every scenario without one, changing only the headings. Prefixes come from the capability folder (<code>user-auth</code> → <code>USERAUTH</code>) unless you map them under <code>[ids.prefixes]</code>, and a delta copy in an open change gets the same ID as its spec.</p>
+      <p>Existing specs don't need editing by hand. <code>sj ids --write</code> adds IDs to every scenario without one, changing only the headings. Prefixes come from the capability folder (<code>user-auth</code> → <code>USERAUTH</code>) unless you map them under <code>[ids.prefixes]</code>, and a delta copy in an open change gets the same ID as its spec. <code>sj ids --write staff</code> limits the write to one capability.</p>
 
       <h3>Tests point at scenarios</h3>
       <p>Link a test by putting the ID in its name or title, or in a <code>spec:</code> comment on the line above. No library needed.</p>
@@ -338,6 +338,9 @@ The system SHALL reject tokens older than 24 hours.
       <ul>
         <li>It runs per suite. Every changed file matching a suite's <code>tests</code> or <code>support</code> globs is overlaid, so a co-located <code>auth.test.ts</code> runs against the base <code>auth.ts</code>.</li>
         <li>An assertion failure on base counts as red (<code>red:assert</code>). A test that fails to compile or load, because it calls code that doesn't exist yet, counts too (<code>red:compile</code>).</li>
+        <li>A test that fails to load on base because it imports a test helper the change added or modified, but no <code>support</code> glob overlaid, fails as <code>not-overlaid</code>, not <code>red:compile</code>. Helpers are files under a <code>testing</code>, <code>test-utils</code>, <code>test-helpers</code>, <code>testutils</code>, <code>fixtures</code>, <code>__fixtures__</code>, <code>mocks</code> or <code>__mocks__</code> folder, found by path in the base failure message with <code>\</code> or <code>/</code> as the separator (non-Cargo suites only). A new source module that base can't load is still <code>red:compile</code>.</li>
+        <li>A suite with <code>red_on_base = "assert"</code> counts only assertion failures: a compile or load failure there fails as <code>compile-red</code>. It takes no <code>reason</code> and works for Cargo suites too.</li>
+        <li>An <em>implemented</em> scenario, one that existed before and gains its first test, whose tests pass on base and at head is <code>green:linked</code>: the behaviour predates the change and the test only links to it. It passes, but doesn't count as specifying a source change, even when its test then fails at head. When one of its tests fails on base, that failure proves it instead.</li>
         <li>A base checkout has no installed dependencies, so a suite can declare <code>setup</code> (e.g. <code>pnpm install --frozen-lockfile</code>), run once before its base run.</li>
         <li>A suite that can't run on old code, such as end-to-end tests against a deployed API, sets <code>red_on_base = "skip"</code> with a <code>reason</code>. Its new tests are <em>unverifiable</em>, and its head run still happens.</li>
         <li>Rust tests inline in source files (<code>#[cfg(test)] mod tests</code>) can't be overlaid and are reported as <em>unverifiable</em>. Keep scenario tests in <code>tests/</code>.</li>
@@ -467,11 +470,13 @@ sj doctor                        <span class="c-m"># hook, instructions or hook 
           <tr><td><code>unidentified &lt;file&gt;:&lt;line&gt;</code></td><td>A new or edited scenario has no ID.</td></tr>
           <tr><td><code>failing AUTH-004 &lt;test&gt;</code></td><td>A mapped test fails on the PR head.</td></tr>
           <tr><td><code>not-run AUTH-004 &lt;test&gt;</code></td><td>A mapped test didn't run.</td></tr>
-          <tr><td><code>green-on-base AUTH-004 &lt;test&gt;</code></td><td>The new test already passes on the old code.</td></tr>
+          <tr><td><code>green-on-base AUTH-004 &lt;test&gt;</code></td><td>The new test of an added or modified scenario already passes on the old code. For an implemented scenario that's <code>green:linked</code>, which passes.</td></tr>
+          <tr><td><code>not-overlaid AUTH-004 &lt;test&gt; (&lt;file&gt;; add it to the suite's support globs)</code></td><td>The test failed to load on base because of a helper file the change added or modified and the gate didn't overlay. Checked before the <code>[keep]</code> rules and <code>compile-red</code>.</td></tr>
+          <tr><td><code>compile-red AUTH-004 &lt;test&gt; (suite requires an assertion failure on base)</code></td><td>The test failed to compile or load on base in a suite with <code>red_on_base = "assert"</code>.</td></tr>
           <tr><td><code>unverifiable AUTH-004 &lt;test&gt;</code></td><td>The test can't run on base: inline in a Rust source file, or in a suite with <code>red_on_base = "skip"</code>. Pass <code>--allow-unverifiable</code> to warn instead.</td></tr>
           <tr><td><code>orphan AUTH-003 &lt;test&gt;</code></td><td>A test points at a scenario that was removed, and the base branch's baseline doesn't list it.</td></tr>
           <tr><td><code>baseline-added &lt;entry&gt;</code></td><td>The change adds an entry to <code>trace-baseline.txt</code> without a <code>config</code> exemption.</td></tr>
-          <tr><td><code>unspecified change</code></td><td>Source files changed with no added or modified scenario and no exemption.</td></tr>
+          <tr><td><code>unspecified change</code></td><td>Source files changed with no added, modified or implemented scenario and no exemption. An implemented scenario whose tests all pass on base doesn't count, even if one fails at head.</td></tr>
           <tr><td><code>exemption needs a reason</code></td><td>An exemption line has no reason.</td></tr>
           <tr><td><code>spike cannot merge to main</code></td><td>A spike exemption targets <code>main</code>.</td></tr>
         </tbody>
@@ -547,7 +552,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       </div>
       <div class="cmd">
         <h3>sj gate</h3>
-        <p>CI check: every changed scenario tested, red on base, green on head.</p>
+        <p>CI check: every changed scenario tested, red on base, green on head. A pass sums the evidence, as in <code>gate: pass — 2 scenarios proven (1 red:assert, 1 green:linked)</code>. <code>--json</code> lists linked scenarios in <code>proven</code> with <code>"red": "green:linked"</code>, and <code>--format markdown</code> under <strong>Linked existing behaviour</strong>.</p>
         <dl>
           <dt>--base &lt;ref&gt;</dt><dd>Base to compare against, e.g. <code>origin/main</code>. A ref that doesn't resolve exits 2 with a hint about <code>fetch-depth: 0</code>.</dd>
           <dt>--since &lt;commit&gt;</dt><dd>Check commit history instead: every <code>feat(ID)</code> commit needs an earlier <code>test(ID): red</code>.</dd>
@@ -591,7 +596,7 @@ total  3  1500  54000  97%  ~13125 tokens saved</pre>
       </div>
       <div class="cmd">
         <h3>sj adopt</h3>
-        <p>Detect an existing project's packages and runners and write <code>specjutsu.toml</code>. Never runs a tool.</p>
+        <p>Detect an existing project's packages and runners and write <code>specjutsu.toml</code>. Never runs a tool. A non-Cargo suite gets a <code>support</code> glob, <code>&lt;folder&gt;/**</code>, for every helper folder (<code>testing</code>, <code>test-utils</code>, <code>test-helpers</code>, <code>testutils</code>, <code>fixtures</code>, <code>__fixtures__</code>, <code>mocks</code>, <code>__mocks__</code>) in its package that its <code>tests</code> globs don't cover; a suite with none gets no <code>support</code> key. Folders under a <code>tests</code> folder are left out, since the gate always overlays them. Each glob gets a note on stderr, <code>note    support: apps/api/src/testing/** (not source; overlaid on base; remove it if this folder holds product code)</code>. A helper folder it can't read stops it with the error.</p>
         <dl><dt>--dry-run</dt><dd>Print the config instead of writing it.</dd><dt>--force</dt><dd>Replace an existing file.</dd></dl>
       </div>
       <div class="cmd">
@@ -608,9 +613,10 @@ total  3  1500  54000  97%  ~13125 tokens saved</pre>
         <p>Print a completion script for <code>bash</code>, <code>zsh</code>, <code>fish</code>, <code>powershell</code> or <code>elvish</code> to stdout. Any other shell exits 2. See <a href="#install">Install</a> for where to save it.</p>
       </div>
       <div class="cmd">
-        <h3>sj ids</h3>
+        <h3>sj ids [--write] [target…]</h3>
         <p>List scenarios without IDs and the IDs they would get; exits 1 when there are any. A prefix derived from a folder name longer than six letters ends the list with <code>hint: distribution would use DISTRIBUTION; sj ids prefixes --write maps it to DIST</code>.</p>
-        <dl><dt>--write</dt><dd>Insert them, changing only the headings.</dd></dl>
+        <p>A <code>specs/</code> scenario without an ID takes the ID its copy in an open change's MODIFIED requirement already has, matched by capability, requirement and scenario name (a requirement renamed in the same change matches by its old name). When another scenario already uses that ID, or copies in two open changes disagree, it gets a new number and a <code>note:</code> line names the scenarios involved, as in <code>note: copies disagree: STAFF-057 … , STAFF-058 …; Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; give the delta copies STAFF-100</code>. Update the delta copies to match.</p>
+        <dl><dt>target</dt><dd>A capability name, or a path to a spec file or folder, resolved against <code>--root</code> or absolute. Each selects whole capabilities, their <code>specs/</code> files and their copies in open changes; every other file is left alone. The prefix check covers every capability whose prefix a selected one uses, so a collision between two other capabilities doesn't stop the run. When listing a target, a collision that involves a capability being numbered prints as a <code>note: capabilities … both use prefix …</code> line instead of stopping; numbering still covers the whole spec root. A target that selects nothing exits 2 and lists the known capabilities. A capability named <code>prefixes</code> can only be targeted by path.</dd><dt>--write</dt><dd>Insert them, changing only the headings.</dd><dt>--json</dt><dd><code>assignments</code> with <code>id</code>, <code>name</code>, <code>file</code> and <code>line</code>, plus a <code>note</code> object (<code>kind</code> <code>taken</code> with <code>copy</code> and <code>by</code>, or <code>disagree</code> with <code>copies</code>) when there is one.</dd></dl>
       </div>
       <div class="cmd">
         <h3>sj ids prefixes</h3>
@@ -634,7 +640,7 @@ total  3  1500  54000  97%  ~13125 tokens saved</pre>
       </div>
       <div class="cmd">
         <h3>sj spec validate [change]</h3>
-        <p>Scenario IDs and steps, requirement wording, delta structure, and that every task names its scenarios. Each problem has a file and line.</p>
+        <p>Scenario IDs and steps, requirement wording, delta structure, and that every task names its scenarios. Each problem has a file and line. When a MODIFIED scenario's original in <code>specs/</code> has no ID, it says to run <code>sj ids --write &lt;capability&gt;</code> first: as a warning, <code>STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario without an ID; run sj ids --write staff first</code>, or, when the delta scenario has no ID either, appended to its missing-ID error. When both have IDs and they differ, it warns <code>STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario as STAFF-100; give the delta copy STAFF-100</code>.</p>
         <dl><dt>--strict</dt><dd>Fail on warnings too.</dd></dl>
       </div>
       <div class="cmd">
@@ -664,11 +670,12 @@ total  3  1500  54000  97%  ~13125 tokens saved</pre>
       </div>
       <div class="cmd">
         <h3>sj task done &lt;change&gt; &lt;task&gt;</h3>
-        <p>Tick the task's box and change no other byte. In <code>strict</code> mode it refuses unless every scenario the task names is proven.</p>
+        <p>Tick the task's box and change no other byte. In <code>strict</code> mode it refuses unless every scenario the task names is proven. Like <code>sj verify</code>, it needs a red run only for added and modified scenarios. It always judges against the default branch, never <code>--base</code>, and when it can't classify the scenarios it warns <code>cannot classify scenarios against the merge-base, so every one needs a red run: …</code>.</p>
       </div>
       <div class="cmd">
         <h3>sj verify [change]</h3>
         <p>The local check before a PR: the change's scenario tests, unproven scenarios, orphans, <code>sj spec check</code> problems, and the gate's rules against the merge-base, without red-on-base. The gate's <a href="#baseline">baseline</a> rules apply too: orphans the base's baseline lists aren't problems, and entries the branch adds without a <code>config</code> exemption are <code>baseline-added &lt;entry&gt;</code> problems.</p>
+        <p>Scenarios are classified against the merge-base as the gate does, and only added and modified ones need a red run. Unchanged scenarios, such as one copied without edits into a MODIFIED requirement, and implemented ones need only a passing latest run; their tests still run and a failure is still reported. An implemented scenario with no red-before-green in the ledger doesn't count as covering a source change, so a change that only adds its test and edits source gets <code>unspecified change</code>. On the default branch itself (the merge-base is HEAD), every scenario needs a red run.</p>
         <dl><dt>--base &lt;ref&gt;</dt><dd>Base to compare against.</dd></dl>
       </div>
 
@@ -727,7 +734,7 @@ migrate: undone (2 files restored, 20 deleted; left uncommitted)</pre>
       <h3>What changes for you</h3>
       <ul>
         <li><strong>Your agent stops reading folders.</strong> <code>sj status</code> answers "where am I" in a few lines; <code>sj next</code> returns only the current task, its scenarios and the exact test command.</li>
-        <li><strong>"Done" is checked, not claimed.</strong> In strict mode <code>sj task done</code> refuses to tick a task until the ledger shows its tests went red, then green.</li>
+        <li><strong>"Done" is checked, not claimed.</strong> In strict mode <code>sj task done</code> refuses to tick a task until the ledger shows the tests of its added and modified scenarios went red, then green.</li>
         <li><strong>TDD is enforced, not requested.</strong> The pre-edit hook blocks source edits before a failing test exists. Writing the test is always allowed.</li>
         <li><strong>Your specs don't move.</strong> OpenSpec folders stay where they are; Spec Kit features become the same layout.</li>
       </ul>
@@ -737,7 +744,7 @@ migrate: undone (2 files restored, 20 deleted; left uncommitted)</pre>
       <h2>FAQ</h2>
       <details class="faq"><summary>Does specjutsu call an AI model?</summary><div><p>No. It's a deterministic binary. Your agent calls it; it never calls your agent or any LLM.</p></div></details>
       <details class="faq"><summary>Which languages work today?</summary><div><p>Rust (<code>cargo test</code>), TypeScript and JavaScript (vitest, Jest, Playwright) and Python (pytest), plus any runner that writes a JUnit XML report through a <code>junit</code> suite with your own <code>command</code>. Native test discovery for Go, dotnet, PHPUnit and RSpec is on the roadmap.</p></div></details>
-      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Run <code>sj adopt</code> and <code>sj ids --write</code>, or <code>sj migrate</code> if you're on OpenSpec, Spec Kit or Superpowers. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings. With thousands of them, or old orphan tests, commit a <a href="#baseline">trace baseline</a> so each PR shows only what it adds. Run <code>sj ids prefixes --write</code> before <code>sj ids --write</code> for short IDs.</p></div></details>
+      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Run <code>sj adopt</code> and <code>sj ids --write</code>, or <code>sj migrate</code> if you're on OpenSpec, Spec Kit or Superpowers. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings. With thousands of them, or old orphan tests, commit a <a href="#baseline">trace baseline</a> so each PR shows only what it adds. Run <code>sj ids prefixes --write</code> before <code>sj ids --write</code> for short IDs.</p><p>Keeping OpenSpec alongside? Run <code>sj ids --write &lt;capability&gt;</code> before you modify a capability, so the MODIFIED copy and its original share a name for <code>openspec validate --strict</code>. Declare test helper folders as <code>support</code> (<code>sj adopt</code> does it for the common names); support files aren't source and are overlaid on base, so keep product code out of them. A test added for behaviour that already existed shows as <code>green:linked</code> and passes.</p></div></details>
       <details class="faq"><summary>Does it work in a monorepo?</summary><div><p>Yes. Each package in <code>specjutsu.toml</code> has its own suites, and a file belongs to the package with the longest matching path. <code>sj test apps/api</code> runs one package; the gate runs red-on-base per suite.</p></div></details>
       <details class="faq"><summary>Do my tests have to live in <code>tests/</code>?</summary><div><p>Only Rust's. Red-on-base overlays every changed file that matches a suite's <code>tests</code> globs, so co-located <code>*.test.ts</code> files work. Rust tests inline in a source file can't be moved without the new code, so they're reported as unverifiable.</p></div></details>
       <details class="faq"><summary>Is the local ledger trusted by CI?</summary><div><p>No. A local file is easy to forge, so CI recomputes red and green itself with red-on-base. The ledger is local evidence for the agent loop, the pre-edit hook and strict mode.</p></div></details>

@@ -593,3 +593,177 @@ fn loop_033_a_baseline_entry_added_without_an_exemption_is_a_verify_problem() {
             "\nbaseline-added orphan AUTH-010 tests/auth.rs auth_010_x\n",
         ));
 }
+
+/// Base `main` specifies STAFF-063 with no test; branch `feature` adds the change `link-staff`,
+/// whose MODIFIED requirement copies STAFF-063 unchanged and whose task 4.1 names it, and its
+/// first test, passing. Strict mode.
+fn linked_repo() -> support::Repo {
+    let scenarios = [("STAFF-063", "Lists staff")];
+    let repo = support::Repo::with_lib("pub fn staff() {}\n");
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\nmode = \"strict\"\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**\"]\n",
+    );
+    repo.write(
+        "openspec/specs/staff/spec.md",
+        &support::spec_md(&scenarios),
+    );
+    repo.commit("base: STAFF-063 without a test");
+    repo.branch("feature");
+    repo.write(
+        "openspec/changes/link-staff/proposal.md",
+        "## Why\n\nLink.\n",
+    );
+    repo.write(
+        "openspec/changes/link-staff/specs/staff/spec.md",
+        &support::spec_md(&scenarios).replace("## ADDED", "## MODIFIED"),
+    );
+    repo.write(
+        "openspec/changes/link-staff/tasks.md",
+        "## 4. Staff\n\n- [ ] 4.1 Test the staff list (STAFF-063)\n",
+    );
+    repo.write("tests/staff.rs", "#[test]\nfn staff_063_lists_staff() {}\n");
+    repo.commit("test: STAFF-063");
+    repo
+}
+
+/// The ledger's lines.
+fn ledger_text(repo: &support::Repo) -> String {
+    std::fs::read_to_string(repo.path().join(".specjutsu/ledger/runs.jsonl")).unwrap_or_default()
+}
+
+#[test]
+fn loop_034_verify_and_task_done_accept_a_linked_existing_scenario() {
+    let repo = linked_repo();
+    let verify = stdout(&mut sj(repo.path(), &["verify"]));
+    assert!(!verify.contains("unproven STAFF-063"), "{verify}");
+    let ledger = ledger_text(&repo);
+    assert!(ledger.contains("STAFF-063"), "{verify}{ledger}");
+    assert!(!ledger.contains("\"failed\""), "{ledger}");
+
+    let file = repo.path().join("openspec/changes/link-staff/tasks.md");
+    sj(repo.path(), &["task", "done", "link-staff", "4.1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task: done 4.1"));
+    assert!(std::fs::read_to_string(&file)
+        .unwrap()
+        .contains("- [x] 4.1 Test the staff list (STAFF-063)"));
+}
+
+#[test]
+fn loop_037_verify_does_not_let_a_never_red_implemented_scenario_cover_source() {
+    let repo = linked_repo();
+    repo.write("src/lib.rs", "pub fn staff() { let _ = 1; }\n");
+    repo.commit("edit source");
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("unspecified change: src/lib.rs"));
+    let ledger = ledger_text(&repo);
+    assert!(ledger.contains("STAFF-063"), "{ledger}");
+    assert!(!ledger.contains("\"failed\""), "{ledger}");
+}
+
+/// Base `main` has AUTH-002 with a passing test; branch `feature` adds a change whose
+/// `## MODIFIED Requirements` copies AUTH-002 with the same text.
+fn unchanged_repo() -> support::Repo {
+    let scenarios = [("AUTH-002", "Logs out")];
+    let repo = support::Repo::with_lib("pub fn logout() {}\n");
+    repo.write("openspec/specs/auth/spec.md", &support::spec_md(&scenarios));
+    repo.write("tests/auth.rs", "#[test]\nfn auth_002_logs_out() {}\n");
+    repo.commit("base: AUTH-002 tested");
+    repo.branch("feature");
+    repo.write(
+        "openspec/changes/touch-auth/proposal.md",
+        "## Why\n\nTouch.\n",
+    );
+    repo.write(
+        "openspec/changes/touch-auth/specs/auth/spec.md",
+        &support::spec_md(&scenarios).replace("## ADDED", "## MODIFIED"),
+    );
+    repo.commit("spec: copy AUTH-002");
+    repo
+}
+
+#[test]
+fn loop_035_an_unchanged_scenario_in_a_modified_requirement_needs_no_red_run() {
+    let repo = unchanged_repo();
+    let verify = stdout(&mut sj(repo.path(), &["verify"]));
+    assert!(!verify.contains("unproven AUTH-002"), "{verify}");
+    let ledger = ledger_text(&repo);
+    assert!(ledger.contains("AUTH-002"), "{ledger}");
+    assert!(!ledger.contains("\"failed\""), "{ledger}");
+}
+
+// Regression: pins behaviour verify had before this change, so it carries no scenario ID.
+#[test]
+fn regression_a_failing_unchanged_scenario_is_still_reported() {
+    let repo = unchanged_repo();
+    repo.write(
+        "tests/auth.rs",
+        "#[test]\nfn auth_002_logs_out() { panic!(\"broken\"); }\n",
+    );
+    repo.commit("break AUTH-002");
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_match(r"failing \S+  AUTH-002\n").unwrap());
+}
+
+// Regression: pins behaviour verify had before this change, so it carries no scenario ID.
+#[test]
+fn regression_a_linked_scenario_proven_red_covers_a_source_change() {
+    let repo = linked_repo();
+    repo.write(
+        "tests/staff.rs",
+        "#[test]\nfn staff_063_lists_staff() { panic!(\"red\"); }\n",
+    );
+    repo.commit("red");
+    sj(repo.path(), &["test", "STAFF-063"]).assert().code(1);
+    repo.write("tests/staff.rs", "#[test]\nfn staff_063_lists_staff() {}\n");
+    repo.write("src/lib.rs", "pub fn staff() { let _ = 1; }\n");
+    repo.commit("green");
+    sj(repo.path(), &["test", "STAFF-063"]).assert().success();
+    sj(repo.path(), &["verify"])
+        .assert()
+        .success()
+        .stdout("verify: ok\n");
+}
+
+#[test]
+fn loop_036_an_added_scenario_committed_on_the_default_branch_still_needs_a_red_run() {
+    let repo = support::Repo::with_lib("pub fn x() {}\n");
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\nmode = \"strict\"\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**\"]\n",
+    );
+    repo.commit("config");
+    repo.add_change("add-x", &[("MATH-001", "Adds")]);
+    repo.write(
+        "openspec/changes/add-x/tasks.md",
+        "## 1. X\n\n- [ ] 1.1 Add (MATH-001)\n",
+    );
+    repo.write("tests/math.rs", "#[test]\nfn math_001_adds() {}\n");
+    repo.commit("feat: MATH-001 on main");
+
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "unproven MATH-001 (no red run recorded)",
+        ));
+    assert!(!ledger_text(&repo).contains("\"failed\""));
+    let file = repo.path().join("openspec/changes/add-x/tasks.md");
+    sj(repo.path(), &["task", "done", "add-x", "1.1"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "unproven MATH-001 (no red run recorded)",
+        ));
+    assert!(std::fs::read_to_string(&file)
+        .unwrap()
+        .contains("- [ ] 1.1 Add (MATH-001)"));
+}

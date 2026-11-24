@@ -387,3 +387,455 @@ fn ids_prefixes_takes_root_after_the_subcommand() {
         .success()
         .stdout("[ids.prefixes]\ngate = \"GATE\"\n");
 }
+
+/// Two capabilities, `staff` and `billing`, whose scenarios have no IDs.
+fn staff_and_billing(root: &Path) {
+    for cap in ["staff", "billing"] {
+        put(root, &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+    }
+}
+
+#[test]
+fn ids_014_writing_one_capability_leaves_the_others_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    let billing = std::fs::read(dir.path().join("openspec/specs/billing/spec.md")).unwrap();
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n\
+             wrote 2 IDs to 1 file\n",
+        );
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password")
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("openspec/specs/billing/spec.md")).unwrap(),
+        billing
+    );
+}
+
+/// IDS-014 with IDS-006 and IDS-007: numbers continue past IDs outside the target, and the
+/// targeted capability's delta copies in open changes are included.
+#[test]
+fn ids_014_a_target_keeps_numbering_and_delta_copies() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    put(
+        dir.path(),
+        "openspec/changes/archive/2026-01-01-old/specs/staff/spec.md",
+        &USER_AUTH.replace("Scenario: Valid", "Scenario: STAFF-007 Valid"),
+    );
+    put(
+        dir.path(),
+        "openspec/changes/add/specs/staff/spec.md",
+        USER_AUTH,
+    );
+    put(
+        dir.path(),
+        "openspec/changes/add/specs/billing/spec.md",
+        USER_AUTH,
+    );
+    sj(dir.path()).arg("staff").assert().code(1).stdout(
+        "4 scenarios without IDs\n\
+         STAFF-008 Valid registration (openspec/specs/staff/spec.md:6)\n\
+         STAFF-009 Password too short (openspec/specs/staff/spec.md:10)\n\
+         STAFF-008 Valid registration (openspec/changes/add/specs/staff/spec.md:6)\n\
+         STAFF-009 Password too short (openspec/changes/add/specs/staff/spec.md:10)\n",
+    );
+}
+
+#[test]
+fn ids_015_a_spec_path_limits_the_listing_the_same_way() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .arg("openspec/specs/staff/spec.md")
+        .assert()
+        .code(1)
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n",
+        );
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+#[test]
+fn ids_016_an_unknown_target_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .args(["--write", "staf"])
+        .assert()
+        .code(2)
+        .stderr(
+            predicate::str::contains("`staf`").and(predicate::str::contains(
+                "known capabilities: billing, staff",
+            )),
+        );
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+/// IDS-015 with a delta file as the target: it selects the capability, `specs/` file included.
+#[test]
+fn ids_015_a_delta_file_target_selects_its_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    put(
+        dir.path(),
+        "openspec/changes/add/specs/staff/spec.md",
+        USER_AUTH,
+    );
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .arg("openspec/changes/add/specs/staff/spec.md")
+        .assert()
+        .code(1)
+        .stdout(
+            "4 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n\
+             STAFF-001 Valid registration (openspec/changes/add/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/changes/add/specs/staff/spec.md:10)\n",
+        );
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+#[test]
+fn ids_017_a_target_still_stops_on_colliding_prefixes() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "st-aff"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("`st-aff`").and(predicate::str::contains("`staff`")));
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+#[test]
+fn ids_021_an_unrelated_collision_does_not_stop_a_target() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "billing", "bill-ing"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .code(0)
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n\
+             wrote 2 IDs to 1 file\n",
+        );
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password")
+    );
+    for cap in ["billing", "bill-ing"] {
+        assert_eq!(
+            read(dir.path(), &format!("openspec/specs/{cap}/spec.md")),
+            USER_AUTH,
+            "{cap}"
+        );
+    }
+}
+
+// Regression: IDS-021 on the listing path, which `sj ids` without `--write` takes. No ID: the
+// scenario names `--write`.
+#[test]
+fn regression_listing_a_target_ignores_an_unrelated_collision() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "billing", "bill-ing"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    sj(dir.path())
+        .arg("staff")
+        .assert()
+        .code(1)
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n",
+        )
+        .stderr("");
+    let out = sj(dir.path()).args(["--json", "staff"]).assert().code(1);
+    assert_eq!(String::from_utf8_lossy(&out.get_output().stderr), "");
+    let v: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+    assert_eq!(v["missing"], 2);
+}
+
+// Regression: a target with nothing to number lists nothing, as `--write` writes nothing,
+// even when an unselected capability needing IDs collides with its prefix. Listing `st-aff`,
+// which would number, reports that collision as a line.
+#[test]
+fn regression_a_fully_numbered_target_lists_nothing_beside_a_colliding_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    put(
+        dir.path(),
+        "openspec/specs/staff/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password"),
+    );
+    put(dir.path(), "openspec/specs/st-aff/spec.md", USER_AUTH);
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .arg("staff")
+        .assert()
+        .success()
+        .stdout("0 scenarios without IDs\n")
+        .stderr("");
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout("0 scenarios without IDs\n");
+    assert_eq!(snapshot(dir.path()), before);
+    sj(dir.path())
+        .arg("st-aff")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::ends_with(
+            "\nnote: capabilities `st-aff` and `staff` both use prefix STAFF; \
+             map one in [ids.prefixes] in specjutsu.toml\n",
+        ))
+        .stderr("");
+}
+
+// Regression: within IDS-021's rule, a capability outside the targets with no usable prefix
+// doesn't stop the run either. No ID: the scenario covers collisions only.
+#[test]
+fn regression_an_unselected_capability_without_a_prefix_does_not_stop_a_target() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "123"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    sj(dir.path()).args(["--write", "staff"]).assert().code(0);
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password")
+    );
+    assert_eq!(read(dir.path(), "openspec/specs/123/spec.md"), USER_AUTH);
+}
+
+const ROLE_SPEC: &str = "## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL audit role changes.\n\n\
+#### Scenario: Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n\n\
+#### Scenario: STAFF-099 Role change is visible\n- **WHEN** a role changes\n- **THEN** it is shown\n";
+
+const ROLE_DELTA: &str = "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL audit role changes.\n\n\
+#### Scenario: STAFF-057 Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded with its author\n";
+
+#[test]
+fn ids_018_the_original_takes_the_deltas_id() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    let delta = std::fs::read(
+        dir.path()
+            .join("openspec/changes/audit/specs/staff/spec.md"),
+    )
+    .unwrap();
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        ROLE_SPEC.replace(
+            "#### Scenario: Role change is recorded",
+            "#### Scenario: STAFF-057 Role change is recorded"
+        )
+    );
+    assert_eq!(
+        std::fs::read(
+            dir.path()
+                .join("openspec/changes/audit/specs/staff/spec.md")
+        )
+        .unwrap(),
+        delta
+    );
+}
+
+/// IDS-018 when the delta's ID is already used by another scenario: a new number, and a line
+/// naming both scenarios.
+#[test]
+fn ids_018_a_taken_id_gets_a_new_number_and_a_note() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    put(
+        dir.path(),
+        "openspec/specs/billing/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-057 Valid")
+            .replace("Scenario: Password", "Scenario: BILLING-001 Password"),
+    );
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "note: STAFF-057 Role change is recorded (openspec/changes/audit/specs/staff/spec.md:6) \
+             is taken by STAFF-057 Valid registration (openspec/specs/billing/spec.md:6); \
+             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; \
+             give the delta copies STAFF-100\n",
+        ));
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-100 Role change is recorded"));
+}
+
+#[test]
+fn ids_019_copies_that_disagree_get_a_new_number_and_a_note() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/c1/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    put(
+        dir.path(),
+        "openspec/changes/c2/specs/staff/spec.md",
+        &ROLE_DELTA.replace("STAFF-057", "STAFF-058"),
+    );
+    let deltas = |root: &Path| {
+        ["c1", "c2"].map(|c| {
+            std::fs::read(root.join(format!("openspec/changes/{c}/specs/staff/spec.md"))).unwrap()
+        })
+    };
+    let before = deltas(dir.path());
+    let out = sj(dir.path()).args(["--json", "staff"]).assert().code(1);
+    let v: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+    let note = &v["assignments"][0]["note"];
+    assert_eq!(note["kind"], "disagree");
+    assert_eq!(note["copies"][0]["id"], "STAFF-057");
+    assert_eq!(
+        note["copies"][0]["file"],
+        "openspec/changes/c1/specs/staff/spec.md"
+    );
+    assert_eq!(note["copies"][1]["id"], "STAFF-058");
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "note: copies disagree: \
+             STAFF-057 Role change is recorded (openspec/changes/c1/specs/staff/spec.md:6), \
+             STAFF-058 Role change is recorded (openspec/changes/c2/specs/staff/spec.md:6); \
+             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; \
+             give the delta copies STAFF-100\n",
+        ));
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-100 Role change is recorded"));
+    assert_eq!(deltas(dir.path()), before);
+}
+
+/// IDS-018's JSON carries the taken note too.
+#[test]
+fn ids_018_json_carries_the_taken_note() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    put(
+        dir.path(),
+        "openspec/specs/billing/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-057 Valid")
+            .replace("Scenario: Password", "Scenario: BILLING-001 Password"),
+    );
+    let out = sj(dir.path()).args(["--json", "staff"]).assert().code(1);
+    let v: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+    let note = &v["assignments"][0]["note"];
+    assert_eq!(v["assignments"][0]["id"], "STAFF-100");
+    assert_eq!(note["kind"], "taken");
+    assert_eq!(
+        note["copy"]["file"],
+        "openspec/changes/audit/specs/staff/spec.md"
+    );
+    assert_eq!(note["by"]["name"], "Valid registration");
+    assert_eq!(note["by"]["file"], "openspec/specs/billing/spec.md");
+}
+
+/// IDS-018: a `## ` line inside fenced code does not end the MODIFIED section.
+#[test]
+fn ids_018_a_fenced_heading_does_not_hide_the_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        &ROLE_DELTA.replace(
+            "The system SHALL audit role changes.\n",
+            "The system SHALL audit role changes.\n\n```\n## ADDED Requirements\n```\n",
+        ),
+    );
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-057 Role change is recorded"));
+}
+
+#[test]
+fn ids_020_a_renamed_requirement_matches_by_its_old_name() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        "## RENAMED Requirements\n\
+         - FROM: `### Requirement: Role changes are audited`\n\
+         - TO: `### Requirement: Role changes are logged`\n\n\
+         ## MODIFIED Requirements\n\n\
+         ### Requirement: Role changes are logged\n\
+         The system SHALL log role changes.\n\n\
+         #### Scenario: STAFF-057 Role change is recorded\n\
+         - **WHEN** a role changes\n\
+         - **THEN** it is recorded with its author\n",
+    );
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-057 Role change is recorded"));
+}
