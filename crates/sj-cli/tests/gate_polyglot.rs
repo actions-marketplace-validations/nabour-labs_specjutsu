@@ -435,9 +435,9 @@ printf '<testsuites><testsuite name="vitest">%s</testsuite></testsuites>' "$body
 exit $code
 "#;
 
-/// `sj gate --base main --json` with `pnpm_script` as the fake `pnpm`: exit code and report.
+/// `sj gate --base main <args>` with `pnpm_script` as the fake `pnpm`.
 #[cfg(unix)]
-fn gate_json(repo: &Repo, pnpm_script: &str) -> (Option<i32>, serde_json::Value) {
+fn gate_output(repo: &Repo, pnpm_script: &str, args: &[&str]) -> std::process::Output {
     let bin = tempfile::tempdir().unwrap();
     write_pnpm(bin.path(), pnpm_script);
     let path = format!(
@@ -445,13 +445,21 @@ fn gate_json(repo: &Repo, pnpm_script: &str) -> (Option<i32>, serde_json::Value)
         bin.path().display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let out = Command::cargo_bin("sj")
+    Command::cargo_bin("sj")
         .unwrap()
-        .args(["gate", "--base", "main", "--json", "--root"])
+        .args(["gate", "--base", "main"])
+        .args(args)
+        .arg("--root")
         .arg(repo.path())
         .env("PATH", path)
         .output()
-        .unwrap();
+        .unwrap()
+}
+
+/// `sj gate --base main --json` with `pnpm_script` as the fake `pnpm`: exit code and report.
+#[cfg(unix)]
+fn gate_json(repo: &Repo, pnpm_script: &str) -> (Option<i32>, serde_json::Value) {
+    let out = gate_output(repo, pnpm_script, &["--json"]);
     let report = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {out:?}"));
     (out.status.code(), report)
 }
@@ -626,4 +634,91 @@ fn gate_061_an_assert_suite_still_proves_an_assertion_failure_red_assert() {
     let report: serde_json::Value =
         serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {out:?}"));
     assert!(proven_as(&report, "AUTH-004", "red:assert"), "{report:#}");
+}
+
+/// A fake `pnpm` whose vitest run passes STAFF-063 whatever the code: the behaviour exists on
+/// base already.
+#[cfg(unix)]
+const PNPM_STAFF_063: &str = r#"#!/bin/sh
+out=""
+for a in "$@"; do
+  case "$a" in --outputFile.junit=*) out="${a#--outputFile.junit=}" ;; esac
+done
+printf '<testsuites><testsuite name="vitest"><testcase classname="src/users.test.ts" name="STAFF-063 lists admins"/></testsuite></testsuites>' > "$out"
+exit 0
+"#;
+
+/// GATE-059's change: base has STAFF-063 with no test and `apps/api/src/users.ts` listing the
+/// admin role; the change adds `apps/api/src/users.test.ts`, a test for STAFF-063.
+#[cfg(unix)]
+fn staff_063_repo() -> Repo {
+    let repo = repo_with(&config_without_setup(), BUGGY, true);
+    let r = repo.path();
+    repo.git(&["checkout", "-q", "main"]);
+    write(
+        r,
+        "openspec/specs/staff/spec.md",
+        "## Requirements\n\n### Requirement: Staff\nThe system SHALL list staff.\n\n\
+         #### Scenario: STAFF-063 Lists admins\n- **WHEN** x\n- **THEN** y\n",
+    );
+    write(r, "apps/api/src/users.ts", "export const roles = ['admin']\n");
+    repo.commit("STAFF-063 spec");
+    repo.git(&["checkout", "-q", "-B", "feature"]);
+    write(
+        r,
+        "apps/api/src/users.test.ts",
+        "import { roles } from './users'\n\
+         it(\"STAFF-063 lists admins\", () => { expect(roles).toContain('admin') })\n",
+    );
+    repo.commit("test(STAFF-063)");
+    repo
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_059_a_test_linked_to_existing_behaviour_passes_the_gate() {
+    let repo = staff_063_repo();
+    let (code, report) = gate_json(&repo, PNPM_STAFF_063);
+    assert_eq!(code, Some(0), "{report:#}");
+    assert_eq!(report["pass"], true, "{report:#}");
+    assert_eq!(
+        report["proven"],
+        serde_json::json!([{ "id": "STAFF-063", "red": "green:linked" }]),
+        "{report:#}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_059_markdown_lists_linked_behaviour_apart_from_the_table() {
+    let repo = staff_063_repo();
+    let out = gate_output(&repo, PNPM_STAFF_063, &["--format", "markdown"]);
+    let md = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        md.contains(
+            "\n**Linked existing behaviour**\n\n- STAFF-063 green:linked (`STAFF-063 lists admins`)\n"
+        ),
+        "{md}"
+    );
+    assert!(!md.contains("| STAFF-063"), "{md}");
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_060_a_linked_scenario_does_not_cover_a_source_change() {
+    let repo = staff_063_repo();
+    write(
+        repo.path(),
+        "apps/api/src/users.ts",
+        "export const roles = ['admin', 'owner']\n",
+    );
+    repo.commit("users");
+    let (code, report) = gate_json(&repo, PNPM_STAFF_063);
+    assert_eq!(code, Some(1), "{report:#}");
+    assert_eq!(
+        failures(&report),
+        vec!["unspecified change: apps/api/src/users.ts"],
+        "{report:#}"
+    );
+    assert!(proven_as(&report, "STAFF-063", "green:linked"), "{report:#}");
 }

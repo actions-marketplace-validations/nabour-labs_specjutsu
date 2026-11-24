@@ -99,9 +99,11 @@ fn gate_036_rewording_while_adding_an_id_is_still_added() {
 fn gate_037_adding_an_id_and_a_test_at_once_is_still_gated() {
     let base = "## Requirements\n\n### Requirement: Login\nThe system SHALL log in.\n\n\
                 #### Scenario: Valid login\n- **WHEN** credentials match\n- **THEN** a session starts\n";
-    // The test passes on base too: an implemented scenario must still prove red-on-base.
+    // The test passes on base too, so it links AUTH-001 to existing behaviour; it can't be
+    // what drove the edit to `src/auth.rs`.
     let repo = Repo::with_lib(ADD_OK);
     repo.write("openspec/specs/auth/spec.md", base);
+    repo.write("src/auth.rs", "pub fn login() -> bool { true }\n");
     repo.commit("docs(spec): auth");
     repo.branch("ids");
     repo.write(
@@ -109,15 +111,16 @@ fn gate_037_adding_an_id_and_a_test_at_once_is_still_gated() {
         &base.replace("Scenario: Valid", "Scenario: AUTH-001 Valid"),
     );
     repo.write("tests/auth.rs", ADD_TEST);
+    repo.write("src/auth.rs", "pub fn login() -> bool { false }\n");
     repo.commit("test(AUTH-001): red");
     let r = run(&opts(&repo)).unwrap();
     assert_eq!(r.changes.get("AUTH-001"), Some(&Change::Implemented));
-    assert!(!r.pass, "an implemented scenario green on base must fail");
-    assert!(
-        r.failures
-            .iter()
-            .any(|f| f.contains("AUTH-001") && f.contains("base")),
+    assert_eq!(
+        serde_json::to_value(&r.proven).unwrap(),
+        serde_json::json!([{ "id": "AUTH-001", "red": "green:linked" }]),
         "{:?}",
         r.failures
     );
+    assert!(!r.pass);
+    assert_eq!(r.failures, vec!["unspecified change: src/auth.rs"]);
 }
