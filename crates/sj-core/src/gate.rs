@@ -140,6 +140,9 @@ pub struct Input {
     pub head_build_failed: Vec<String>,
     /// Why a target test is unverifiable on base (`red_on_base = "skip"`), keyed like `base`.
     pub reasons: BTreeMap<(String, String), String>,
+    /// Target tests in a `red_on_base = "assert"` suite, keyed like `base`: a compile red
+    /// doesn't count for them (GATE-061).
+    pub assert_only: BTreeSet<(String, String)>,
     /// IDs of `[keep]` scenarios at head: their tests must pass on base, not fail (GATE-039).
     pub keep: BTreeSet<String>,
     /// The trace baseline as it is on the merge base (GATE-050/051).
@@ -422,6 +425,12 @@ pub fn evaluate(input: &Input) -> GateReport {
                     ok = false;
                     r.failures.push(format!(
                         "keep-red-on-base {what} (it fails on base, so it describes new behaviour; drop [keep] to prove it red-on-base)"
+                    ));
+                }
+                Some(Red::Compile) if input.assert_only.contains(&key) => {
+                    ok = false;
+                    r.failures.push(format!(
+                        "compile-red {what} (suite requires an assertion failure on base)"
                     ));
                 }
                 Some(red @ (Red::Assert | Red::Compile)) => {
@@ -1118,6 +1127,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     let mut base_messages = BTreeMap::new();
     let mut added_helpers = Vec::new();
     let mut reasons = BTreeMap::new();
+    let mut assert_only = BTreeSet::new();
     if !skip_red && !targets.is_empty() {
         for (id, name, file) in &cargo_jobs {
             if !is_test_file(file) {
@@ -1134,6 +1144,9 @@ pub fn run(opts: &Options) -> Result<GateReport> {
                     reasons.insert(key, s.reason.clone().unwrap_or_default());
                 }
             } else {
+                if s.red_on_base == RedOnBase::Assert {
+                    assert_only.extend(jobs.iter().map(|(id, t)| (id.clone(), t.name.clone())));
+                }
                 suite_jobs.push(SuiteJob {
                     at: (pi, si),
                     traced: traced_in((pi, si)),
@@ -1200,6 +1213,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_failing,
         head_build_failed,
         reasons,
+        assert_only,
         keep,
         baseline,
         baseline_added,

@@ -277,7 +277,10 @@ fn gate_034_skip_needs_a_reason_and_a_reason_needs_skip() {
     let e = err_text(&suite("reason = \"slow\"\n"));
     assert!(e.contains("reason") && e.contains("skip"), "{e}");
     let e = err_text(&suite("red_on_base = \"sometimes\"\n"));
-    assert!(e.contains("sometimes") && e.contains("run, assert, skip"), "{e}");
+    assert!(
+        e.contains("sometimes") && e.contains("run, assert, skip"),
+        "{e}"
+    );
 }
 
 #[test]

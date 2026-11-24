@@ -170,15 +170,18 @@ impl Runner {
 pub enum RedOnBase {
     #[default]
     Run,
+    /// Only an assertion failure on base counts as red (GATE-061).
+    Assert,
     Skip,
 }
 
 impl RedOnBase {
-    pub const ALL: [RedOnBase; 2] = [RedOnBase::Run, RedOnBase::Skip];
+    pub const ALL: [RedOnBase; 3] = [RedOnBase::Run, RedOnBase::Assert, RedOnBase::Skip];
 
     pub fn as_str(self) -> &'static str {
         match self {
             RedOnBase::Run => "run",
+            RedOnBase::Assert => "assert",
             RedOnBase::Skip => "skip",
         }
     }
@@ -482,7 +485,7 @@ impl Config {
                     (RedOnBase::Skip, None) => {
                         bail!("{what}: red_on_base = \"skip\" needs a `reason`")
                     }
-                    (RedOnBase::Run, Some(_)) => {
+                    (RedOnBase::Run | RedOnBase::Assert, Some(_)) => {
                         bail!("{what}: `reason` is only for red_on_base = \"skip\"")
                     }
                     _ => {}
