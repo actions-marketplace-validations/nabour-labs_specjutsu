@@ -123,6 +123,17 @@ impl Ledger {
     }
 }
 
+/// The classification to judge red runs by, or `None` when the merge-base is HEAD itself: a
+/// change committed on the default branch has nothing to compare against, so every scenario
+/// needs a red run (LOOP-036).
+pub fn classification<'a>(
+    root: &Path,
+    prep: &'a crate::gate::Prepared,
+) -> Option<&'a BTreeMap<String, crate::gate::Change>> {
+    let head = Git::new(root).resolve("HEAD").ok()?;
+    (prep.mb != head).then_some(&prep.changes)
+}
+
 /// Why `id` is not proven, judged the way the gate classifies it against the merge-base:
 /// `changes` is that classification, `None` without a merge-base. Only added and modified
 /// scenarios need red before green; an unchanged or implemented one needs only a green latest

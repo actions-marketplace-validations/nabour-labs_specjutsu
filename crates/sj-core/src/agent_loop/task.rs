@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 
-use super::{default_base, task_number, why_unproven_against_base, Ledger};
+use super::{classification, default_base, task_number, why_unproven_against_base, Ledger};
 use crate::authoring::{self, blocks};
 use crate::config::Mode;
 use crate::gate;
@@ -26,10 +26,13 @@ pub enum Outcome {
     Done {
         text: String,
         warnings: Vec<Unproven>,
+        /// Why the merge-base classification couldn't be read, when it couldn't.
+        notes: Vec<String>,
     },
     /// Strict mode: nothing was written.
     Refused {
         unproven: Vec<Unproven>,
+        notes: Vec<String>,
     },
 }
 
@@ -53,15 +56,16 @@ fn line_starts(raw: &[u8]) -> Vec<usize> {
     out
 }
 
-/// Each scenario's change against the merge-base with the default branch, as the gate sees it;
-/// `None` without one.
+/// Each scenario's change against the merge-base with the default branch (never `--base`), as
+/// the gate sees it; `None` without one or when the merge-base is HEAD (LOOP-036).
 fn classify(root: &Path, spec_root: &Path) -> Result<Option<BTreeMap<String, gate::Change>>> {
     let Some(base) = default_base(root, None) else {
         return Ok(None);
     };
     let config = crate::config::load(root)?;
     let rel = spec_root.strip_prefix(root).unwrap_or(spec_root);
-    Ok(Some(gate::prepare(root, rel, &config, &base)?.changes))
+    let prep = gate::prepare(root, rel, &config, &base)?;
+    Ok(classification(root, &prep).cloned())
 }
 
 pub fn done(
@@ -87,11 +91,18 @@ pub fn done(
     let keep = crate::spec::keep_ids(spec_root)?;
     let ids = blocks::task_ids(&task.text);
     // The gate's classification, worked out only when the ledger alone leaves an ID unproven.
+    // Unreadable, it falls back to the stricter ledger-only rule.
+    let mut notes = Vec::new();
     let changes = if ids
         .iter()
         .any(|id| why_unproven_against_base(&ledger, &keep, None, id).is_some())
     {
-        classify(root, spec_root)?
+        classify(root, spec_root).unwrap_or_else(|e| {
+            notes.push(format!(
+                "cannot classify scenarios against the merge-base, so every one needs a red run: {e:#}"
+            ));
+            None
+        })
     } else {
         None
     };
@@ -105,7 +116,7 @@ pub fn done(
         }
     }
     if mode == Mode::Strict && !unproven.is_empty() {
-        return Ok(Outcome::Refused { unproven });
+        return Ok(Outcome::Refused { unproven, notes });
     }
 
     let mut raw =
@@ -121,5 +132,6 @@ pub fn done(
     Ok(Outcome::Done {
         text: task.text.clone(),
         warnings: unproven,
+        notes,
     })
 }

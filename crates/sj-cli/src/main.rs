@@ -2062,14 +2062,24 @@ fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> 
     let (root, spec_root) = spec_paths(args)?;
     match task::done(&spec_root, &root, change, task, config.mode)? {
         Outcome::AlreadyDone { text } => println!("task: already done {text}"),
-        Outcome::Done { text, warnings } => {
+        Outcome::Done {
+            text,
+            warnings,
+            notes,
+        } => {
             println!("task: done {text}");
+            for n in &notes {
+                println!("warn    {n}");
+            }
             for u in &warnings {
                 println!("warn    unproven {} ({})", u.id, u.why);
             }
         }
-        Outcome::Refused { unproven } => {
+        Outcome::Refused { unproven, notes } => {
             println!("task: refused — {} unproven", unproven.len());
+            for n in &notes {
+                println!("warn    {n}");
+            }
             for u in &unproven {
                 println!("unproven {} ({})", u.id, u.why);
             }

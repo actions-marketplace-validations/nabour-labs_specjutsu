@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 use serde::Serialize;
 
-use super::{default_base, targets, why_unproven_against_base, Ledger};
+use super::{classification, default_base, targets, why_unproven_against_base, Ledger};
 use crate::authoring::{self, check};
 use crate::gate;
 use crate::git::Git;
@@ -131,8 +131,9 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
     // Evidence, read after the runs above were recorded.
     let ledger = Ledger::load(root)?;
     let keep = crate::spec::keep_ids(&spec_root)?;
+    let classified = classification(root, &prep);
     for id in &passing {
-        if let Some(why) = why_unproven_against_base(&ledger, &keep, Some(&prep.changes), id) {
+        if let Some(why) = why_unproven_against_base(&ledger, &keep, classified, id) {
             r.problems.push(problem(
                 "unproven",
                 Some(id),
