@@ -640,6 +640,65 @@ fn spec_047_different_ids_on_a_copy_and_its_original_are_a_warning() {
         .stdout(warning);
 }
 
+/// The delta of `audit-roles` with `body` under `## RENAMED` / `## MODIFIED` sections.
+fn with_delta(dir: &Path, body: &str) {
+    put(
+        dir,
+        "openspec/changes/audit-roles/specs/staff/spec.md",
+        body,
+    );
+}
+
+// Regression: an edge of SPEC-047 that base already passed, so it carries no scenario ID.
+// The original's ID moved to a renamed scenario in the same block, so giving the copy that ID
+// would make two.
+#[test]
+fn regression_no_different_id_warning_when_the_block_already_uses_the_originals_id() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-100 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    with_delta(
+        dir.path(),
+        "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes with the actor.\n\n\
+         #### Scenario: STAFF-100 Role change is recorded with the actor\n- **WHEN** a role changes\n- **THEN** it is recorded with the actor\n\n\
+         #### Scenario: STAFF-057 Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n",
+    );
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .success()
+        .stdout("validate: ok\n");
+}
+
+// Regression: SPEC-047 through a RENAMED requirement, which matches by its old name.
+#[test]
+fn regression_a_renamed_requirement_gets_the_different_id_warning() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-100 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    with_delta(
+        dir.path(),
+        "## RENAMED Requirements\n\
+         - FROM: `### Requirement: Role changes are audited`\n\
+         - TO: `### Requirement: Role changes are logged`\n\n\
+         ## MODIFIED Requirements\n\n### Requirement: Role changes are logged\nThe system SHALL log role changes.\n\n\
+         #### Scenario: STAFF-057 Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n",
+    );
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(
+            "warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario as STAFF-100; give the delta copy STAFF-100 (openspec/changes/audit-roles/specs/staff/spec.md:10)\n",
+        ));
+}
+
 #[test]
 fn spec_046_a_missing_id_in_a_modified_copy_names_the_same_fix() {
     let dir = project();
