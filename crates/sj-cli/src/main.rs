@@ -192,7 +192,10 @@ enum Command {
         spec_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,
-        /// Capabilities, or paths to spec files or folders, to limit the run to. All when none.
+        /// Capabilities, or paths to spec files or folders, to limit the run to; all when none.
+        /// A path is resolved against --root (or is absolute) and selects the capability of
+        /// every open spec file under it. A capability named `prefixes` can only be named by
+        /// path, since `sj ids prefixes` is the subcommand.
         targets: Vec<String>,
     },
     /// Convert another tool's spec folders into the specjutsu layout (dry run unless --write).
@@ -2193,6 +2196,25 @@ fn ids_cmd(
         }
         for a in &plan {
             println!("{} {} ({}:{})", a.id, a.name, rel(&a.file, root), a.line);
+        }
+        for a in &plan {
+            if let Some(t) = &a.taken {
+                println!(
+                    "note: {} {} ({}:{}) is taken by {} {} ({}:{}); {} ({}:{}) gets {}",
+                    t.copy.id,
+                    t.copy.name,
+                    rel(&t.copy.file, root),
+                    t.copy.line,
+                    t.by.id,
+                    t.by.name,
+                    rel(&t.by.file, root),
+                    t.by.line,
+                    a.name,
+                    rel(&a.file, root),
+                    a.line,
+                    a.id
+                );
+            }
         }
         if !write {
             for (cap, long, short) in

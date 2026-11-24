@@ -19,6 +19,25 @@ pub struct Assignment {
     pub file: PathBuf,
     pub line: usize,
     title_offset: usize,
+    /// Set when the ID of the scenario's MODIFIED copy is held by another scenario, so it
+    /// gets a new number instead (IDS-018).
+    pub taken: Option<Taken>,
+}
+
+/// An identified scenario heading: its ID, name and place.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Scenario {
+    pub id: String,
+    pub name: String,
+    pub file: PathBuf,
+    pub line: usize,
+}
+
+/// A MODIFIED copy whose ID its original cannot take, and the scenario that holds it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Taken {
+    pub copy: Scenario,
+    pub by: Scenario,
 }
 
 /// Whether `s` is a valid ID prefix: an uppercase letter, then uppercase letters or digits.
@@ -403,7 +422,8 @@ pub fn resolve_targets(
         }
         if caps.is_empty() {
             bail!(
-                "`{target}` names no capability and no spec file or folder; \
+                "`{target}` names no capability and no open spec file or folder \
+                 (archived changes and paths outside specs/ and open changes/ are not targets); \
                  known capabilities: {}",
                 known.join(", ")
             );
@@ -437,19 +457,14 @@ pub fn plan_for(
     let mut files = Vec::new();
     for file in spec::discover_spec_files(spec_root)? {
         let place = place(spec_root, &file);
-        if let Some(only) = only {
-            if !place.capability.as_ref().is_some_and(|c| only.contains(c)) {
-                continue;
-            }
-        }
         let content = read(&file)?;
         let located = spec::locate_scenarios(&file, &content);
-        files.push((file, place, located));
+        files.push((file, place, located, content));
     }
 
     // Prefixes for capabilities that need IDs, and collisions among them (IDS-004, IDS-005).
     let mut prefix_of: BTreeMap<String, String> = BTreeMap::new();
-    for (file, place, located) in &files {
+    for (file, place, located, _) in &files {
         if located.iter().all(|l| l.scenario.id.is_some()) {
             continue;
         }
@@ -499,7 +514,7 @@ pub fn plan_for(
         )
     };
     let mut origin: BTreeMap<Key, (usize, usize, Option<String>)> = BTreeMap::new();
-    for (fi, (_, place, located)) in files.iter().enumerate() {
+    for (fi, (_, place, located, _)) in files.iter().enumerate() {
         let (true, Some(cap)) = (place.in_specs, &place.capability) else {
             continue;
         };
@@ -510,8 +525,43 @@ pub fn plan_for(
         }
     }
 
+    // The first identified copy per key in an open change's MODIFIED requirement (IDS-018).
+    let mut modified: BTreeMap<Key, Scenario> = BTreeMap::new();
+    for (file, place, located, content) in &files {
+        let (false, Some(cap)) = (place.in_specs, &place.capability) else {
+            continue;
+        };
+        for l in located {
+            if let (Some(id), true) = (&l.scenario.id, under_modified(content, l.scenario.line)) {
+                modified.entry(key(cap, l)).or_insert_with(|| Scenario {
+                    id: id.clone(),
+                    name: l.scenario.name.clone(),
+                    file: file.clone(),
+                    line: l.scenario.line,
+                });
+            }
+        }
+    }
+    // Who else holds a MODIFIED copy's ID: a scenario under another key, archive included.
+    let taken_by = |id: &str, k: &Key| -> Result<Option<Scenario>> {
+        for file in all_spec_files(spec_root)? {
+            let cap = place(spec_root, &file).capability.unwrap_or_default();
+            for l in spec::locate_scenarios(&file, &read(&file)?) {
+                if l.scenario.id.as_deref() == Some(id) && key(&cap, &l) != *k {
+                    return Ok(Some(Scenario {
+                        id: id.to_string(),
+                        name: l.scenario.name,
+                        file,
+                        line: l.scenario.line,
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    };
+
     let mut out = Vec::new();
-    for (fi, (file, place, located)) in files.iter().enumerate() {
+    for (fi, (file, place, located, _)) in files.iter().enumerate() {
         let Some(cap) = &place.capability else {
             continue;
         };
@@ -520,10 +570,23 @@ pub fn plan_for(
                 continue;
             }
             let k = key(cap, l);
-            let copied = if place.in_specs {
-                None
-            } else {
+            let is_origin = origin.get(&k).is_some_and(|o| (o.0, o.1) == (fi, li));
+            let mut taken = None;
+            let copied = if !place.in_specs {
                 origin.get(&k).and_then(|(_, _, id)| id.clone())
+            } else if let (true, Some(copy)) = (is_origin, modified.get(&k)) {
+                match taken_by(&copy.id, &k)? {
+                    None => Some(copy.id.clone()),
+                    Some(by) => {
+                        taken = Some(Taken {
+                            copy: copy.clone(),
+                            by,
+                        });
+                        None
+                    }
+                }
+            } else {
+                None
             };
             let id = match copied {
                 Some(id) => id,
@@ -547,10 +610,29 @@ pub fn plan_for(
                 file: file.clone(),
                 line: l.scenario.line,
                 title_offset: l.title_offset,
+                taken,
             });
         }
     }
+    // Targets limit the result only, so the checks above cover the whole root (IDS-017).
+    if let Some(only) = only {
+        out.retain(|a| {
+            place(spec_root, &a.file)
+                .capability
+                .is_some_and(|c| only.contains(&c))
+        });
+    }
     Ok(out)
+}
+
+/// Whether the 1-based `line` of `content` sits under a `## MODIFIED` heading.
+fn under_modified(content: &str, line: usize) -> bool {
+    content
+        .lines()
+        .take(line.saturating_sub(1))
+        .filter(|l| l.starts_with("## "))
+        .last()
+        .is_some_and(|l| l.contains("MODIFIED"))
 }
 
 /// Insert each planned ID before its scenario name. Returns the number of files written.
