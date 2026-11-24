@@ -2247,12 +2247,21 @@ fn ids_cmd(
             );
         }
         if !write {
-            for (cap, long, short) in
-                sj_core::ids::long_prefixes(&root.join(&spec_root), &config.id_prefixes, &plan)?
-            {
+            // With targets, clashes outside the planned capabilities don't matter (IDS-021),
+            // and the ones that do are reported without stopping the listing.
+            let long = sj_core::ids::long_prefixes(
+                &root.join(&spec_root),
+                &config.id_prefixes,
+                &plan,
+                only.is_some(),
+            )?;
+            for (cap, long, short) in &long.hints {
                 println!(
                     "hint: {cap} would use {long}; sj ids prefixes --write maps it to {short}"
                 );
+            }
+            for c in &long.clashes {
+                println!("note: {c}");
             }
         }
         if write && !plan.is_empty() {

@@ -72,6 +72,38 @@ pub fn suggest_prefixes(
     kept: &BTreeMap<String, String>,
     open: &[String],
 ) -> Result<BTreeMap<String, String>> {
+    let (out, clashes) = suggest(kept, open);
+    match clashes.first() {
+        Some(c) => bail!("{c}"),
+        None => Ok(out),
+    }
+}
+
+/// Two capabilities left with the same prefix by [`suggest_prefixes`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Clash {
+    /// The two capabilities, sorted.
+    pub caps: [String; 2],
+    pub prefix: String,
+}
+
+impl std::fmt::Display for Clash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "capabilities `{}` and `{}` both use prefix {}; \
+             map one in [ids.prefixes] in specjutsu.toml",
+            self.caps[0], self.caps[1], self.prefix
+        )
+    }
+}
+
+/// [`suggest_prefixes`] without stopping on a clash: the capabilities it could place, and
+/// every clash in order. A clashing capability is left out of the table.
+fn suggest(
+    kept: &BTreeMap<String, String>,
+    open: &[String],
+) -> (BTreeMap<String, String>, Vec<Clash>) {
     let letters: Vec<(&String, String)> = open
         .iter()
         .filter(|c| !kept.contains_key(*c))
@@ -106,6 +138,7 @@ pub fn suggest_prefixes(
         }
     }
     let mut out = kept.clone();
+    let mut clashes = Vec::new();
     for ((cap, l), n) in letters.iter().zip(&len) {
         let prefix = &l[..*n];
         let other = out
@@ -113,18 +146,17 @@ pub fn suggest_prefixes(
             .find(|(c, p)| *p == prefix && *c != *cap)
             .map(|(c, _)| c.clone());
         if let Some(other) = other {
-            let mut pair = [other.as_str(), cap.as_str()];
-            pair.sort();
-            bail!(
-                "capabilities `{}` and `{}` both use prefix {prefix}; \
-                 map one in [ids.prefixes] in specjutsu.toml",
-                pair[0],
-                pair[1]
-            );
+            let mut caps = [other, (*cap).clone()];
+            caps.sort();
+            clashes.push(Clash {
+                caps,
+                prefix: prefix.to_string(),
+            });
+            continue;
         }
         out.insert((*cap).clone(), prefix.to_string());
     }
-    Ok(out)
+    (out, clashes)
 }
 
 /// The `[ids.prefixes]` table `sj ids prefixes` prints: one line per capability folder. A
@@ -143,6 +175,19 @@ fn table_with_use(
     configured: &BTreeMap<String, String>,
     used: &BTreeMap<String, BTreeMap<String, usize>>,
 ) -> Result<BTreeMap<String, String>> {
+    let (table, clashes) = table_and_clashes(spec_root, configured, used)?;
+    match clashes.first() {
+        Some(c) => bail!("{c}"),
+        None => Ok(table),
+    }
+}
+
+/// [`table_with_use`] without stopping on a clash (see [`suggest`]).
+fn table_and_clashes(
+    spec_root: &Path,
+    configured: &BTreeMap<String, String>,
+    used: &BTreeMap<String, BTreeMap<String, usize>>,
+) -> Result<(BTreeMap<String, String>, Vec<Clash>)> {
     let mut folders = Vec::new();
     for file in spec::discover_spec_files(spec_root)? {
         if let Some(cap) = place(spec_root, &file).capability {
@@ -163,9 +208,9 @@ fn table_with_use(
             }
         }
     }
-    let mut table = suggest_prefixes(&kept, &folders)?;
+    let (mut table, clashes) = suggest(&kept, &folders);
     table.retain(|cap, _| folders.contains(cap));
-    Ok(table)
+    Ok((table, clashes))
 }
 
 /// Prefix use per capability, archive included: how many IDs carry each prefix.
@@ -200,15 +245,29 @@ pub fn unmapped_prefixes(
     Ok(table)
 }
 
+/// The long-prefix hints for a plan, and the prefix clashes they could not see past.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LongPrefixes {
+    /// (capability, long prefix, the prefix `sj ids prefixes --write` would map it to).
+    pub hints: Vec<(String, String, String)>,
+    /// With `targeted`, the clashes that involve a planned capability.
+    pub clashes: Vec<Clash>,
+}
+
 /// Each capability that `plan` mints IDs for with a derived prefix longer than six letters:
 /// the capability, that prefix, and the one `sj ids prefixes --write` would map it to, in
 /// capability order. Mapped capabilities are skipped, and so are those whose existing IDs
 /// already use the long prefix.
+///
+/// Without `targeted`, any prefix clash under the spec root is an error. With it (a plan for
+/// selected capabilities, IDS-021), an empty plan has no hints, clashes between capabilities
+/// outside the plan are ignored, and the others are returned rather than failing.
 pub fn long_prefixes(
     spec_root: &Path,
     configured: &BTreeMap<String, String>,
     plan: &[Assignment],
-) -> Result<Vec<(String, String, String)>> {
+    targeted: bool,
+) -> Result<LongPrefixes> {
     let mut caps: Vec<String> = Vec::new();
     for a in plan {
         if let Some(cap) = place(spec_root, &a.file).capability {
@@ -218,8 +277,15 @@ pub fn long_prefixes(
         }
     }
     caps.sort();
-    let table = prefix_table(spec_root, configured)?;
-    Ok(caps
+    if targeted && caps.is_empty() {
+        return Ok(LongPrefixes::default());
+    }
+    let (table, mut clashes) = table_and_clashes(spec_root, configured, &prefix_use(spec_root)?)?;
+    match clashes.first() {
+        Some(c) if !targeted => bail!("{c}"),
+        _ => clashes.retain(|c| c.caps.iter().any(|x| caps.contains(x))),
+    }
+    let hints = caps
         .into_iter()
         .filter(|cap| !configured.contains_key(cap))
         .filter_map(|cap| {
@@ -228,7 +294,8 @@ pub fn long_prefixes(
             let short = table.get(&cap)?.clone();
             (long.len() > WHOLE && minted && short != long).then_some((cap, long, short))
         })
-        .collect())
+        .collect();
+    Ok(LongPrefixes { hints, clashes })
 }
 
 /// `toml` (the text of `specjutsu.toml`) with a `key = "VALUE"` line for each of `add`
