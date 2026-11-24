@@ -29,12 +29,27 @@ nothing.
 - **THEN** it changes no file and exits 2 naming `staff` and `st-aff`
 
 ### Requirement: An original takes the ID its MODIFIED copy already has
-When a `specs/` scenario without an ID has a copy in an open change's MODIFIED requirement
-(same capability, requirement name and scenario name, ignoring IDs and `[keep]`), and that copy
-already has an ID, `sj ids --write` SHALL give the original that ID, not a new number. If
-another scenario already uses that ID, the original SHALL get a new number, and `sj ids` SHALL
-print a line naming both scenarios.
+When a `specs/` scenario without an ID has a copy in an open change's MODIFIED requirement, and
+that copy already has an ID, `sj ids --write` SHALL give the original that ID, not a new number.
+A copy matches when it has the same capability, requirement name and scenario name, ignoring IDs
+and `[keep]`. A requirement renamed in the same change (`## RENAMED Requirements`) SHALL match
+by its old name.
+
+The original SHALL get a new number instead, and `sj ids` SHALL print a note line naming the
+scenarios involved, in two cases:
+- another scenario already uses that ID;
+- copies in two open changes carry different IDs.
+
+`--json` SHALL carry the same note.
 
 #### Scenario: IDS-018 The original takes the delta's ID
 - **WHEN** a change's `## MODIFIED Requirements` › `### Requirement: Role changes are audited` has `#### Scenario: STAFF-057 Role change is recorded`, `specs/staff/spec.md` has `#### Scenario: Role change is recorded` without an ID, and the highest STAFF number in use is STAFF-099
 - **THEN** `sj ids --write staff` changes that heading in `specs/staff/spec.md` to `#### Scenario: STAFF-057 Role change is recorded`, and the delta is unchanged
+
+#### Scenario: IDS-019 Copies that disagree get a new number and a note
+- **WHEN** open changes `c1` and `c2` both have a MODIFIED copy of `Role change is recorded`, one as STAFF-057 and one as STAFF-058, the original has no ID, and the highest STAFF number in use is STAFF-099
+- **THEN** `sj ids --write staff` gives the original STAFF-100 and prints a note naming both copies, and neither delta changes
+
+#### Scenario: IDS-020 A renamed requirement matches by its old name
+- **WHEN** a change renames `Role changes are audited` to `Role changes are logged`, has a MODIFIED copy `STAFF-057 Role change is recorded` under the new name, and `specs/staff/spec.md` has `Role change is recorded` without an ID under the old name
+- **THEN** `sj ids --write staff` gives the original STAFF-057
