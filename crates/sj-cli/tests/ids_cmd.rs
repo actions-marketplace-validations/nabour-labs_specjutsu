@@ -565,6 +565,72 @@ fn ids_021_an_unrelated_collision_does_not_stop_a_target() {
     }
 }
 
+// Regression: IDS-021 on the listing path, which `sj ids` without `--write` takes. No ID: the
+// scenario names `--write`.
+#[test]
+fn regression_listing_a_target_ignores_an_unrelated_collision() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "billing", "bill-ing"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    sj(dir.path())
+        .arg("staff")
+        .assert()
+        .code(1)
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n",
+        )
+        .stderr("");
+    let out = sj(dir.path()).args(["--json", "staff"]).assert().code(1);
+    assert_eq!(String::from_utf8_lossy(&out.get_output().stderr), "");
+    let v: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+    assert_eq!(v["missing"], 2);
+}
+
+// Regression: a target with nothing to number lists nothing, as `--write` writes nothing,
+// even when an unselected capability needing IDs collides with its prefix. Listing `st-aff`,
+// which would number, reports that collision as a line.
+#[test]
+fn regression_a_fully_numbered_target_lists_nothing_beside_a_colliding_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    put(
+        dir.path(),
+        "openspec/specs/staff/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password"),
+    );
+    put(dir.path(), "openspec/specs/st-aff/spec.md", USER_AUTH);
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .arg("staff")
+        .assert()
+        .success()
+        .stdout("0 scenarios without IDs\n")
+        .stderr("");
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout("0 scenarios without IDs\n");
+    assert_eq!(snapshot(dir.path()), before);
+    sj(dir.path())
+        .arg("st-aff")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::ends_with(
+            "\nnote: capabilities `st-aff` and `staff` both use prefix STAFF; \
+             map one in [ids.prefixes] in specjutsu.toml\n",
+        ))
+        .stderr("");
+}
+
 // Regression: within IDS-021's rule, a capability outside the targets with no usable prefix
 // doesn't stop the run either. No ID: the scenario covers collisions only.
 #[test]
