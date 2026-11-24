@@ -540,6 +540,43 @@ fn ids_021_an_unrelated_collision_does_not_stop_a_target() {
             USER_AUTH,
         );
     }
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .code(0)
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n\
+             wrote 2 IDs to 1 file\n",
+        );
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password")
+    );
+    for cap in ["billing", "bill-ing"] {
+        assert_eq!(
+            read(dir.path(), &format!("openspec/specs/{cap}/spec.md")),
+            USER_AUTH,
+            "{cap}"
+        );
+    }
+}
+
+// Regression: within IDS-021's rule, a capability outside the targets with no usable prefix
+// doesn't stop the run either. No ID: the scenario covers collisions only.
+#[test]
+fn regression_an_unselected_capability_without_a_prefix_does_not_stop_a_target() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "123"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
     sj(dir.path()).args(["--write", "staff"]).assert().code(0);
     assert_eq!(
         read(dir.path(), "openspec/specs/staff/spec.md"),
@@ -547,10 +584,7 @@ fn ids_021_an_unrelated_collision_does_not_stop_a_target() {
             .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
             .replace("Scenario: Password", "Scenario: STAFF-002 Password")
     );
-    assert_eq!(
-        read(dir.path(), "openspec/specs/billing/spec.md"),
-        USER_AUTH
-    );
+    assert_eq!(read(dir.path(), "openspec/specs/123/spec.md"), USER_AUTH);
 }
 
 const ROLE_SPEC: &str = "## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL audit role changes.\n\n\
