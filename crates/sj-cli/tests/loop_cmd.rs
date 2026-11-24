@@ -653,7 +653,7 @@ fn loop_034_verify_and_task_done_accept_a_linked_existing_scenario() {
 }
 
 #[test]
-fn loop_034_a_linked_scenario_never_red_does_not_cover_a_source_change() {
+fn loop_037_verify_does_not_let_a_never_red_implemented_scenario_cover_source() {
     let repo = linked_repo();
     repo.write("src/lib.rs", "pub fn staff() { let _ = 1; }\n");
     repo.commit("edit source");
@@ -661,6 +661,9 @@ fn loop_034_a_linked_scenario_never_red_does_not_cover_a_source_change() {
         .assert()
         .code(1)
         .stdout(predicate::str::contains("unspecified change: src/lib.rs"));
+    let ledger = ledger_text(&repo);
+    assert!(ledger.contains("STAFF-063"), "{ledger}");
+    assert!(!ledger.contains("\"failed\""), "{ledger}");
 }
 
 /// Base `main` has AUTH-002 with a passing test; branch `feature` adds a change whose
