@@ -175,21 +175,27 @@ impl IdFix {
 }
 
 /// The `specs/` scenarios without an ID in the requirement a MODIFIED block `name` replaces.
+/// `None` when the delta sits in no capability folder: the first folder, as `sj ids` reads it.
 fn unnamed_originals(
     spec_root: &Path,
     target: &Path,
     rel: &Path,
     renames: &[blocks::Rename],
     name: &str,
-) -> Result<IdFix> {
-    let slash = |p: &Path| p.to_string_lossy().replace('\\', "/");
+) -> Result<Option<IdFix>> {
+    let mut parts = rel.components();
+    let capability = match (parts.next(), parts.next()) {
+        (Some(c), Some(_)) => c.as_os_str().to_string_lossy().into_owned(),
+        _ => return Ok(None),
+    };
+    let shown = target.strip_prefix(spec_root).unwrap_or(target);
     let mut fix = IdFix {
         names: BTreeSet::new(),
-        target: slash(target.strip_prefix(spec_root).unwrap_or(target)),
-        capability: slash(rel.parent().unwrap_or(rel)),
+        target: shown.to_string_lossy().replace('\\', "/"),
+        capability,
     };
     if !target.is_file() {
-        return Ok(fix);
+        return Ok(Some(fix));
     }
     let original = renames
         .iter()
@@ -207,7 +213,7 @@ fn unnamed_originals(
             }
         }
     }
-    Ok(fix)
+    Ok(Some(fix))
 }
 
 /// A requirement needs a scenario and a SHALL or MUST; each scenario needs an ID, WHEN and THEN.
@@ -362,7 +368,7 @@ fn validate_change(
         }
         for b in &d.modified {
             let fix = unnamed_originals(spec_root, &target, rel, &d.renamed, &b.name)?;
-            check_block(out, &file, &lines, &mask, b, Some(&fix));
+            check_block(out, &file, &lines, &mask, b, fix.as_ref());
             if !after.contains(&b.name) {
                 out.err(
                     format!("MODIFIED requirement not found: {}", b.name),

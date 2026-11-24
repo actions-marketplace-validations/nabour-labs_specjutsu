@@ -527,42 +527,95 @@ fn spec_033_all_done_archives_only_finished_changes() {
 
 // ---------- MODIFIED scenarios whose original has no ID ----------
 
-/// `specs/staff/spec.md` with `Role changes are audited` holding a scenario without an ID,
-/// and a change `audit-roles` whose MODIFIED copy of it has the heading `scenario`.
-fn with_unnamed_original(dir: &Path, scenario: &str) {
+/// `<root>/specs/staff/spec.md` with `Role changes are audited` holding the scenario
+/// `original`, and a change `audit-roles` whose MODIFIED copy of it has `scenario`.
+fn with_original(dir: &Path, root: &str, original: &str, scenario: &str) {
     put(
         dir,
-        "openspec/specs/staff/spec.md",
-        "# staff Specification\n\n## Purpose\nManage staff accounts and roles.\n\n## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes.\n\n#### Scenario: Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n",
+        &format!("{root}/specs/staff/spec.md"),
+        &format!(
+            "# staff Specification\n\n## Purpose\nManage staff accounts and roles.\n\n## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes.\n\n#### Scenario: {original}\n- **WHEN** a role changes\n- **THEN** it is recorded\n"
+        ),
     );
     put(
         dir,
-        "openspec/changes/audit-roles/specs/staff/spec.md",
+        &format!("{root}/changes/audit-roles/specs/staff/spec.md"),
         &format!(
             "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes with the actor.\n\n#### Scenario: {scenario}\n- **WHEN** a role changes\n- **THEN** it is recorded with the actor\n"
         ),
     );
     put(
         dir,
-        "openspec/changes/audit-roles/tasks.md",
+        &format!("{root}/changes/audit-roles/tasks.md"),
         "# Tasks\n\n- [ ] 1.1 Record the actor (STAFF-057)\n",
     );
+}
+
+/// The original without an ID, in an `openspec/` tree.
+fn with_unnamed_original(dir: &Path, scenario: &str) {
+    with_original(dir, "openspec", "Role change is recorded", scenario);
+}
+
+fn spec_045_warning(root: &str) -> String {
+    format!(
+        "validate: 0 errors, 1 warning\n\
+         warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario without an ID; run sj ids --write staff first ({root}/changes/audit-roles/specs/staff/spec.md:6)\n"
+    )
 }
 
 #[test]
 fn spec_045_an_id_the_original_lacks_is_a_warning_with_the_fix() {
     let dir = project();
     with_unnamed_original(dir.path(), "STAFF-057 Role change is recorded");
-    let warning = "validate: 0 errors, 1 warning\n\
-         warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario without an ID; run sj ids --write staff first (openspec/changes/audit-roles/specs/staff/spec.md:6)\n";
+    let warning = spec_045_warning("openspec");
     sj(dir.path(), &["validate", "audit-roles"])
         .assert()
         .code(0)
-        .stdout(warning);
+        .stdout(warning.clone());
     sj(dir.path(), &["validate", "audit-roles", "--strict"])
         .assert()
         .code(1)
         .stdout(warning);
+}
+
+#[test]
+fn spec_045_a_specjutsu_root_gives_the_same_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    with_original(
+        dir.path(),
+        "specjutsu",
+        "Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(spec_045_warning("specjutsu"));
+}
+
+#[test]
+fn spec_045_the_keep_marker_is_ignored_when_matching_names() {
+    let dir = project();
+    with_unnamed_original(dir.path(), "STAFF-057 [keep] Role change is recorded");
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(spec_045_warning("openspec"));
+}
+
+#[test]
+fn spec_045_no_hint_when_the_original_already_has_an_id() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-057 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .success()
+        .stdout("validate: ok\n");
 }
 
 #[test]
