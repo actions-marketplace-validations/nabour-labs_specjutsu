@@ -492,8 +492,20 @@ pub fn plan_for(
         }
         prefix_of.insert(cap.clone(), prefix);
     }
+    // With targets, only prefixes a selected capability uses are checked (IDS-017, IDS-021).
+    let selected = |prefix: &str| {
+        only.map_or(true, |caps| {
+            caps.iter().any(|c| {
+                prefixes
+                    .get(c)
+                    .cloned()
+                    .unwrap_or_else(|| derive_prefix(c))
+                    == prefix
+            })
+        })
+    };
     let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
-    for (cap, prefix) in &prefix_of {
+    for (cap, prefix) in prefix_of.iter().filter(|(_, p)| selected(p)) {
         if let Some(other) = owner.insert(prefix, cap) {
             let mut pair = [other, cap.as_str()];
             pair.sort();
@@ -538,11 +550,7 @@ pub fn plan_for(
         let mask = blocks::fence_mask(&lines);
         let delta = blocks::parse_delta(content);
         for b in &delta.modified {
-            let requirement = delta
-                .renamed
-                .iter()
-                .find(|r| r.to == b.name)
-                .map_or(b.name.as_str(), |r| r.from.as_str());
+            let requirement = blocks::name_before(&delta.renamed, &b.name);
             for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
                 let Some(id) = s.id else { continue };
                 let k = (
@@ -651,7 +659,7 @@ pub fn plan_for(
             });
         }
     }
-    // Targets limit the result only, so the checks above cover the whole root (IDS-017).
+    // Targets limit the result; numbering above covers the whole root (IDS-014).
     if let Some(only) = only {
         out.retain(|a| {
             place(spec_root, &a.file)

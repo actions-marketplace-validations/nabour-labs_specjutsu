@@ -2180,6 +2180,10 @@ fn ids_cmd(
                     "file": rel(&a.file, root),
                     "line": a.line,
                 });
+                // `note` is absent unless the original gets a new number instead of its
+                // MODIFIED copies' ID (IDS-018/019). Its `kind` is `taken` (with `copy`, and
+                // `by`, the scenario that holds the ID) or `disagree` (with `copies`); each
+                // scenario is `{id, name, file, line}`.
                 if let Some(note) = &a.note {
                     let scn = |s: &sj_core::ids::Scenario| {
                         serde_json::json!({
@@ -2234,10 +2238,11 @@ fn ids_cmd(
                 ),
             };
             println!(
-                "note: {why}; {} ({}:{}) gets {}",
+                "note: {why}; {} ({}:{}) gets {}; give the delta copies {}",
                 a.name,
                 rel(&a.file, root),
                 a.line,
+                a.id,
                 a.id
             );
         }
