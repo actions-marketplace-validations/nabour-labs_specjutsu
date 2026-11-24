@@ -48,7 +48,9 @@ import. It's language-specific and slow, and it goes against the gate's plain, d
 rules. Files outside these folders can still be declared in `support` by hand.
 
 **Match the helper by its name in the failure message.** The base run already keeps each
-failed file's message (vitest, Jest and pytest JUnit reports; Cargo's compiler errors). The
+failed file's message from vitest, Jest and pytest JUnit reports. Cargo base runs keep no
+compiler message, so the check doesn't cover Cargo suites; their helpers live under `tests/`,
+which is always overlaid. The
 gate looks in that message for the helper's path from the repository, the package or the
 test's folder, with or without its extension. Rejected: overlaying every added file in a helper
 folder automatically. That would silently fix the pilot case, but it would hide a config gap

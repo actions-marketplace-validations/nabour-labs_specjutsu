@@ -1,18 +1,24 @@
 ## ADDED Requirements
 
 ### Requirement: Only added and modified scenarios need a red run
-`sj verify` and `sj task done` SHALL judge each scenario against the merge-base with the
-default branch, the same way the gate classifies it. They SHALL require a red run only for
-**added** and **modified** scenarios. They SHALL NOT report as unproven:
+`sj verify` and `sj task done` SHALL judge each scenario against a merge-base, classifying it
+the same way the gate does. For `sj verify` that is the merge-base with `--base` when given,
+otherwise with the default branch. `sj task done` always uses the default branch.
+
+They SHALL require a red run only for **added** and **modified** scenarios. The following need
+only a green latest run, and SHALL NOT be reported as unproven when they have one:
 
 - an **unchanged** scenario, such as one copied without edits into a MODIFIED requirement;
-- an **implemented** scenario (GATE-023) whose latest run is green. Its behaviour may predate
-  the change, and the gate checks it on base.
+- an **implemented** scenario (GATE-023). Its behaviour may predate the change, and the gate
+  checks it on base.
 
 The tests of these scenarios SHALL still run in `sj verify`, and a failing one SHALL still be
-reported. With no merge-base, when the merge-base is HEAD itself (HEAD is already on the
-default branch), or when the classification can't be read, every scenario in the change SHALL
-need a red run, as before.
+reported.
+
+Every scenario in the change SHALL need a red run, as before, when there is no merge-base or
+when the merge-base is HEAD itself (HEAD is already on the default branch). The same applies
+when `sj task done` can't read the classification, and it then prints a warning. In `sj verify`,
+an error while classifying is an environment error, as it is for the gate rules verify runs.
 
 #### Scenario: LOOP-034 Verify and task done accept a linked existing scenario
 - **WHEN** mode is `strict`, the merge-base has scenario STAFF-063 with no test, and task 4.1 of the change names STAFF-063 and adds its first test, which has only `passed` records in the ledger
