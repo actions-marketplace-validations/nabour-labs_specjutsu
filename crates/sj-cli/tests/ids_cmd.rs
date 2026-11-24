@@ -387,3 +387,92 @@ fn ids_prefixes_takes_root_after_the_subcommand() {
         .success()
         .stdout("[ids.prefixes]\ngate = \"GATE\"\n");
 }
+
+/// Two capabilities, `staff` and `billing`, whose scenarios have no IDs.
+fn staff_and_billing(root: &Path) {
+    for cap in ["staff", "billing"] {
+        put(root, &format!("openspec/specs/{cap}/spec.md"), USER_AUTH);
+    }
+}
+
+#[test]
+fn ids_014_writing_one_capability_leaves_the_others_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    let billing = std::fs::read(dir.path().join("openspec/specs/billing/spec.md")).unwrap();
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n\
+             wrote 2 IDs to 1 file\n",
+        );
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password")
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("openspec/specs/billing/spec.md")).unwrap(),
+        billing
+    );
+}
+
+/// IDS-014 with IDS-006 and IDS-007: numbers continue past IDs outside the target, and the
+/// targeted capability's delta copies in open changes are included.
+#[test]
+fn ids_014_a_target_keeps_numbering_and_delta_copies() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    put(
+        dir.path(),
+        "openspec/changes/archive/2026-01-01-old/specs/staff/spec.md",
+        &USER_AUTH.replace("Scenario: Valid", "Scenario: STAFF-007 Valid"),
+    );
+    put(dir.path(), "openspec/changes/add/specs/staff/spec.md", USER_AUTH);
+    put(dir.path(), "openspec/changes/add/specs/billing/spec.md", USER_AUTH);
+    sj(dir.path()).arg("staff").assert().code(1).stdout(
+        "4 scenarios without IDs\n\
+         STAFF-008 Valid registration (openspec/changes/add/specs/staff/spec.md:6)\n\
+         STAFF-009 Password too short (openspec/changes/add/specs/staff/spec.md:10)\n\
+         STAFF-008 Valid registration (openspec/specs/staff/spec.md:6)\n\
+         STAFF-009 Password too short (openspec/specs/staff/spec.md:10)\n",
+    );
+}
+
+#[test]
+fn ids_015_a_spec_path_limits_the_listing_the_same_way() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .arg("openspec/specs/staff/spec.md")
+        .assert()
+        .code(1)
+        .stdout(
+            "2 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n",
+        );
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+#[test]
+fn ids_016_an_unknown_target_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .args(["--write", "staf"])
+        .assert()
+        .code(2)
+        .stderr(
+            predicate::str::contains("`staf`")
+                .and(predicate::str::contains("known capabilities: billing, staff")),
+        );
+    assert_eq!(snapshot(dir.path()), before);
+}
