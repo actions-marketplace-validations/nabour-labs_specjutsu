@@ -1,5 +1,5 @@
 //! GATE-026, GATE-030..035 and GATE-038 (polyglot-gate) and GATE-046..047
-//! (fix-base-run-no-report) and GATE-056 (gate-pilot-fixes) CLI scenarios: the gate across
+//! (fix-base-run-no-report) and GATE-056..058 (gate-pilot-fixes) CLI scenarios: the gate across
 //! suites.
 //!
 //! A fake `pnpm` on PATH stands in for vitest and Playwright (Unix only). Its vitest run fails
@@ -383,41 +383,121 @@ fn gate_047_keep_a_base_report_with_a_failed_test_file_is_still_red_compile() {
     ));
 }
 
-/// A fake `pnpm` whose vitest run fails to load `src/users.test.ts` while
-/// `src/testing/admin.ts` is missing, and otherwise passes STAFF-073.
+/// Writes `script` as a fake `pnpm` in `dir`.
 #[cfg(unix)]
-fn fake_bin_admin(dir: &Path) {
+fn write_pnpm(dir: &Path, script: &str) {
     use std::os::unix::fs::PermissionsExt;
-    let pnpm = r#"#!/bin/sh
+    let p = dir.join("pnpm");
+    std::fs::write(&p, script).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A fake `pnpm` whose vitest run fails to load `src/users.test.ts` while
+/// `src/testing/admin.ts` is missing, fails STAFF-073's assertion while `src/users.ts` lists no
+/// admin role (base), and otherwise passes it (head).
+#[cfg(unix)]
+const PNPM_ADMIN: &str = r#"#!/bin/sh
 out=""
 for a in "$@"; do
   case "$a" in --outputFile.junit=*) out="${a#--outputFile.junit=}" ;; esac
 done
-if [ -f src/testing/admin.ts ]; then
-  body='<testcase classname="src/users.test.ts" name="STAFF-073 lists admins"/>'
+case_='<testcase classname="src/users.test.ts" name="STAFF-073 lists admins"'
+if [ ! -f src/testing/admin.ts ]; then
+  body='<testcase classname="src/users.test.ts" name="src/users.test.ts"><failure message="Failed to load url ./testing/admin"/></testcase>'
+  code=1
+elif grep -q "'admin'" src/users.ts; then
+  body="$case_/>"
   code=0
 else
-  body='<testcase classname="src/users.test.ts" name="src/users.test.ts"><failure message="Failed to load url ./testing/admin"/></testcase>'
+  body="$case_><failure message=\"AssertionError: expected [] to include 'admin'\"/></testcase>"
   code=1
 fi
 printf '<testsuites><testsuite name="vitest">%s</testsuite></testsuites>' "$body" > "$out"
 exit $code
 "#;
-    let p = dir.join("pnpm");
-    std::fs::write(&p, pnpm).unwrap();
-    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+/// A fake `pnpm` whose vitest run fails to load `src/usage.test.ts` while `src/usage.ts` is
+/// missing, and otherwise passes USAGE-001.
+#[cfg(unix)]
+const PNPM_USAGE: &str = r#"#!/bin/sh
+out=""
+for a in "$@"; do
+  case "$a" in --outputFile.junit=*) out="${a#--outputFile.junit=}" ;; esac
+done
+if [ -f src/usage.ts ]; then
+  body='<testcase classname="src/usage.test.ts" name="USAGE-001 counts requests"/>'
+  code=0
+else
+  body='<testcase classname="src/usage.test.ts" name="src/usage.test.ts"><failure message="Failed to load url ./usage (resolved id: ./usage) in src/usage.test.ts. Does the file exist?"/></testcase>'
+  code=1
+fi
+printf '<testsuites><testsuite name="vitest">%s</testsuite></testsuites>' "$body" > "$out"
+exit $code
+"#;
+
+/// `sj gate --base main --json` with `pnpm_script` as the fake `pnpm`: exit code and report.
+#[cfg(unix)]
+fn gate_json(repo: &Repo, pnpm_script: &str) -> (Option<i32>, serde_json::Value) {
+    let bin = tempfile::tempdir().unwrap();
+    write_pnpm(bin.path(), pnpm_script);
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let out = Command::cargo_bin("sj")
+        .unwrap()
+        .args(["gate", "--base", "main", "--json", "--root"])
+        .arg(repo.path())
+        .env("PATH", path)
+        .output()
+        .unwrap();
+    let report = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    (out.status.code(), report)
 }
 
+/// The report's `failures` reasons.
 #[cfg(unix)]
-#[test]
-fn gate_056_a_helper_the_change_added_but_did_not_overlay_fails_the_gate() {
-    let repo = repo_with(&config_without_setup(), BUGGY, true);
+fn failures(report: &serde_json::Value) -> Vec<&str> {
+    report["failures"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|f| f.as_str())
+        .collect()
+}
+
+/// Whether the report's `proven` lists `id` with red kind `red`.
+#[cfg(unix)]
+fn proven_as(report: &serde_json::Value, id: &str, red: &str) -> bool {
+    report["proven"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["id"] == id && p["red"] == red)
+}
+
+/// GATE-056's change, on a repository built with `config`: base has `apps/api/src/users.ts`
+/// with no admin role; the change adds the role, `apps/api/src/testing/admin.ts` and
+/// `apps/api/src/users.test.ts`, whose STAFF-073 test imports `./testing/admin`.
+#[cfg(unix)]
+fn staff_073_repo(config: &str) -> Repo {
+    let repo = repo_with(config, BUGGY, true);
     let r = repo.path();
+    repo.git(&["checkout", "-q", "main"]);
+    write(r, "apps/api/src/users.ts", "export const roles = []\n");
+    repo.commit("users");
+    repo.git(&["checkout", "-q", "-B", "feature"]);
     write(
         r,
         "openspec/specs/staff/spec.md",
         "## Requirements\n\n### Requirement: Staff\nThe system SHALL list staff.\n\n\
          #### Scenario: STAFF-073 Lists admins\n- **WHEN** x\n- **THEN** y\n",
+    );
+    write(
+        r,
+        "apps/api/src/users.ts",
+        "export const roles = ['admin']\n",
     );
     write(
         r,
@@ -427,44 +507,76 @@ fn gate_056_a_helper_the_change_added_but_did_not_overlay_fails_the_gate() {
     write(
         r,
         "apps/api/src/users.test.ts",
-        "import { admin } from './testing/admin'\n\
-         it(\"STAFF-073 lists admins\", () => { expect(admin.role).toBe('admin') })\n",
+        "import { admin } from './testing/admin'\nimport { roles } from './users'\n\
+         it(\"STAFF-073 lists admins\", () => { expect(roles).toContain(admin.role) })\n",
     );
     repo.commit("STAFF-073");
+    repo
+}
 
-    let bin = tempfile::tempdir().unwrap();
-    fake_bin_admin(bin.path());
-    let path = format!(
-        "{}:{}",
-        bin.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-    let out = Command::cargo_bin("sj")
-        .unwrap()
-        .args(["gate", "--base", "main", "--json", "--root"])
-        .arg(r)
-        .env("PATH", path)
-        .output()
-        .unwrap();
-    assert_eq!(out.status.code(), Some(1), "{out:?}");
-    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    let failures: Vec<&str> = report["failures"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|f| f.as_str())
-        .collect();
+#[cfg(unix)]
+#[test]
+fn gate_056_a_helper_the_change_added_but_did_not_overlay_fails_the_gate() {
+    let repo = staff_073_repo(&config_without_setup());
+    let (code, report) = gate_json(&repo, PNPM_ADMIN);
+    assert_eq!(code, Some(1), "{report:#}");
+    let failures = failures(&report);
     assert!(
         failures.contains(
             &"not-overlaid STAFF-073 lists admins (apps/api/src/testing/admin.ts; add it to the suite's support globs)"
         ),
         "{failures:#?}"
     );
-    let proven = report["proven"].as_array().unwrap();
     assert!(
-        !proven
-            .iter()
-            .any(|p| p["id"] == "STAFF-073" && p["red"] == "red:compile"),
-        "{proven:#?}"
+        !proven_as(&report, "STAFF-073", "red:compile"),
+        "{report:#}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_057_keep_an_overlaid_helper_lets_the_test_fail_on_an_assertion() {
+    let tests = "tests = [\"apps/api/src/**/*.test.ts\"]\n";
+    let config = config_without_setup().replacen(
+        tests,
+        &format!("{tests}support = [\"apps/api/src/testing/**\"]\n"),
+        1,
+    );
+    assert!(config.contains("support = [\"apps/api/src/testing/**\"]"));
+    let repo = staff_073_repo(&config);
+    let (_, report) = gate_json(&repo, PNPM_ADMIN);
+    assert!(proven_as(&report, "STAFF-073", "red:assert"), "{report:#}");
+    let failures = failures(&report);
+    assert!(
+        !failures.iter().any(|f| f.starts_with("not-overlaid")),
+        "{failures:#?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_058_keep_a_new_source_module_missing_on_base_is_still_red_compile() {
+    let repo = repo_with(&config_without_setup(), BUGGY, true);
+    let r = repo.path();
+    write(
+        r,
+        "openspec/specs/usage/spec.md",
+        "## Requirements\n\n### Requirement: Usage\nThe system SHALL count usage.\n\n\
+         #### Scenario: USAGE-001 Counts requests\n- **WHEN** x\n- **THEN** y\n",
+    );
+    write(r, "apps/api/src/usage.ts", "export const count = () => 1\n");
+    write(
+        r,
+        "apps/api/src/usage.test.ts",
+        "import { count } from './usage'\n\
+         it(\"USAGE-001 counts requests\", () => { expect(count()).toBe(1) })\n",
+    );
+    repo.commit("USAGE-001");
+    let (_, report) = gate_json(&repo, PNPM_USAGE);
+    assert!(proven_as(&report, "USAGE-001", "red:compile"), "{report:#}");
+    let failures = failures(&report);
+    assert!(
+        !failures.iter().any(|f| f.starts_with("not-overlaid")),
+        "{failures:#?}"
     );
 }
