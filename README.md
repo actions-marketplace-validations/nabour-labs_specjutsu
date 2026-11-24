@@ -1075,7 +1075,7 @@ spec folders and logs:
 
 | Skill | Use it to | Replaces |
 | --- | --- | --- |
-| `sj-explore` | think an idea through before specifying it | Superpowers brainstorming, OpenSpec explore |
+| `sj-explore` | brainstorm and think an idea through before specifying it: go wide, then narrow to two or three options | Superpowers brainstorming, OpenSpec explore |
 | `sj-propose` | write the proposal, delta specs, design and tasks | Superpowers writing-plans; OpenSpec propose, update; Spec Kit specify, plan, tasks, analyze |
 | `sj-clarify` | resolve `[NEEDS CLARIFICATION]` markers with the user | Spec Kit clarify |
 | `sj-principles` | create or amend `<spec_root>/principles.md` | Spec Kit constitution |
@@ -1106,6 +1106,7 @@ only at the step that needs it:
 | --- | --- |
 | `sj-apply` | `implementer-prompt.md`, `task-reviewer-prompt.md`, `re-review-prompt.md`, `writing-good-tests.md` |
 | `sj-debug` | `root-cause-tracing.md`, `defense-in-depth.md`, `condition-based-waiting.md` |
+| `sj-explore` | `brainstorming.md` |
 
 `sj-apply`, `sj-debug` and `sj-verify` also list the rationalizations that lead agents to
 skip a step, and the red flags that mean stop and go back.
@@ -1115,7 +1116,9 @@ its skill and, for Superpowers, to the file that carries the technique. `cargo t
 checks the skills: frontmatter whose description says when to use the skill, a body of
 at most 6,000 bytes, reference files of at most 8,000 bytes that `SKILL.md` names, no
 commands from the tools they replace, the `sj` commands each workflow needs, the review
-loop and discipline sections above, and complete coverage. Agent adapters install the
+loop and discipline sections above, the brainstorming rules of `sj-explore` (a description
+that names brainstorming, a go-wide step, and a reference with a YAGNI pass that presents the
+design one section at a time), and complete coverage. Agent adapters install the
 ten `sj-*` skills with their reference files; the setup skill is fetched on its own.
 
 ## The Claude Code adapter
