@@ -147,6 +147,11 @@ pub struct Input {
     /// Baseline entries at head that base doesn't list; honoured only with a `config`
     /// exemption (GATE-053/054).
     pub baseline_added: BTreeSet<BaselineEntry>,
+    /// The base run's failure message for target tests that failed there, keyed like `base`.
+    pub base_messages: BTreeMap<(String, String), String>,
+    /// Files the change added in a helper folder ([`crate::config::HELPER_DIRS`]) that were
+    /// not overlaid on base (GATE-056).
+    pub added_helpers: Vec<String>,
 }
 
 /// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
@@ -157,6 +162,45 @@ fn label(id: &str, name: &str) -> String {
     } else {
         format!("{id} {name}")
     }
+}
+
+/// The first of `helpers` that a base failure message of test `t` names (GATE-056): by its
+/// path from the repository, the test's package or the test's folder, with or without its
+/// extension.
+fn missing_helper(t: &trace::TestRef, message: &str, helpers: &[String]) -> Option<String> {
+    let file = t.file.to_string_lossy().replace('\\', "/");
+    let folder = file.rsplit_once('/').map_or("", |(d, _)| d);
+    let bases = [t.package.as_deref().unwrap_or(""), folder];
+    helpers
+        .iter()
+        .find(|h| {
+            let mut names = vec![h.as_str()];
+            names.extend(
+                bases
+                    .iter()
+                    .filter(|b| !b.is_empty() && **b != ".")
+                    .filter_map(|b| h.strip_prefix(*b)?.strip_prefix('/')),
+            );
+            names.iter().any(|n| {
+                let name_start = n.rfind('/').map_or(0, |i| i + 1);
+                let stem = match n.rfind('.') {
+                    Some(dot) if dot > name_start => &n[..dot],
+                    _ => n,
+                };
+                names_path(message, n) || names_path(message, stem)
+            })
+        })
+        .cloned()
+}
+
+/// Whether `message` holds `path` as a whole path: not inside a longer file or folder name.
+fn names_path(message: &str, path: &str) -> bool {
+    let word = |c: char| c.is_alphanumeric() || c == '_' || c == '-';
+    message.match_indices(path).any(|(i, _)| {
+        let before = message[..i].chars().next_back();
+        let after = message[i + path.len()..].chars().next();
+        !before.is_some_and(word) && !after.is_some_and(word)
+    })
 }
 
 fn test_key(t: &trace::TestRef) -> (String, String) {
@@ -343,6 +387,10 @@ pub fn evaluate(input: &Input) -> GateReport {
                 continue;
             }
             let key = (id.to_string(), t.name.clone());
+            let missing = input
+                .base_messages
+                .get(&key)
+                .and_then(|msg| missing_helper(t, msg, &input.added_helpers));
             match input.base.get(&key) {
                 // GATE-039/040: a keep test must pass on base; failing there means the
                 // scenario describes new behaviour.
@@ -351,6 +399,15 @@ pub fn evaluate(input: &Input) -> GateReport {
                     ok = false;
                     r.failures.push(format!(
                         "keep-red-on-base {what} (it fails on base, so it describes new behaviour; drop [keep] to prove it red-on-base)"
+                    ));
+                }
+                // GATE-056: a test that fails to load because of a helper the change added but
+                // didn't overlay shows nothing about the old code.
+                Some(Red::Compile) if missing.is_some() => {
+                    let file = missing.unwrap_or_default();
+                    ok = false;
+                    r.failures.push(format!(
+                        "not-overlaid {what} ({file}; add it to the suite's support globs)"
                     ));
                 }
                 Some(red @ (Red::Assert | Red::Compile)) => {
@@ -1040,6 +1097,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
 
     // Red-on-base.
     let mut base = BTreeMap::new();
+    let mut base_messages = BTreeMap::new();
+    let mut added_helpers = Vec::new();
     let mut reasons = BTreeMap::new();
     if !skip_red && !targets.is_empty() {
         for (id, name, file) in &cargo_jobs {
@@ -1082,14 +1141,28 @@ pub fn run(opts: &Options) -> Result<GateReport> {
                 (is_test_support(f) || overlay_globs.is_match(f.as_str())) && root.join(f).is_file()
             })
             .collect();
+        // GATE-056: helpers the change added (absent on base) that weren't overlaid.
+        let base_files: BTreeSet<String> = git.ls_tree(&mb)?.into_iter().collect();
+        added_helpers = changed_files
+            .iter()
+            .filter(|f| {
+                f.rsplit_once('/')
+                    .is_some_and(|(dir, _)| dir.split('/').any(crate::config::is_helper_dir))
+                    && !overlay.contains(f)
+                    && !base_files.contains(*f)
+                    && root.join(f).is_file()
+            })
+            .cloned()
+            .collect();
         let verifiable: Vec<&(String, String, String)> = cargo_jobs
             .iter()
             .filter(|(_, _, f)| is_test_file(f))
             .collect();
         if !verifiable.is_empty() || !suite_jobs.is_empty() {
-            let results =
+            let (results, messages) =
                 run_on_base(&git, root, &config, &mb, &overlay, &verifiable, &suite_jobs)?;
             base.extend(results);
+            base_messages = messages;
         }
     }
 
@@ -1113,6 +1186,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         keep,
         baseline,
         baseline_added,
+        base_messages,
+        added_helpers,
     });
     // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
     let audit = crate::audit::run(&crate::audit::Options {
@@ -1249,11 +1324,18 @@ fn base_mapped_ids(
         .collect())
 }
 
+/// Base results and failure messages, keyed by (scenario ID, test name).
+type BaseResults = (
+    BTreeMap<(String, String), Red>,
+    BTreeMap<(String, String), String>,
+);
+
 /// Lines of output kept from a failing base `setup`.
 const SETUP_ERROR_LINES: usize = 20;
 
 /// Check out `rev` in a temporary worktree, overlay the change's test files, and run each Cargo
-/// test target and each non-Cargo suite that holds a scenario test.
+/// test target and each non-Cargo suite that holds a scenario test. Returns each target test's
+/// result and, for non-Cargo tests that failed, the base run's failure message.
 fn run_on_base(
     git: &Git,
     root: &Path,
@@ -1262,11 +1344,11 @@ fn run_on_base(
     overlay: &[&String],
     jobs: &[&(String, String, String)],
     suite_jobs: &[SuiteJob],
-) -> Result<BTreeMap<(String, String), Red>> {
+) -> Result<BaseResults> {
     let tmp = tempfile::tempdir().context("creating temp dir for base checkout")?;
     let wt = tmp.path().join("base");
     git.worktree_add(&wt, rev)?;
-    let result = (|| -> Result<BTreeMap<(String, String), Red>> {
+    let result = (|| -> Result<BaseResults> {
         for f in overlay {
             let dest = wt.join(f);
             if let Some(parent) = dest.parent() {
@@ -1279,6 +1361,7 @@ fn run_on_base(
         // One cargo invocation per test target: (crate dir, target name).
         let mut runs: BTreeMap<(String, String), Run> = BTreeMap::new();
         let mut out = BTreeMap::new();
+        let mut messages = BTreeMap::new();
         for (id, name, file) in jobs {
             let (crate_dir, stem) = split_test_target(file);
             let key = (crate_dir.clone(), stem.clone());
@@ -1347,10 +1430,14 @@ fn run_on_base(
                     None if failed_early => Red::Compile,
                     None => Red::NotRun,
                 };
-                out.insert((id.clone(), t.name.clone()), red);
+                let key = (id.clone(), t.name.clone());
+                if let Some(msg) = joined.and_then(|j| j.message.clone()) {
+                    messages.insert(key.clone(), msg);
+                }
+                out.insert(key, red);
             }
         }
-        Ok(out)
+        Ok((out, messages))
     })();
     let cleanup = git.worktree_remove(&wt);
     let out = result?;
