@@ -250,6 +250,15 @@ pub struct Rename {
     pub line: usize,
 }
 
+/// The name requirement `name` had before `renamed`: the `from` of the rename to it, or
+/// `name` itself when nothing renames to it.
+pub fn name_before<'a>(renamed: &'a [Rename], name: &'a str) -> &'a str {
+    renamed
+        .iter()
+        .find(|r| r.to == name)
+        .map_or(name, |r| r.from.as_str())
+}
+
 /// A parsed delta file. Lines are kept so callers can scan blocks and sections.
 #[derive(Debug, Clone, Default)]
 pub struct Delta {

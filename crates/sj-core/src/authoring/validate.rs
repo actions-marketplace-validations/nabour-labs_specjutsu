@@ -160,10 +160,12 @@ fn check_keywords(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool]) {
     }
 }
 
-/// Scenarios without an ID in the `specs/` copy of a MODIFIED requirement, and the command
-/// that gives them one (SPEC-045/046).
+/// The scenarios of the `specs/` copy of a MODIFIED requirement: those without an ID, with
+/// the command that gives them one (SPEC-045/046), and the IDs of the others (SPEC-047).
 struct IdFix {
     names: BTreeSet<String>,
+    /// Scenario name → ID, for the scenarios that have one.
+    ids: BTreeMap<String, String>,
     target: String,
     capability: String,
 }
@@ -191,24 +193,27 @@ fn unnamed_originals(
     let shown = target.strip_prefix(spec_root).unwrap_or(target);
     let mut fix = IdFix {
         names: BTreeSet::new(),
+        ids: BTreeMap::new(),
         target: shown.to_string_lossy().replace('\\', "/"),
         capability,
     };
     if !target.is_file() {
         return Ok(Some(fix));
     }
-    let original = renames
-        .iter()
-        .find(|r| r.to == name)
-        .map_or(name, |r| r.from.as_str());
+    let original = blocks::name_before(renames, name);
     let text = read(target)?;
     let lines: Vec<&str> = text.split('\n').collect();
     let mask = blocks::fence_mask(&lines);
     for b in blocks::blocks_in(&lines, &mask, 0..lines.len()) {
         if b.name == original {
             for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
-                if s.id.is_none() {
-                    fix.names.insert(s.name);
+                match s.id {
+                    None => {
+                        fix.names.insert(s.name);
+                    }
+                    Some(id) => {
+                        fix.ids.insert(s.name, id);
+                    }
                 }
             }
         }
@@ -217,7 +222,8 @@ fn unnamed_originals(
 }
 
 /// A requirement needs a scenario and a SHALL or MUST; each scenario needs an ID, WHEN and THEN.
-/// `fix`, for a MODIFIED block, names the `specs/` scenarios that still lack an ID.
+/// `fix`, for a MODIFIED block, describes the `specs/` copy's scenarios: which lack an ID, and the
+/// IDs of the rest.
 fn check_block(
     r: &mut Report,
     file: &Path,
@@ -245,8 +251,8 @@ fn check_block(
     }
     for s in &scenarios {
         let label = s.id.clone().unwrap_or_else(|| s.name.clone());
-        let fix = fix.filter(|f| f.names.contains(&s.name));
-        match (&s.id, fix) {
+        let unnamed = fix.filter(|f| f.names.contains(&s.name));
+        match (&s.id, unnamed) {
             (None, None) => r.err(format!("{} has no ID", s.name), file, s.line),
             (None, Some(f)) => r.err(format!("{} has no ID; {}", s.name, f.hint()), file, s.line),
             (Some(id), Some(f)) => r.warn(
@@ -259,7 +265,20 @@ fn check_block(
                 file,
                 s.line,
             ),
-            (Some(_), None) => {}
+            (Some(id), None) => {
+                // SPEC-047: tools that match by full name see two scenarios.
+                let other = fix.and_then(|f| Some((f, f.ids.get(&s.name)?)));
+                if let Some((f, original)) = other.filter(|(_, o)| *o != id) {
+                    r.warn(
+                        format!(
+                            "{id} {}: {} has this scenario as {original}; give the delta copy {original}",
+                            s.name, f.target
+                        ),
+                        file,
+                        s.line,
+                    );
+                }
+            }
         }
         if let Some(m) = s.marker.as_deref().filter(|m| *m != crate::spec::KEEP) {
             r.err(format!("unknown scenario marker [{m}]"), file, s.line);
