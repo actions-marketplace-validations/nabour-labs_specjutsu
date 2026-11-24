@@ -2166,6 +2166,7 @@ fn ids_cmd(
     let plan =
         sj_core::ids::plan_for(&root.join(&spec_root), &config.id_prefixes, only.as_deref())?;
     let files = if write {
+        sj_core::ids::check_prefixes_free(&root.join(&spec_root), &config.id_prefixes, &plan)?;
         sj_core::ids::write(&plan)?
     } else {
         0

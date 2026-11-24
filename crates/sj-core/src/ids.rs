@@ -690,9 +690,15 @@ pub fn plan_for(
 
     // Targets limit the result; numbering above covers the whole root (IDS-014).
     let mut out = Vec::new();
-    for (fi, (file, place, located, _)) in files.iter().enumerate() {
+    for (fi, (file, place, located, content)) in files.iter().enumerate() {
         let Some(cap) = place.capability.as_ref().filter(|c| is_selected(c)) else {
             continue;
+        };
+        // A delta copy finds its original under a RENAMED requirement's old name (IDS-022).
+        let renamed = if place.in_specs {
+            Vec::new()
+        } else {
+            blocks::parse_delta(content).renamed
         };
         for (li, l) in located.iter().enumerate() {
             if l.scenario.id.is_some() {
@@ -701,7 +707,13 @@ pub fn plan_for(
             let k = key(cap, l);
             let is_origin = origin.get(&k).is_some_and(|o| (o.0, o.1) == (fi, li));
             let (copied, note) = if !place.in_specs {
-                (origin.get(&k).and_then(|(_, _, id)| id.clone()), None)
+                let requirement = l.requirement.as_deref().unwrap_or_default();
+                let old = (
+                    k.0.clone(),
+                    blocks::normalize_name(blocks::name_before(&renamed, requirement)),
+                    k.2.clone(),
+                );
+                (origin.get(&old).and_then(|(_, _, id)| id.clone()), None)
             } else if is_origin {
                 from_copies(&k)
             } else {
@@ -734,6 +746,49 @@ pub fn plan_for(
         }
     }
     Ok(out)
+}
+
+/// Errors when a capability in `plan` shares its prefix with another capability under the
+/// spec root, including one whose scenarios all have IDs already (IDS-023). [`plan_for`] only
+/// compares capabilities that need IDs, so `sj ids --write` runs this before [`write`].
+pub fn check_prefixes_free(
+    spec_root: &Path,
+    prefixes: &BTreeMap<String, String>,
+    plan: &[Assignment],
+) -> Result<()> {
+    let prefix_for = |cap: &str| {
+        prefixes
+            .get(cap)
+            .cloned()
+            .unwrap_or_else(|| derive_prefix(cap))
+    };
+    let planned: BTreeSet<String> = plan
+        .iter()
+        .filter_map(|a| place(spec_root, &a.file).capability)
+        .collect();
+    if planned.is_empty() {
+        return Ok(());
+    }
+    let mut all: BTreeSet<String> = BTreeSet::new();
+    for file in spec::discover_spec_files(spec_root)? {
+        if let Some(cap) = place(spec_root, &file).capability {
+            all.insert(cap);
+        }
+    }
+    for cap in &planned {
+        let prefix = prefix_for(cap);
+        if let Some(other) = all.iter().find(|o| *o != cap && prefix_for(o) == prefix) {
+            let mut pair = [cap.as_str(), other.as_str()];
+            pair.sort();
+            bail!(
+                "capabilities `{}` and `{}` both use prefix {prefix}; \
+                 map one in [ids.prefixes] in specjutsu.toml",
+                pair[0],
+                pair[1]
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Insert each planned ID before its scenario name. Returns the number of files written.

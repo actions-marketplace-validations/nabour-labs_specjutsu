@@ -839,3 +839,51 @@ fn ids_020_a_renamed_requirement_matches_by_its_old_name() {
     assert!(read(dir.path(), "openspec/specs/staff/spec.md")
         .contains("#### Scenario: STAFF-057 Role change is recorded"));
 }
+
+#[test]
+fn ids_022_a_copy_under_a_renamed_requirement_gets_the_originals_id() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        "## RENAMED Requirements\n\
+         - FROM: `### Requirement: Role changes are audited`\n\
+         - TO: `### Requirement: Role changes are logged`\n\n\
+         ## MODIFIED Requirements\n\n\
+         ### Requirement: Role changes are logged\n\
+         The system SHALL log role changes.\n\n\
+         #### Scenario: Role change is recorded\n\
+         - **WHEN** a role changes\n\
+         - **THEN** it is recorded with its author\n",
+    );
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-100 Role change is recorded"));
+    assert!(
+        read(dir.path(), "openspec/changes/audit/specs/staff/spec.md")
+            .contains("#### Scenario: STAFF-100 Role change is recorded")
+    );
+}
+
+#[test]
+fn ids_023_a_numbered_capabilitys_prefix_is_taken() {
+    let dir = tempfile::tempdir().unwrap();
+    put(
+        dir.path(),
+        "openspec/specs/staff/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password"),
+    );
+    put(dir.path(), "openspec/specs/st-aff/spec.md", USER_AUTH);
+    let before = snapshot(dir.path());
+    for args in [&["--write"][..], &["--write", "st-aff"][..]] {
+        sj(dir.path())
+            .args(args)
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("`st-aff`").and(predicate::str::contains("`staff`")));
+        assert_eq!(snapshot(dir.path()), before);
+    }
+}

@@ -719,13 +719,15 @@ wrote 2 IDs to 1 file
   user-auth = "AUTH"
   ```
 
-  If two capabilities that need IDs end up with the same prefix, nothing is
-  written and the command exits 2 naming both. Map one of them to fix it.
+  If a capability that needs IDs ends up with the same prefix as another
+  capability, nothing is written and the command exits 2 naming both. That holds
+  when the other one is already fully numbered. Map one of them to fix it.
 - **IDs are never reused.** Numbers continue after the highest one used for that
   prefix anywhere under the spec root, `changes/archive/` included, so keep the
   archive. Archived changes are read, never written.
 - **A delta copy shares its spec's ID.** A scenario in an open change with the
-  same requirement and scenario name as one in `specs/` gets the same ID. It works
+  same requirement and scenario name as one in `specs/` gets the same ID, matching
+  a requirement the same change renames by its old name. It works
   the other way too: a `specs/` scenario without an ID takes the ID its copy in an
   open change's MODIFIED requirement already has, matched by capability,
   requirement and scenario name, ignoring IDs and `[keep]`. A requirement the same

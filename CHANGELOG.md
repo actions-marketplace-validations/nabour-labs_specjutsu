@@ -57,6 +57,12 @@ All notable changes are recorded here. The format follows
   `not-overlaid <ID> <test> (<file>; add it to the suite's support globs)`, matching the
   helper's path in the base failure message with `\` or `/` as the separator (non-Cargo
   suites). A new source module missing on base is still `red:compile`.
+- `sj ids --write` gives a delta copy without an ID, under a requirement renamed in the
+  same change, the ID of its `specs/` original matched by the old name. It used to give
+  the copy and the original different numbers.
+- `sj ids --write` exits 2 naming both capabilities when a capability that needs IDs shares
+  its prefix with a fully numbered one, as in `` capabilities `st-aff` and `staff` both use
+  prefix STAFF ``. It used to continue the other capability's numbering.
 
 ## [0.5.1] - 2026-11-23
 
