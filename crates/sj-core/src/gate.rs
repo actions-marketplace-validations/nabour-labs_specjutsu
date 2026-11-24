@@ -174,33 +174,44 @@ fn missing_helper(t: &trace::TestRef, message: &str, helpers: &[String]) -> Opti
     helpers
         .iter()
         .find(|h| {
-            let mut names = vec![h.as_str()];
+            // (name, whether it is the repository path, which may end a longer absolute path)
+            let mut names = vec![(h.as_str(), true)];
             names.extend(
                 bases
                     .iter()
                     .filter(|b| !b.is_empty() && **b != ".")
-                    .filter_map(|b| h.strip_prefix(*b)?.strip_prefix('/')),
+                    .filter_map(|b| h.strip_prefix(*b)?.strip_prefix('/'))
+                    .map(|n| (n, false)),
             );
-            names.iter().any(|n| {
+            names.iter().any(|&(n, repo)| {
                 let name_start = n.rfind('/').map_or(0, |i| i + 1);
                 let stem = match n.rfind('.') {
                     Some(dot) if dot > name_start => &n[..dot],
                     _ => n,
                 };
-                names_path(message, n) || names_path(message, stem)
+                names_path(message, n, repo) || names_path(message, stem, repo)
             })
         })
         .cloned()
 }
 
-/// Whether `message` holds `path` as a whole path: not inside a longer file or folder name.
-fn names_path(message: &str, path: &str) -> bool {
-    let word = |c: char| c.is_alphanumeric() || c == '_' || c == '-';
-    message.match_indices(path).any(|(i, _)| {
-        let before = message[..i].chars().next_back();
-        let after = message[i + path.len()..].chars().next();
-        !before.is_some_and(word) && !after.is_some_and(word)
-    })
+/// Whether `message` holds `path` as a whole path. It must start a path in the message (or
+/// follow `./`, or a `/` when `after_slash`), and end it, a trailing `.` aside.
+fn names_path(message: &str, path: &str, after_slash: bool) -> bool {
+    let in_path = |c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/');
+    let starts_path = |before: &str| {
+        let starts = |s: &str| !s.chars().next_back().is_some_and(in_path);
+        starts(before)
+            || before.strip_suffix("./").is_some_and(starts)
+            || (after_slash && before.ends_with('/'))
+    };
+    let ends_path = |after: &str| {
+        let after = after.strip_prefix('.').unwrap_or(after);
+        !after.chars().next().is_some_and(in_path)
+    };
+    message
+        .match_indices(path)
+        .any(|(i, _)| starts_path(&message[..i]) && ends_path(&message[i + path.len()..]))
 }
 
 fn test_key(t: &trace::TestRef) -> (String, String) {
@@ -387,11 +398,23 @@ pub fn evaluate(input: &Input) -> GateReport {
                 continue;
             }
             let key = (id.to_string(), t.name.clone());
-            let missing = input
-                .base_messages
-                .get(&key)
-                .and_then(|msg| missing_helper(t, msg, &input.added_helpers));
-            match input.base.get(&key) {
+            let red = input.base.get(&key);
+            // GATE-056: a test that fails to load because of a helper the change added but
+            // didn't overlay shows nothing about the old code, keep test or not.
+            if red == Some(&Red::Compile) {
+                if let Some(file) = input
+                    .base_messages
+                    .get(&key)
+                    .and_then(|msg| missing_helper(t, msg, &input.added_helpers))
+                {
+                    ok = false;
+                    r.failures.push(format!(
+                        "not-overlaid {what} ({file}; add it to the suite's support globs)"
+                    ));
+                    continue;
+                }
+            }
+            match red {
                 // GATE-039/040: a keep test must pass on base; failing there means the
                 // scenario describes new behaviour.
                 Some(Red::Green) if keep => {}
@@ -399,15 +422,6 @@ pub fn evaluate(input: &Input) -> GateReport {
                     ok = false;
                     r.failures.push(format!(
                         "keep-red-on-base {what} (it fails on base, so it describes new behaviour; drop [keep] to prove it red-on-base)"
-                    ));
-                }
-                // GATE-056: a test that fails to load because of a helper the change added but
-                // didn't overlay shows nothing about the old code.
-                Some(Red::Compile) if missing.is_some() => {
-                    let file = missing.unwrap_or_default();
-                    ok = false;
-                    r.failures.push(format!(
-                        "not-overlaid {what} ({file}; add it to the suite's support globs)"
                     ));
                 }
                 Some(red @ (Red::Assert | Red::Compile)) => {
@@ -795,6 +809,8 @@ pub struct Prepared {
     pub baseline: Baseline,
     /// Entries of the head baseline that the base baseline doesn't list.
     pub baseline_added: BTreeSet<BaselineEntry>,
+    /// Every file path on the merge base, repository-relative.
+    pub base_files: BTreeSet<String>,
 }
 
 /// Gather the gate's inputs against the merge-base of `base` and `HEAD`, without running tests.
@@ -830,11 +846,11 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     // which `classify` keeps, is the open change's on both sides (GATE-045).
     let specs_dir = under_root(&base_root, "specs/");
     base_paths.sort_by_key(|p| (!p.starts_with(&specs_dir), p.clone()));
-    for path in base_paths {
-        if spec::is_spec_path(&path, &base_root) {
-            let content = git.show(&mb, &path)?;
+    for path in &base_paths {
+        if spec::is_spec_path(path, &base_root) {
+            let content = git.show(&mb, path)?;
             base_fps.extend(spec::fingerprints(&content));
-            for (s, t) in spec::scenario_texts(Path::new(&path), &content) {
+            for (s, t) in spec::scenario_texts(Path::new(path), &content) {
                 if s.id.is_none() {
                     base_unidentified.insert(t.clone());
                 }
@@ -947,6 +963,7 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
         exemptions,
         baseline,
         baseline_added,
+        base_files: base_paths.into_iter().collect(),
     })
 }
 
@@ -990,6 +1007,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         exemptions,
         baseline,
         baseline_added,
+        base_files,
     } = prepare(root, &opts.spec_root, &config, &opts.base)?;
 
     let targets: Vec<&String> = changes
@@ -1142,7 +1160,6 @@ pub fn run(opts: &Options) -> Result<GateReport> {
             })
             .collect();
         // GATE-056: helpers the change added (absent on base) that weren't overlaid.
-        let base_files: BTreeSet<String> = git.ls_tree(&mb)?.into_iter().collect();
         added_helpers = changed_files
             .iter()
             .filter(|f| {
@@ -1553,4 +1570,55 @@ pub fn history(root: &Path, since: &str) -> Result<GateReport> {
         format!("gate: fail — {}", plural(r.failures.len(), "problem"))
     };
     Ok(r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Which helper a base failure message names for the STAFF-073 test in `apps/api/src`.
+    fn named(message: &str, helpers: &[&str]) -> Option<String> {
+        let t = trace::TestRef {
+            name: "STAFF-073 lists admins".into(),
+            file: PathBuf::from("apps/api/src/users.test.ts"),
+            package: Some("apps/api".into()),
+            ..trace::TestRef::default()
+        };
+        let helpers: Vec<String> = helpers.iter().map(|h| h.to_string()).collect();
+        missing_helper(&t, message, &helpers)
+    }
+
+    #[test]
+    fn gate_056_a_failure_message_names_a_helper_by_its_paths() {
+        let admin = "apps/api/src/testing/admin.ts";
+        let hit = Some(admin.to_string());
+        // From the test's folder, the package and the repository, with or without extension.
+        assert_eq!(named("Failed to load url ./testing/admin", &[admin]), hit);
+        assert_eq!(named("Cannot find './testing/admin.ts'.", &[admin]), hit);
+        assert_eq!(named("Cannot find src/testing/admin", &[admin]), hit);
+        assert_eq!(
+            named("ENOENT /tmp/x/base/apps/api/src/testing/admin.ts", &[admin]),
+            hit
+        );
+        // Not inside an unrelated path, and not a longer or different file name.
+        assert_eq!(
+            named("Failed to load url ./other/testing/admin", &[admin]),
+            None
+        );
+        assert_eq!(
+            named("Failed to load url ./testing/admin.spec", &[admin]),
+            None
+        );
+        assert_eq!(
+            named("Failed to load url ./testing/admin/index", &[admin]),
+            None
+        );
+        assert_eq!(
+            named(
+                "Failed to load url ./testing/admin",
+                &["apps/api/src/testing/a.ts"]
+            ),
+            None
+        );
+    }
 }
