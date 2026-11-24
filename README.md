@@ -751,7 +751,9 @@ wrote 2 IDs to 1 file
   always get the same ID. The prefix check covers every capability, anywhere under
   the spec root, whose prefix a selected capability uses, so a collision on that
   prefix still stops the run, but one between two other capabilities (`billing` and
-  `bill-ing` both giving `BILLING`) doesn't stop `sj ids --write staff`. Numbering
+  `bill-ing` both giving `BILLING`) doesn't stop `sj ids staff` or `sj ids --write staff`.
+  When listing a target, a collision that involves a capability being numbered prints
+  as a `note: capabilities … both use prefix …` line instead of stopping. Numbering
   still covers the whole spec root, so numbers continue after the highest one used
   anywhere. A target that selects nothing exits 2, names it and lists the known
   capabilities. A capability named `prefixes` can only be targeted by path (`sj ids specjutsu/specs/prefixes`), since
