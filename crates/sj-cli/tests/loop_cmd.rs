@@ -605,10 +605,16 @@ fn linked_repo() -> support::Repo {
         "schema = 1\nmode = \"strict\"\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
          [[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**\"]\n",
     );
-    repo.write("openspec/specs/staff/spec.md", &support::spec_md(&scenarios));
+    repo.write(
+        "openspec/specs/staff/spec.md",
+        &support::spec_md(&scenarios),
+    );
     repo.commit("base: STAFF-063 without a test");
     repo.branch("feature");
-    repo.write("openspec/changes/link-staff/proposal.md", "## Why\n\nLink.\n");
+    repo.write(
+        "openspec/changes/link-staff/proposal.md",
+        "## Why\n\nLink.\n",
+    );
     repo.write(
         "openspec/changes/link-staff/specs/staff/spec.md",
         &support::spec_md(&scenarios).replace("## ADDED", "## MODIFIED"),
@@ -666,7 +672,10 @@ fn unchanged_repo() -> support::Repo {
     repo.write("tests/auth.rs", "#[test]\nfn auth_002_logs_out() {}\n");
     repo.commit("base: AUTH-002 tested");
     repo.branch("feature");
-    repo.write("openspec/changes/touch-auth/proposal.md", "## Why\n\nTouch.\n");
+    repo.write(
+        "openspec/changes/touch-auth/proposal.md",
+        "## Why\n\nTouch.\n",
+    );
     repo.write(
         "openspec/changes/touch-auth/specs/auth/spec.md",
         &support::spec_md(&scenarios).replace("## ADDED", "## MODIFIED"),

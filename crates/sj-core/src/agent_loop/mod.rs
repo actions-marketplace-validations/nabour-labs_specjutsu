@@ -7,7 +7,7 @@ pub mod task;
 pub mod verify;
 pub mod view;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::Result;
@@ -121,6 +121,32 @@ impl Ledger {
             "no red run recorded".to_string()
         })
     }
+}
+
+/// Why `id` is not proven, judged the way the gate classifies it against the merge-base:
+/// `changes` is that classification, `None` without a merge-base. Only added and modified
+/// scenarios need red before green; an unchanged or implemented one needs only a green latest
+/// run (LOOP-034, LOOP-035), and a `[keep]` one needs nothing (LOOP-020). Shared by `sj verify`
+/// and `sj task done`.
+pub fn why_unproven_against_base(
+    ledger: &Ledger,
+    keep: &BTreeSet<String>,
+    changes: Option<&BTreeMap<String, crate::gate::Change>>,
+    id: &str,
+) -> Option<String> {
+    use crate::gate::Change as Scenario;
+    if keep.contains(id) {
+        return None;
+    }
+    let why = ledger.why_unproven(id)?;
+    let needs_red = !matches!(
+        changes.and_then(|c| c.get(id)),
+        Some(Scenario::Unchanged | Scenario::Implemented)
+    );
+    let green = ledger
+        .status(id)
+        .is_some_and(|s| s.latest == LedgerResult::Passed);
+    (needs_red || !green).then_some(why)
 }
 
 /// The base to compare against: `flag`, else the first of `origin/HEAD`, `origin/main`,

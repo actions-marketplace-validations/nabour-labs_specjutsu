@@ -1,12 +1,14 @@
 //! `sj task done`: check one task's box, with proof in strict mode.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 
-use super::{task_number, Ledger};
+use super::{default_base, task_number, why_unproven_against_base, Ledger};
 use crate::authoring::{self, blocks};
 use crate::config::Mode;
+use crate::gate;
 
 /// An ID the task names that the ledger does not prove.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +53,17 @@ fn line_starts(raw: &[u8]) -> Vec<usize> {
     out
 }
 
+/// Each scenario's change against the merge-base with the default branch, as the gate sees it;
+/// `None` without one.
+fn classify(root: &Path, spec_root: &Path) -> Result<Option<BTreeMap<String, gate::Change>>> {
+    let Some(base) = default_base(root, None) else {
+        return Ok(None);
+    };
+    let config = crate::config::load(root)?;
+    let rel = spec_root.strip_prefix(root).unwrap_or(spec_root);
+    Ok(Some(gate::prepare(root, rel, &config, &base)?.changes))
+}
+
 pub fn done(
     spec_root: &Path,
     root: &Path,
@@ -71,14 +84,23 @@ pub fn done(
     }
 
     let ledger = Ledger::load(root)?;
-    // A `[keep]` scenario needs no red run (LOOP-020).
     let keep = crate::spec::keep_ids(spec_root)?;
+    let ids = blocks::task_ids(&task.text);
+    // The gate's classification, worked out only when the ledger alone leaves an ID unproven.
+    let changes = if ids
+        .iter()
+        .any(|id| why_unproven_against_base(&ledger, &keep, None, id).is_some())
+    {
+        classify(root, spec_root)?
+    } else {
+        None
+    };
     let mut unproven = Vec::new();
-    for id in blocks::task_ids(&task.text) {
-        if keep.contains(&id) || unproven.iter().any(|u: &Unproven| u.id == id) {
+    for id in ids {
+        if unproven.iter().any(|u: &Unproven| u.id == id) {
             continue;
         }
-        if let Some(why) = ledger.why_unproven(&id) {
+        if let Some(why) = why_unproven_against_base(&ledger, &keep, changes.as_ref(), &id) {
             unproven.push(Unproven { id, why });
         }
     }
