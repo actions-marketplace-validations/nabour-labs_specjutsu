@@ -9,8 +9,8 @@
 - [x] 2.3 `red_on_base = "assert"` policy and `compile-red` reason (GATE-034, GATE-061)
 
 ## 3. Linked existing behaviour
-- [ ] 3.1 `green:linked` result for implemented scenarios that pass on base, in JSON and markdown output (GATE-059, GATE-023)
-- [ ] 3.2 Linked scenarios do not cover source changes (GATE-060, GATE-036, GATE-037)
+- [x] 3.1 `green:linked` result for implemented scenarios that pass on base, in JSON and markdown output (GATE-059, GATE-023)
+- [x] 3.2 Linked scenarios do not cover source changes (GATE-060, GATE-036, GATE-037)
 - [ ] 3.3 `sj verify` and `sj task done` need red only for added and modified scenarios (LOOP-034, LOOP-035)
 
 ## 4. IDs for one capability
