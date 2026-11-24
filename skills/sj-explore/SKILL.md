@@ -1,6 +1,6 @@
 ---
 name: sj-explore
-description: Use when an idea, feature request or problem is still vague and needs thinking through before anything is specified or built — "let's explore", "how should we approach", "what are the options". Produces a shared understanding, not code.
+description: Use when an idea, feature request or problem is still vague and needs thinking through before anything is specified or built — "let's brainstorm", "let's explore", "how should we approach", "what are the options". Produces a shared understanding, not code.
 ---
 
 # Explore before you specify
@@ -28,23 +28,35 @@ Ask one question at a time, and prefer multiple choice when the options are know
 
 Stop asking when you could write the scenarios yourself.
 
-## 3. Lay out the options
+## 3. Go wide, then narrow
 
-Give two or three approaches, each with:
+Go wide before narrowing. List many ideas first, eight or more, without judging them: the
+obvious one, the smallest one, one that removes a constraint, one that does nothing.
+`brainstorming.md` has prompts for this. Then cut the list: drop ideas that break a
+principle, miss a WHEN/THEN outcome, or only add what nobody asked for. Keep two or three.
+
+Don't skip this step because one idea looks right. The first idea is often the familiar
+one, not the best one.
+
+## 4. Lay out the options
+
+Give the two or three that survived, each with:
 
 - what it changes (capabilities, files, data),
 - the trade-off (cost, risk, what it rules out),
 - which scenarios it makes easy or hard.
 
-Recommend one and say why. Use a diagram when structure or flow matters.
+Recommend one and say why. Use a diagram when structure or flow matters. Once the user
+picks one, present its design one section at a time and check each section with them
+before going on, as `brainstorming.md` describes.
 
-## 4. Check the size
+## 5. Check the size
 
 One change should be reviewable in one sitting. If the idea needs more than about a dozen
 scenarios, or spans unrelated capabilities, split it into changes the user can ship one at
 a time, and say which comes first.
 
-## 5. Hand off
+## 6. Hand off
 
 Summarize in a few lines: the problem, the chosen approach, what's out of scope, and the
 WHEN/THEN outcomes. Then continue with `sj-propose`, which turns this into a change folder.
