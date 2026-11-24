@@ -1690,6 +1690,9 @@ mod tests {
             named(r"ENOENT C:\x\base\apps\api\src\testing\admin.ts", &[admin]),
             hit
         );
-        assert_eq!(named(r"Failed to load url .\other\testing\admin", &[admin]), None);
+        assert_eq!(
+            named(r"Failed to load url .\other\testing\admin", &[admin]),
+            None
+        );
     }
 }
