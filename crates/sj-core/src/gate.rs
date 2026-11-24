@@ -175,8 +175,7 @@ fn label(id: &str, name: &str) -> String {
 /// path from the repository, the test's package or the test's folder, with or without its
 /// extension, and with `\` or `/` as the separator.
 fn missing_helper(t: &trace::TestRef, message: &str, helpers: &[String]) -> Option<String> {
-    // Windows runners may write `\` in paths.
-    let message = &message.replace('\\', "/");
+    let message = &forward_slashes(message);
     let file = t.file.to_string_lossy().replace('\\', "/");
     let folder = file.rsplit_once('/').map_or("", |(d, _)| d);
     let bases = [t.package.as_deref().unwrap_or(""), folder];
@@ -202,6 +201,29 @@ fn missing_helper(t: &trace::TestRef, message: &str, helpers: &[String]) -> Opti
             })
         })
         .cloned()
+}
+
+/// `message` with each run of `\` as one `/`: Windows runners write `\` in paths, and escaped
+/// messages (Python repr, JSON) double it. A run before a quote escapes the quote and is kept.
+fn forward_slashes(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut chars = message.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        let mut run = 1;
+        while chars.next_if_eq(&'\\').is_some() {
+            run += 1;
+        }
+        if matches!(chars.peek(), Some('"' | '\'')) {
+            out.extend(std::iter::repeat('\\').take(run));
+        } else {
+            out.push('/');
+        }
+    }
+    out
 }
 
 /// Whether `message` holds `path` as a whole path. It must start a path in the message (or
@@ -1693,6 +1715,19 @@ mod tests {
         assert_eq!(
             named(r"Failed to load url .\other\testing\admin", &[admin]),
             None
+        );
+        // Escaped, as Python repr and JSON write them: a run of `\` is one separator, and a
+        // `\` before a quote escapes the quote.
+        assert_eq!(
+            named(
+                r"ENOENT C:\\x\\base\\apps\\api\\src\\testing\\admin.ts",
+                &[admin]
+            ),
+            hit
+        );
+        assert_eq!(
+            named(r#"Failed to load url \"./testing/admin\""#, &[admin]),
+            hit
         );
     }
 }
