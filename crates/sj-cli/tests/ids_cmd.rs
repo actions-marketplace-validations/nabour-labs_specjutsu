@@ -530,6 +530,29 @@ fn ids_017_a_target_still_stops_on_colliding_prefixes() {
     assert_eq!(snapshot(dir.path()), before);
 }
 
+#[test]
+fn ids_021_an_unrelated_collision_does_not_stop_a_target() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "billing", "bill-ing"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    sj(dir.path()).args(["--write", "staff"]).assert().code(0);
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-001 Valid")
+            .replace("Scenario: Password", "Scenario: STAFF-002 Password")
+    );
+    assert_eq!(
+        read(dir.path(), "openspec/specs/billing/spec.md"),
+        USER_AUTH
+    );
+}
+
 const ROLE_SPEC: &str = "## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL audit role changes.\n\n\
 #### Scenario: Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n\n\
 #### Scenario: STAFF-099 Role change is visible\n- **WHEN** a role changes\n- **THEN** it is shown\n";
@@ -594,7 +617,8 @@ fn ids_018_a_taken_id_gets_a_new_number_and_a_note() {
         .stdout(predicate::str::contains(
             "note: STAFF-057 Role change is recorded (openspec/changes/audit/specs/staff/spec.md:6) \
              is taken by STAFF-057 Valid registration (openspec/specs/billing/spec.md:6); \
-             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100",
+             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; \
+             give the delta copies STAFF-100\n",
         ));
     assert!(read(dir.path(), "openspec/specs/staff/spec.md")
         .contains("#### Scenario: STAFF-100 Role change is recorded"));
@@ -638,7 +662,8 @@ fn ids_019_copies_that_disagree_get_a_new_number_and_a_note() {
             "note: copies disagree: \
              STAFF-057 Role change is recorded (openspec/changes/c1/specs/staff/spec.md:6), \
              STAFF-058 Role change is recorded (openspec/changes/c2/specs/staff/spec.md:6); \
-             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100",
+             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; \
+             give the delta copies STAFF-100\n",
         ));
     assert!(read(dir.path(), "openspec/specs/staff/spec.md")
         .contains("#### Scenario: STAFF-100 Role change is recorded"));
