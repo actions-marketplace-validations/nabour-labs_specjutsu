@@ -707,3 +707,58 @@ fn loop_035_a_failing_unchanged_scenario_is_still_reported() {
         .code(1)
         .stdout(predicate::str::is_match(r"failing \S+  AUTH-002\n").unwrap());
 }
+
+#[test]
+fn loop_034_a_linked_scenario_proven_red_covers_a_source_change() {
+    let repo = linked_repo();
+    repo.write(
+        "tests/staff.rs",
+        "#[test]\nfn staff_063_lists_staff() { panic!(\"red\"); }\n",
+    );
+    repo.commit("red");
+    sj(repo.path(), &["test", "STAFF-063"]).assert().code(1);
+    repo.write("tests/staff.rs", "#[test]\nfn staff_063_lists_staff() {}\n");
+    repo.write("src/lib.rs", "pub fn staff() { let _ = 1; }\n");
+    repo.commit("green");
+    sj(repo.path(), &["test", "STAFF-063"]).assert().success();
+    sj(repo.path(), &["verify"])
+        .assert()
+        .success()
+        .stdout("verify: ok\n");
+}
+
+#[test]
+fn loop_036_an_added_scenario_committed_on_the_default_branch_still_needs_a_red_run() {
+    let repo = support::Repo::with_lib("pub fn x() {}\n");
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\nmode = \"strict\"\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**\"]\n",
+    );
+    repo.commit("config");
+    repo.add_change("add-x", &[("MATH-001", "Adds")]);
+    repo.write(
+        "openspec/changes/add-x/tasks.md",
+        "## 1. X\n\n- [ ] 1.1 Add (MATH-001)\n",
+    );
+    repo.write("tests/math.rs", "#[test]\nfn math_001_adds() {}\n");
+    repo.commit("feat: MATH-001 on main");
+
+    sj(repo.path(), &["verify"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "unproven MATH-001 (no red run recorded)",
+        ));
+    assert!(!ledger_text(&repo).contains("\"failed\""));
+    let file = repo.path().join("openspec/changes/add-x/tasks.md");
+    sj(repo.path(), &["task", "done", "add-x", "1.1"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "unproven MATH-001 (no red run recorded)",
+        ));
+    assert!(std::fs::read_to_string(&file)
+        .unwrap()
+        .contains("- [ ] 1.1 Add (MATH-001)"));
+}
