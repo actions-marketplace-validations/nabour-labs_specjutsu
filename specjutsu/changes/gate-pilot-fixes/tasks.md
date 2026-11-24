@@ -15,7 +15,7 @@
 
 ## 4. IDs for one capability
 - [ ] 4.1 [P] `sj ids` capability and path targets, an original takes its MODIFIED copy's ID (IDS-014..018)
-- [ ] 4.2 [P] `sj spec validate` hint for MODIFIED scenarios whose original has no ID (SPEC-045, SPEC-046)
+- [x] 4.2 [P] `sj spec validate` hint for MODIFIED scenarios whose original has no ID (SPEC-045, SPEC-046)
 
 ## 5. Docs
 - [ ] 5.1 README and site/manual.html: gate results, suite `red_on_base` and `support`, `sj adopt`, `sj ids` targets, `sj verify`, `sj spec validate`; CHANGELOG entry (no-scenario: docs)
