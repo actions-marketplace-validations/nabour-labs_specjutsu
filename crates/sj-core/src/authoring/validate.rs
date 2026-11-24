@@ -72,7 +72,7 @@ pub fn validate(spec_root: &Path, change: Option<&str>) -> Result<Report> {
             check_keywords(&mut r, &file, &lines, &mask);
             let blocks = blocks::blocks_in(&lines, &mask, all);
             for b in &blocks {
-                check_block(&mut r, &file, &lines, &mask, b);
+                check_block(&mut r, &file, &lines, &mask, b, None);
             }
             check_purpose(&mut r, &file, &text);
         }
@@ -160,8 +160,66 @@ fn check_keywords(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool]) {
     }
 }
 
+/// Scenarios without an ID in the `specs/` copy of a MODIFIED requirement, and the command
+/// that gives them one (SPEC-045/046).
+struct IdFix {
+    names: BTreeSet<String>,
+    target: String,
+    capability: String,
+}
+
+impl IdFix {
+    fn hint(&self) -> String {
+        format!("run sj ids --write {} first", self.capability)
+    }
+}
+
+/// The `specs/` scenarios without an ID in the requirement a MODIFIED block `name` replaces.
+fn unnamed_originals(
+    spec_root: &Path,
+    target: &Path,
+    rel: &Path,
+    renames: &[blocks::Rename],
+    name: &str,
+) -> Result<IdFix> {
+    let slash = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let mut fix = IdFix {
+        names: BTreeSet::new(),
+        target: slash(target.strip_prefix(spec_root).unwrap_or(target)),
+        capability: slash(rel.parent().unwrap_or(rel)),
+    };
+    if !target.is_file() {
+        return Ok(fix);
+    }
+    let original = renames
+        .iter()
+        .find(|r| r.to == name)
+        .map_or(name, |r| r.from.as_str());
+    let text = read(target)?;
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mask = blocks::fence_mask(&lines);
+    for b in blocks::blocks_in(&lines, &mask, 0..lines.len()) {
+        if b.name == original {
+            for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
+                if s.id.is_none() {
+                    fix.names.insert(s.name);
+                }
+            }
+        }
+    }
+    Ok(fix)
+}
+
 /// A requirement needs a scenario and a SHALL or MUST; each scenario needs an ID, WHEN and THEN.
-fn check_block(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool], b: &Block) {
+/// `fix`, for a MODIFIED block, names the `specs/` scenarios that still lack an ID.
+fn check_block(
+    r: &mut Report,
+    file: &Path,
+    lines: &[&str],
+    mask: &[bool],
+    b: &Block,
+    fix: Option<&IdFix>,
+) {
     let scenarios = blocks::scenarios_in(lines, mask, b.lines.clone());
     let first = scenarios.first().map_or(b.lines.end, |s| s.line - 1);
     let text = lines[b.header..first].join("\n");
@@ -181,8 +239,21 @@ fn check_block(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool], b: &B
     }
     for s in &scenarios {
         let label = s.id.clone().unwrap_or_else(|| s.name.clone());
-        if s.id.is_none() {
-            r.err(format!("{} has no ID", s.name), file, s.line);
+        let fix = fix.filter(|f| f.names.contains(&s.name));
+        match (&s.id, fix) {
+            (None, None) => r.err(format!("{} has no ID", s.name), file, s.line),
+            (None, Some(f)) => r.err(format!("{} has no ID; {}", s.name, f.hint()), file, s.line),
+            (Some(id), Some(f)) => r.warn(
+                format!(
+                    "{id} {}: {} has this scenario without an ID; {}",
+                    s.name,
+                    f.target,
+                    f.hint()
+                ),
+                file,
+                s.line,
+            ),
+            (Some(_), None) => {}
         }
         if let Some(m) = s.marker.as_deref().filter(|m| *m != crate::spec::KEEP) {
             r.err(format!("unknown scenario marker [{m}]"), file, s.line);
@@ -278,7 +349,7 @@ fn validate_change(
             );
         }
         for b in &d.added {
-            check_block(out, &file, &lines, &mask, b);
+            check_block(out, &file, &lines, &mask, b, None);
             for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
                 let Some(id) = s.id else { continue };
                 match seen.get(&id) {
@@ -290,7 +361,8 @@ fn validate_change(
             }
         }
         for b in &d.modified {
-            check_block(out, &file, &lines, &mask, b);
+            let fix = unnamed_originals(spec_root, &target, rel, &d.renamed, &b.name)?;
+            check_block(out, &file, &lines, &mask, b, Some(&fix));
             if !after.contains(&b.name) {
                 out.err(
                     format!("MODIFIED requirement not found: {}", b.name),
