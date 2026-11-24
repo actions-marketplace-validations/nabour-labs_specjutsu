@@ -89,7 +89,8 @@ pub fn default_spec_root(root: &Path) -> String {
 /// Folder names that hold test helpers and fixtures rather than product code. `sj adopt`
 /// declares them as `support` globs (CONF-039), and the gate checks files the change added or
 /// modified under them for helpers missing on base (GATE-056/062). The gate does not treat them
-/// as support: only files under `tests/` and those a `support` glob matches are overlaid.
+/// as support: only files under `tests/` and those a suite's `tests` or `support` glob matches
+/// are overlaid.
 pub const HELPER_DIRS: [&str; 8] = [
     "testing",
     "test-utils",

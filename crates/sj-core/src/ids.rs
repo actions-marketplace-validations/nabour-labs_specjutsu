@@ -4,7 +4,7 @@
 //! highest one ever used under the spec root, archive included; a delta copy of a `specs/`
 //! scenario shares its ID. Writing inserts the ID before each name and changes no other byte.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -464,6 +464,15 @@ pub fn plan_for(
         files.push((file, place, located, content));
     }
 
+    // With targets, problems in capabilities outside them don't stop the run (IDS-021).
+    let is_selected = |cap: &str| only.map_or(true, |caps| caps.iter().any(|c| c == cap));
+    let prefix_for = |cap: &str| {
+        prefixes
+            .get(cap)
+            .cloned()
+            .unwrap_or_else(|| derive_prefix(cap))
+    };
+
     // Prefixes for capabilities that need IDs, and collisions among them (IDS-004, IDS-005).
     let mut prefix_of: BTreeMap<String, String> = BTreeMap::new();
     for (file, place, located, _) in &files {
@@ -471,6 +480,9 @@ pub fn plan_for(
             continue;
         }
         let Some(cap) = &place.capability else {
+            if only.is_some() {
+                continue;
+            }
             bail!(
                 "{} has scenarios without IDs but is not in a capability folder \
                  (specs/<capability>/spec.md)",
@@ -480,11 +492,11 @@ pub fn plan_for(
         if prefix_of.contains_key(cap) {
             continue;
         }
-        let prefix = match prefixes.get(cap) {
-            Some(p) => p.clone(),
-            None => derive_prefix(cap),
-        };
+        let prefix = prefix_for(cap);
         if prefix.is_empty() {
+            if !is_selected(cap) {
+                continue;
+            }
             bail!(
                 "capability `{cap}` has no letters to make a prefix; \
                  map it in [ids.prefixes] in specjutsu.toml"
@@ -493,14 +505,13 @@ pub fn plan_for(
         prefix_of.insert(cap.clone(), prefix);
     }
     // With targets, only prefixes a selected capability uses are checked (IDS-017, IDS-021).
-    let selected = |prefix: &str| {
-        only.map_or(true, |caps| {
-            caps.iter()
-                .any(|c| prefixes.get(c).cloned().unwrap_or_else(|| derive_prefix(c)) == prefix)
-        })
-    };
+    let selected: Option<BTreeSet<String>> =
+        only.map(|caps| caps.iter().map(|c| prefix_for(c)).collect());
     let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
-    for (cap, prefix) in prefix_of.iter().filter(|(_, p)| selected(p)) {
+    for (cap, prefix) in prefix_of
+        .iter()
+        .filter(|(_, p)| selected.as_ref().map_or(true, |s| s.contains(*p)))
+    {
         if let Some(other) = owner.insert(prefix, cap) {
             let mut pair = [other, cap.as_str()];
             pair.sort();
@@ -610,9 +621,10 @@ pub fn plan_for(
         }
     };
 
+    // Targets limit the result; numbering above covers the whole root (IDS-014).
     let mut out = Vec::new();
     for (fi, (file, place, located, _)) in files.iter().enumerate() {
-        let Some(cap) = &place.capability else {
+        let Some(cap) = place.capability.as_ref().filter(|c| is_selected(c)) else {
             continue;
         };
         for (li, l) in located.iter().enumerate() {
@@ -653,14 +665,6 @@ pub fn plan_for(
                 note,
             });
         }
-    }
-    // Targets limit the result; numbering above covers the whole root (IDS-014).
-    if let Some(only) = only {
-        out.retain(|a| {
-            place(spec_root, &a.file)
-                .capability
-                .is_some_and(|c| only.contains(&c))
-        });
     }
     Ok(out)
 }
