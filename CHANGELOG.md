@@ -12,21 +12,31 @@ All notable changes are recorded here. The format follows
   `compile-red <ID> <test> (suite requires an assertion failure on base)`. It takes no
   `reason` and applies to Cargo suites too.
 - `green:linked`: an implemented scenario (one that gains its first test) whose tests pass
-  on base and at head passes the gate instead of failing as `green-on-base`. It doesn't
-  count as specifying a source change, so a change that also edits source still needs a
-  red-on-base scenario or an exemption. `--json` lists it in `proven` with
-  `"red": "green:linked"`; `--format markdown` lists it under **Linked existing behaviour**.
+  on base and at head passes the gate instead of failing as `green-on-base`, and the pass
+  line counts it (`gate: pass — 1 scenario proven (1 green:linked)`). An implemented
+  scenario whose tests all pass on base never counts as specifying a source change, even
+  when a test fails at head, so a change that also edits source still needs a red-on-base
+  scenario or an exemption. When one of its tests fails on base, that proves it instead.
+  `--json` lists it in `proven` with `"red": "green:linked"`; `--format markdown` lists it
+  under **Linked existing behaviour**.
 - `sj ids [--write] [<target>...]` takes capability names or paths to spec files or
   folders (resolved against `--root`, or absolute) and lists and writes only those whole
-  capabilities. Prefix checks and numbering still cover the whole spec root. A target
-  that selects nothing exits 2 and lists the known capabilities. A capability named
-  `prefixes` can only be targeted by path.
+  capabilities. The prefix check covers only the prefixes the selected capabilities use,
+  so an unrelated collision doesn't stop the run; numbering still covers the whole spec
+  root. A target that selects nothing exits 2 and lists the known capabilities. A
+  capability named `prefixes` can only be targeted by path.
 - `sj adopt` declares each package's test helper folders (`testing`, `test-utils`,
   `test-helpers`, `testutils`, `fixtures`, `__fixtures__`, `mocks`, `__mocks__`) as
-  `support` globs on its non-Cargo suites.
+  `support` globs on its non-Cargo suites, except folders under a `tests` folder, and
+  prints `note    support: <glob> (not source; overlaid on base; remove it if this folder
+  holds product code)` on stderr for each. Support files aren't source and are overlaid
+  on base, so don't mark product code as support. A helper folder it can't read stops it
+  with the error.
 - `sj spec validate` says to run `sj ids --write <capability>` first when a MODIFIED
   scenario's original in `specs/` has no ID: as a warning when the delta scenario has an
-  ID, appended to the missing-ID error when it has none.
+  ID, appended to the missing-ID error when it has none. When both have IDs and they
+  differ, it warns, as in `STAFF-057 Role change is recorded: specs/staff/spec.md has this
+  scenario as STAFF-100; give the delta copy STAFF-100`.
 
 ### Changed
 - `sj verify` and `sj task done` classify scenarios against the merge-base like the gate
@@ -34,18 +44,19 @@ All notable changes are recorded here. The format follows
   ones copied into a MODIFIED requirement, and implemented ones need only a passing latest
   run. On the default branch itself, or when `sj task done` can't classify (it warns),
   every scenario needs a red run. `sj task done` always compares with the default branch.
-  In `sj verify`, an implemented scenario with no red run doesn't cover a source change.
+  In `sj verify`, an implemented scenario with no red-before-green in the ledger doesn't
+  cover a source change, so editing source alongside it is an `unspecified change`.
 - `sj ids --write` gives a `specs/` scenario without an ID the ID its MODIFIED copy in an
   open change already has, matching a RENAMED requirement by its old name. When that ID is
   taken, or copies in two changes disagree, it assigns a new number and prints a `note:`
-  line; `--json` carries it as a `note` object.
+  line ending `; give the delta copies <ID>`; `--json` carries it as a `note` object.
 
 ### Fixed
-- A test that failed to load on base because it imports a test helper the change added but
-  didn't overlay no longer passes as `red:compile`. The gate fails it as
+- A test that failed to load on base because it imports a test helper the change added or
+  modified but didn't overlay no longer passes as `red:compile`. The gate fails it as
   `not-overlaid <ID> <test> (<file>; add it to the suite's support globs)`, matching the
-  helper's path in the base failure message (non-Cargo suites). A new source module missing
-  on base is still `red:compile`.
+  helper's path in the base failure message with `\` or `/` as the separator (non-Cargo
+  suites). A new source module missing on base is still `red:compile`.
 
 ## [0.5.1] - 2026-11-23
 

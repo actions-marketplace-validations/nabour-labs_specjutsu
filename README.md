@@ -371,13 +371,15 @@ is never skipped. A test file that fails to load on base, for example because it
 imports a function that doesn't exist yet, counts as `red:compile`.
 
 A test can also fail to load on base because it imports a test helper the change
-added but the gate didn't overlay. That shows nothing about the old code, so the
+added or modified but the gate didn't overlay. That shows nothing about the old code, so the
 gate fails it as `not-overlaid STAFF-073 lists admins (apps/api/src/testing/admin.ts;
 add it to the suite's support globs)` instead. The gate checks the files the change
-added under a helper folder (`testing`, `test-utils`, `test-helpers`, `testutils`,
-`fixtures`, `__fixtures__`, `mocks` or `__mocks__`) that base doesn't have and that
-weren't overlaid, and looks for each one in the base failure message, by its path from the
-repository, the package or the test's folder, with or without its extension. Only
+added or modified under a helper folder (`testing`, `test-utils`, `test-helpers`,
+`testutils`, `fixtures`, `__fixtures__`, `mocks` or `__mocks__`) that weren't overlaid,
+and looks for each one in the base failure message, by its path from the repository, the
+package or the test's folder, with or without its extension, with `\` or `/` as the
+separator. A helper base already has counts too, such as an edited `testing/index.ts`
+whose new export the base run reports as `does not provide an export named 'makeAdmin'`. Only
 non-Cargo suites report failure messages, so Cargo tests are never `not-overlaid`.
 A new source module that base can't load stays `red:compile`. Declare helpers
 outside these folders in `support` by hand.
@@ -394,9 +396,12 @@ A scenario that already existed but gains its first test in the change is
 pass on base and at head, the behaviour predates the change and the test only links
 to it. The gate passes it as `green:linked` instead of failing it as
 `green-on-base`. `--json` lists it in `proven` with `"red": "green:linked"`, and
-`--format markdown` lists it under **Linked existing behaviour**. A linked scenario
-doesn't count as specifying a source change, so a change that also edits source
-still needs a scenario that is red on base, or an exemption, or it fails as
+`--format markdown` lists it under **Linked existing behaviour**, and the pass line
+counts it, as in `gate: pass — 1 scenario proven (1 green:linked)`. When one of its
+tests fails on base, that failure proves it instead, and its other tests may pass there.
+An implemented scenario whose tests all pass on base never counts as specifying a source
+change, even when a test then fails at head, so a change that also edits source still
+needs a scenario that is red on base, or an exemption, or it fails as
 `unspecified change`.
 
 When a package declares `sources`, only changed files matching them need a scenario,
@@ -658,7 +663,17 @@ For each non-Cargo suite, adopt also declares the package's test helper folders
 on base. With `apps/api/src/testing/admin.ts` and `apps/api/src/__fixtures__/user.json`,
 the `apps/api` vitest suite gets
 `support = ["apps/api/src/__fixtures__/**", "apps/api/src/testing/**"]`. A suite
-with no helper folder gets no `support` key.
+with no helper folder gets no `support` key. Helper folders under a `tests` folder are
+left out, since the gate always overlays those. Adopt prints a note on stderr for each
+glob it adds:
+
+```
+note    support: apps/api/src/testing/** (not source; overlaid on base; remove it if this folder holds product code)
+```
+
+Support files are not source: they need no scenario, and the gate runs the head copy
+against the base code. Don't mark a folder of product code as support; remove the glob if
+one is. A helper folder adopt can't read stops it with the error.
 
 Every command reads the file first. An unknown key or runner exits 2 and names
 the problem. `--spec-root` still overrides `spec_root`. `sj doctor` lists config
@@ -719,8 +734,11 @@ wrote 2 IDs to 1 file
   uses that ID or when copies in two open changes disagree:
 
   ```
-  note: copies disagree: STAFF-057 Role change is recorded (openspec/changes/c1/specs/staff/spec.md:6), STAFF-058 Role change is recorded (openspec/changes/c2/specs/staff/spec.md:6); Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100
+  note: copies disagree: STAFF-057 Role change is recorded (openspec/changes/c1/specs/staff/spec.md:6), STAFF-058 Role change is recorded (openspec/changes/c2/specs/staff/spec.md:6); Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; give the delta copies STAFF-100
   ```
+
+  A taken ID reads `note: <copy> is taken by <scenario>; … gets STAFF-100; give the
+  delta copies STAFF-100`. Either way, update the delta copies by hand so they match.
 
   In `--json`, such an assignment carries a `note` object: `{"kind": "taken",
   "copy", "by"}` or `{"kind": "disagree", "copies"}`, each scenario with its `id`,
@@ -730,11 +748,13 @@ wrote 2 IDs to 1 file
   every other file byte for byte. A target is a capability name or a path to a
   spec file or folder, resolved against `--root` or absolute, and selects the whole
   capability of every open spec file under it, so a MODIFIED copy and its original
-  always get the same ID. The prefix checks and the numbering still cover the
-  whole spec root, so colliding prefixes still stop the run and numbers still
-  continue after the highest one used anywhere. A target that selects nothing exits
-  2, names it and lists the known capabilities. A capability named `prefixes` can
-  only be targeted by path (`sj ids specjutsu/specs/prefixes`), since
+  always get the same ID. The prefix check covers every capability, anywhere under
+  the spec root, whose prefix a selected capability uses, so a collision on that
+  prefix still stops the run, but one between two other capabilities (`billing` and
+  `bill-ing` both giving `BILLING`) doesn't stop `sj ids --write staff`. Numbering
+  still covers the whole spec root, so numbers continue after the highest one used
+  anywhere. A target that selects nothing exits 2, names it and lists the known
+  capabilities. A capability named `prefixes` can only be targeted by path (`sj ids specjutsu/specs/prefixes`), since
   `sj ids prefixes` is the subcommand.
 
 The gate treats a scenario that only gained an ID as unchanged, so the ID commit
@@ -839,7 +859,9 @@ and *clarify* passes. Existing `openspec/` folders work unchanged.
   a dropped scenario plus a new one. With an ID it is a warning, `STAFF-057 Role change is recorded:
   specs/staff/spec.md has this scenario without an ID; run sj ids --write staff
   first`; without one, the missing-ID error ends with `; run sj ids --write staff
-  first`.
+  first`. When both have IDs and they differ, the same tools see two scenarios, so
+  validate warns `STAFF-057 Role change is recorded: specs/staff/spec.md has this
+  scenario as STAFF-100; give the delta copy STAFF-100`.
 
   It exits 1 on errors. `--strict` also fails on warnings, such as a placeholder
   Purpose.
@@ -999,10 +1021,11 @@ takes `--json`, except `sj task done`.
   scenario that gains its first test) need only a passing latest run: an
   implemented scenario may be `green:linked`, which only the gate's base run can
   tell. Their tests still run, and a failing one is still reported. Since verify
-  can't see the base run, an implemented scenario with no red run doesn't count as
-  covering a source change there. On the default branch itself (the merge-base is
-  HEAD), with no merge-base, or when `sj task done` can't classify, every scenario
-  needs a red run.
+  can't see the base run, an implemented scenario whose ledger shows no
+  red-before-green doesn't count as covering a source change there: a change that
+  only adds such a test and edits `src/lib.rs` gets `unspecified change`. On the
+  default branch itself (the merge-base is HEAD), with no merge-base, or when
+  `sj task done` can't classify, every scenario needs a red run.
 
 `sj next` and `sj verify` compare against `--base`, or else the first of
 `origin/HEAD`, `origin/main`, `origin/master`, `main` and `master` that exists.
@@ -1384,7 +1407,8 @@ two in step:
   a new one, and `sj spec validate` says to run the same command.
 - **Declare test helper folders as `support`.** `sj adopt` does this for the
   folders it knows; add any other helper path by hand, or the gate fails tests that
-  import it as `not-overlaid`.
+  import it as `not-overlaid`. Support files aren't source and are overlaid on base,
+  so keep product code out of them.
 - **Behaviour that already existed shows as `green:linked`.** A test added for an
   old scenario passes on base, so the gate links it instead of failing it, and
   `sj verify` and `sj task done` accept its passing run. It doesn't cover source
