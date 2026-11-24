@@ -603,8 +603,9 @@ fn spec_045_the_keep_marker_is_ignored_when_matching_names() {
         .stdout(spec_045_warning("openspec"));
 }
 
+// Regression: pins behaviour validate had before this change, so it carries no scenario ID.
 #[test]
-fn spec_045_no_hint_when_the_original_already_has_an_id() {
+fn regression_no_hint_or_warning_when_the_original_has_the_same_id() {
     let dir = project();
     with_original(
         dir.path(),
@@ -616,6 +617,27 @@ fn spec_045_no_hint_when_the_original_already_has_an_id() {
         .assert()
         .success()
         .stdout("validate: ok\n");
+}
+
+#[test]
+fn spec_047_different_ids_on_a_copy_and_its_original_are_a_warning() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-100 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    let warning = "validate: 0 errors, 1 warning\n\
+         warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario as STAFF-100; give the delta copy STAFF-100 (openspec/changes/audit-roles/specs/staff/spec.md:6)\n";
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(warning);
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .code(1)
+        .stdout(warning);
 }
 
 #[test]
