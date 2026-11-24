@@ -1,5 +1,6 @@
 //! GATE-026, GATE-030..035 and GATE-038 (polyglot-gate) and GATE-046..047
-//! (fix-base-run-no-report) CLI scenarios: the gate across suites.
+//! (fix-base-run-no-report) and GATE-056 (gate-pilot-fixes) CLI scenarios: the gate across
+//! suites.
 //!
 //! A fake `pnpm` on PATH stands in for vitest and Playwright (Unix only). Its vitest run fails
 //! without a report unless `pnpm install` ran in the package first, fails to load the test file
@@ -380,4 +381,90 @@ fn gate_047_keep_a_base_report_with_a_failed_test_file_is_still_red_compile() {
     cmd.assert().success().stdout(predicate::str::starts_with(
         "gate: pass — 1 scenario proven (1 red:compile)\n",
     ));
+}
+
+/// A fake `pnpm` whose vitest run fails to load `src/users.test.ts` while
+/// `src/testing/admin.ts` is missing, and otherwise passes STAFF-073.
+#[cfg(unix)]
+fn fake_bin_admin(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let pnpm = r#"#!/bin/sh
+out=""
+for a in "$@"; do
+  case "$a" in --outputFile.junit=*) out="${a#--outputFile.junit=}" ;; esac
+done
+if [ -f src/testing/admin.ts ]; then
+  body='<testcase classname="src/users.test.ts" name="STAFF-073 lists admins"/>'
+  code=0
+else
+  body='<testcase classname="src/users.test.ts" name="src/users.test.ts"><failure message="Failed to load url ./testing/admin"/></testcase>'
+  code=1
+fi
+printf '<testsuites><testsuite name="vitest">%s</testsuite></testsuites>' "$body" > "$out"
+exit $code
+"#;
+    let p = dir.join("pnpm");
+    std::fs::write(&p, pnpm).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_056_a_helper_the_change_added_but_did_not_overlay_fails_the_gate() {
+    let repo = repo_with(&config_without_setup(), BUGGY, true);
+    let r = repo.path();
+    write(
+        r,
+        "openspec/specs/staff/spec.md",
+        "## Requirements\n\n### Requirement: Staff\nThe system SHALL list staff.\n\n\
+         #### Scenario: STAFF-073 Lists admins\n- **WHEN** x\n- **THEN** y\n",
+    );
+    write(
+        r,
+        "apps/api/src/testing/admin.ts",
+        "export const admin = { role: 'admin' }\n",
+    );
+    write(
+        r,
+        "apps/api/src/users.test.ts",
+        "import { admin } from './testing/admin'\n\
+         it(\"STAFF-073 lists admins\", () => { expect(admin.role).toBe('admin') })\n",
+    );
+    repo.commit("STAFF-073");
+
+    let bin = tempfile::tempdir().unwrap();
+    fake_bin_admin(bin.path());
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let out = Command::cargo_bin("sj")
+        .unwrap()
+        .args(["gate", "--base", "main", "--json", "--root"])
+        .arg(r)
+        .env("PATH", path)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let failures: Vec<&str> = report["failures"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|f| f.as_str())
+        .collect();
+    assert!(
+        failures.contains(
+            &"not-overlaid STAFF-073 lists admins (apps/api/src/testing/admin.ts; add it to the suite's support globs)"
+        ),
+        "{failures:#?}"
+    );
+    let proven = report["proven"].as_array().unwrap();
+    assert!(
+        !proven
+            .iter()
+            .any(|p| p["id"] == "STAFF-073" && p["red"] == "red:compile"),
+        "{proven:#?}"
+    );
 }
