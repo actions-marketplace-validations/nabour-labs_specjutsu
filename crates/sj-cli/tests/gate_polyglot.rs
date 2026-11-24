@@ -1,5 +1,5 @@
 //! GATE-026, GATE-030..035 and GATE-038 (polyglot-gate) and GATE-046..047
-//! (fix-base-run-no-report) and GATE-056..058, GATE-061 (gate-pilot-fixes) CLI scenarios: the gate across
+//! (fix-base-run-no-report) and GATE-056..062 (gate-pilot-fixes) CLI scenarios: the gate across
 //! suites.
 //!
 //! A fake `pnpm` on PATH stands in for vitest and Playwright (Unix only). Its vitest run fails
@@ -727,5 +727,110 @@ fn gate_060_a_linked_scenario_does_not_cover_a_source_change() {
     assert!(
         proven_as(&report, "STAFF-063", "green:linked"),
         "{report:#}"
+    );
+}
+
+/// A fake `pnpm` like `PNPM_STAFF_063`, except that STAFF-063's test fails while
+/// `src/users.ts` lists the owner role (head).
+#[cfg(unix)]
+const PNPM_STAFF_063_FAILS_AT_HEAD: &str = r#"#!/bin/sh
+out=""
+for a in "$@"; do
+  case "$a" in --outputFile.junit=*) out="${a#--outputFile.junit=}" ;; esac
+done
+case_='<testcase classname="src/users.test.ts" name="STAFF-063 lists admins"'
+if grep -q owner src/users.ts; then
+  body="$case_><failure message=\"AssertionError: expected only admin\"/></testcase>"
+  code=1
+else
+  body="$case_/>"
+  code=0
+fi
+printf '<testsuites><testsuite name="vitest">%s</testsuite></testsuites>' "$body" > "$out"
+exit $code
+"#;
+
+#[cfg(unix)]
+#[test]
+fn gate_060_a_linked_scenario_failing_at_head_still_does_not_cover_a_source_change() {
+    let repo = staff_063_repo();
+    write(
+        repo.path(),
+        "apps/api/src/users.ts",
+        "export const roles = ['admin', 'owner']\n",
+    );
+    repo.commit("users");
+    let (code, report) = gate_json(&repo, PNPM_STAFF_063_FAILS_AT_HEAD);
+    assert_eq!(code, Some(1), "{report:#}");
+    let failures = failures(&report);
+    assert!(
+        failures.contains(&"failing STAFF-063 lists admins"),
+        "{failures:#?}"
+    );
+    assert!(
+        failures.contains(&"unspecified change: apps/api/src/users.ts"),
+        "{failures:#?}"
+    );
+}
+
+/// A fake `pnpm` whose vitest run fails to load `src/staff.test.ts` while
+/// `src/testing/index.ts` has no `makeAdmin` export (base), and otherwise passes STAFF-074.
+#[cfg(unix)]
+const PNPM_MAKE_ADMIN: &str = r#"#!/bin/sh
+out=""
+for a in "$@"; do
+  case "$a" in --outputFile.junit=*) out="${a#--outputFile.junit=}" ;; esac
+done
+if grep -q makeAdmin src/testing/index.ts; then
+  body='<testcase classname="src/staff.test.ts" name="STAFF-074 makes an admin"/>'
+  code=0
+else
+  body="<testcase classname=\"src/staff.test.ts\" name=\"src/staff.test.ts\"><failure message=\"SyntaxError: The requested module './testing/index.ts' does not provide an export named 'makeAdmin'\"/></testcase>"
+  code=1
+fi
+printf '<testsuites><testsuite name="vitest">%s</testsuite></testsuites>' "$body" > "$out"
+exit $code
+"#;
+
+#[cfg(unix)]
+#[test]
+fn gate_062_a_helper_the_change_modified_but_did_not_overlay_fails_the_gate() {
+    let repo = repo_with(&config_without_setup(), BUGGY, true);
+    let r = repo.path();
+    repo.git(&["checkout", "-q", "main"]);
+    write(
+        r,
+        "apps/api/src/testing/index.ts",
+        "export const user = { role: 'user' }\n",
+    );
+    repo.commit("testing helpers");
+    repo.git(&["checkout", "-q", "-B", "feature"]);
+    write(
+        r,
+        "openspec/specs/staff/spec.md",
+        "## Requirements\n\n### Requirement: Staff\nThe system SHALL make staff.\n\n\
+         #### Scenario: STAFF-074 Makes an admin\n- **WHEN** x\n- **THEN** y\n",
+    );
+    write(
+        r,
+        "apps/api/src/testing/index.ts",
+        "export const user = { role: 'user' }\n\
+         export const makeAdmin = () => ({ role: 'admin' })\n",
+    );
+    write(
+        r,
+        "apps/api/src/staff.test.ts",
+        "import { makeAdmin } from './testing/index.ts'\n\
+         it(\"STAFF-074 makes an admin\", () => { expect(makeAdmin().role).toBe('admin') })\n",
+    );
+    repo.commit("STAFF-074");
+    let (code, report) = gate_json(&repo, PNPM_MAKE_ADMIN);
+    assert_eq!(code, Some(1), "{report:#}");
+    let failures = failures(&report);
+    assert!(
+        failures.contains(
+            &"not-overlaid STAFF-074 makes an admin (apps/api/src/testing/index.ts; add it to the suite's support globs)"
+        ),
+        "{failures:#?}"
     );
 }
