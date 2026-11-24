@@ -524,3 +524,55 @@ fn spec_033_all_done_archives_only_finished_changes() {
         .success()
         .stdout("nothing to archive\n");
 }
+
+// ---------- MODIFIED scenarios whose original has no ID ----------
+
+/// `specs/staff/spec.md` with `Role changes are audited` holding a scenario without an ID,
+/// and a change `audit-roles` whose MODIFIED copy of it has the heading `scenario`.
+fn with_unnamed_original(dir: &Path, scenario: &str) {
+    put(
+        dir,
+        "openspec/specs/staff/spec.md",
+        "# staff Specification\n\n## Purpose\nManage staff accounts and roles.\n\n## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes.\n\n#### Scenario: Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n",
+    );
+    put(
+        dir,
+        "openspec/changes/audit-roles/specs/staff/spec.md",
+        &format!(
+            "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes with the actor.\n\n#### Scenario: {scenario}\n- **WHEN** a role changes\n- **THEN** it is recorded with the actor\n"
+        ),
+    );
+    put(
+        dir,
+        "openspec/changes/audit-roles/tasks.md",
+        "# Tasks\n\n- [ ] 1.1 Record the actor (STAFF-057)\n",
+    );
+}
+
+#[test]
+fn spec_045_an_id_the_original_lacks_is_a_warning_with_the_fix() {
+    let dir = project();
+    with_unnamed_original(dir.path(), "STAFF-057 Role change is recorded");
+    let warning = "validate: 0 errors, 1 warning\n\
+         warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario without an ID; run sj ids --write staff first (openspec/changes/audit-roles/specs/staff/spec.md:6)\n";
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(warning);
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .code(1)
+        .stdout(warning);
+}
+
+#[test]
+fn spec_046_a_missing_id_in_a_modified_copy_names_the_same_fix() {
+    let dir = project();
+    with_unnamed_original(dir.path(), "Role change is recorded");
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "fail    Role change is recorded has no ID; run sj ids --write staff first (openspec/changes/audit-roles/specs/staff/spec.md:6)\n",
+        ));
+}
