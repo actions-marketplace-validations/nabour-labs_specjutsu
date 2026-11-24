@@ -212,7 +212,8 @@ fn unnamed_originals(
                         fix.names.insert(s.name);
                     }
                     Some(id) => {
-                        fix.ids.insert(s.name, id);
+                        // The first of two same-named scenarios; other checks flag the pair.
+                        fix.ids.entry(s.name).or_insert(id);
                     }
                 }
             }
@@ -266,9 +267,11 @@ fn check_block(
                 s.line,
             ),
             (Some(id), None) => {
-                // SPEC-047: tools that match by full name see two scenarios.
+                // SPEC-047: tools that match by full name see two scenarios. When another
+                // scenario in the block already has the original's ID, taking it would make two.
                 let other = fix.and_then(|f| Some((f, f.ids.get(&s.name)?)));
-                if let Some((f, original)) = other.filter(|(_, o)| *o != id) {
+                let in_block = |o: &String| scenarios.iter().any(|t| t.id.as_ref() == Some(o));
+                if let Some((f, original)) = other.filter(|(_, o)| *o != id && !in_block(o)) {
                     r.warn(
                         format!(
                             "{id} {}: {} has this scenario as {original}; give the delta copy {original}",
