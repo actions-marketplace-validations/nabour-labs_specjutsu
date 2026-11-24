@@ -387,6 +387,37 @@ fn gate_009_compile_failure_on_base_is_red_compile() {
 }
 
 #[test]
+fn gate_061_a_cargo_assert_suite_rejects_a_compile_red() {
+    let repo = Repo::with_lib("pub fn other() {}\n");
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**\"]\nred_on_base = \"assert\"\n",
+    );
+    repo.commit("config");
+    repo.branch("feature");
+    repo.add_change("add-math", &[("MATH-001", "Add numbers")]);
+    repo.write("tests/math.rs", ADD_TEST);
+    repo.write("src/lib.rs", ADD_OK);
+    repo.commit("feat(MATH-001): green");
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    assert!(
+        r.failures.contains(
+            &"compile-red MATH-001 math_001_adds (suite requires an assertion failure on base)"
+                .to_string()
+        ),
+        "{:?}",
+        r.failures
+    );
+    assert!(
+        r.proven.iter().all(|p| p.id != "MATH-001"),
+        "{:?}",
+        r.proven
+    );
+}
+
+#[test]
 fn gate_010_only_test_files_are_overlaid_and_head_is_untouched() {
     let repo = Repo::with_lib(ADD_BUG);
     repo.branch("feature");

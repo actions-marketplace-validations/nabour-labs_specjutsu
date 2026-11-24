@@ -611,3 +611,19 @@ fn gate_061_an_assert_suite_rejects_a_compile_red() {
     let proven = report["proven"].as_array().unwrap();
     assert!(!proven.iter().any(|p| p["id"] == "AUTH-004"), "{report:#}");
 }
+
+#[cfg(unix)]
+#[test]
+fn gate_061_an_assert_suite_still_proves_an_assertion_failure_red_assert() {
+    let tests = "tests = [\"apps/api/src/**/*.test.ts\"]\n";
+    let config =
+        config_without_setup().replacen(tests, &format!("{tests}red_on_base = \"assert\"\n"), 1);
+    let repo = repo_with(&config, BUGGY, true);
+    add_auth_004(&repo, TEST, FIXED);
+    let bin = tempfile::tempdir().unwrap();
+    let (mut cmd, _) = gate(&repo, &bin);
+    let out = cmd.arg("--json").output().unwrap();
+    let report: serde_json::Value =
+        serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    assert!(proven_as(&report, "AUTH-004", "red:assert"), "{report:#}");
+}

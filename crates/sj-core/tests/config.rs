@@ -284,6 +284,27 @@ fn gate_034_skip_needs_a_reason_and_a_reason_needs_skip() {
 }
 
 #[test]
+fn gate_061_assert_parses_round_trips_and_takes_no_reason() {
+    let suite = |body: &str| {
+        format!(
+            "schema = 1\n\n[[package]]\npath = \"apps/api\"\nsources = []\n\n[[package.suite]]\n\
+             runner = \"vitest\"\ntests = []\n{body}"
+        )
+    };
+    let c = load_text(&suite("red_on_base = \"assert\"\n")).unwrap();
+    assert_eq!(
+        c.packages[0].suites[0].red_on_base,
+        config::RedOnBase::Assert
+    );
+    assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
+    let e = err_text(&suite("red_on_base = \"assert\"\nreason = \"x\"\n"));
+    assert!(
+        e.contains("`reason` is only for red_on_base = \"skip\""),
+        "{e}"
+    );
+}
+
+#[test]
 fn gate_038_non_source_is_a_top_level_list() {
     let c = load_text(GATE_KEYS).unwrap();
     assert_eq!(c.non_source, vec!["infra/**".to_string(), "*.tf".into()]);
