@@ -107,10 +107,7 @@ fn conf_041_adopt_names_each_support_glob_it_adds() {
         .get_output()
         .clone();
     let stderr = String::from_utf8(out.stderr).unwrap();
-    let lines: Vec<&str> = stderr
-        .lines()
-        .filter(|l| l.contains("support: "))
-        .collect();
+    let lines: Vec<&str> = stderr.lines().filter(|l| l.contains("support: ")).collect();
     assert_eq!(
         lines,
         ["note    support: apps/api/src/testing/** (not source; overlaid on base; remove it if this folder holds product code)"],
