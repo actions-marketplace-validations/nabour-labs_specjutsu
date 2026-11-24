@@ -498,6 +498,33 @@ fn gate_023_implemented_is_treated_like_added() {
     assert!(has(&evaluate(&i).failures, "untested AUTH-004"));
 }
 
+#[test]
+fn gate_023_an_implemented_scenario_with_a_red_test_is_proven_by_it() {
+    // Two tests: one red on base, one passing there. The red one is the proof; the other
+    // doesn't make the scenario green-on-base, nor linked.
+    let mut i = input();
+    i.changes.insert("MATH-001".into(), Change::Implemented);
+    i.trace.mapped.push(Mapped {
+        id: "MATH-001".into(),
+        name: "Add numbers".into(),
+        tests: vec![tref("math_001_adds"), tref("math_001_adds_zero")],
+    });
+    i.head_run = head(&[
+        ("tests::math_001_adds", Outcome::Passed),
+        ("tests::math_001_adds_zero", Outcome::Passed),
+    ]);
+    i.base
+        .insert(("MATH-001".into(), "math_001_adds".into()), Red::Assert);
+    i.base
+        .insert(("MATH-001".into(), "math_001_adds_zero".into()), Red::Green);
+    i.changed_files = vec!["src/lib.rs".into()];
+    let r = evaluate(&i);
+    assert!(r.pass, "{:?}", r.failures);
+    assert_eq!(r.proven.len(), 1);
+    assert_eq!(r.proven[0].id, "MATH-001");
+    assert_eq!(r.proven[0].red, Red::Assert);
+}
+
 // ---------- history ----------
 
 #[test]
