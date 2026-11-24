@@ -1,7 +1,7 @@
 # Tasks
 
 ## 1. Helper folders
-- [ ] 1.1 Shared helper-folder list in sj-core, used by `sj adopt` for `support` globs (CONF-039, CONF-040)
+- [x] 1.1 Shared helper-folder list in sj-core, used by `sj adopt` for `support` globs (CONF-039, CONF-040)
 
 ## 2. Compile red from a missing helper
 - [ ] 2.1 `not-overlaid` check on base-run failure messages (GATE-056)
