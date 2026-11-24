@@ -1035,6 +1035,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     // Target tests, by the suite that runs them: (package index, suite index) → (ID, test).
     let mut by_suite: BTreeMap<(usize, usize), Vec<(String, testscan::TestFn)>> = BTreeMap::new();
     let mut cargo_jobs: Vec<(String, String, String)> = Vec::new();
+    // Target tests in a `red_on_base = "assert"` suite (GATE-061).
+    let mut assert_only = BTreeSet::new();
     let rel = |p: &Path| -> String {
         p.strip_prefix(root)
             .unwrap_or(p)
@@ -1044,6 +1046,11 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     for m in report.mapped.iter().filter(|m| targets.contains(&&m.id)) {
         for t in &m.tests {
             if is_cargo(t) {
+                if suite_of(&config, t.package.as_deref(), t.suite).is_some_and(|(pi, si)| {
+                    config.packages[pi].suites[si].red_on_base == RedOnBase::Assert
+                }) {
+                    assert_only.insert((m.id.clone(), t.name.clone()));
+                }
                 cargo_jobs.push((m.id.clone(), t.name.clone(), rel(&t.file)));
                 continue;
             }
@@ -1127,7 +1134,6 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     let mut base_messages = BTreeMap::new();
     let mut added_helpers = Vec::new();
     let mut reasons = BTreeMap::new();
-    let mut assert_only = BTreeSet::new();
     if !skip_red && !targets.is_empty() {
         for (id, name, file) in &cargo_jobs {
             if !is_test_file(file) {
