@@ -1,5 +1,5 @@
 //! GATE-026, GATE-030..035 and GATE-038 (polyglot-gate) and GATE-046..047
-//! (fix-base-run-no-report) and GATE-056..058 (gate-pilot-fixes) CLI scenarios: the gate across
+//! (fix-base-run-no-report) and GATE-056..058, GATE-061 (gate-pilot-fixes) CLI scenarios: the gate across
 //! suites.
 //!
 //! A fake `pnpm` on PATH stands in for vitest and Playwright (Unix only). Its vitest run fails
@@ -579,4 +579,35 @@ fn gate_058_keep_a_new_source_module_missing_on_base_is_still_red_compile() {
         !failures.iter().any(|f| f.starts_with("not-overlaid")),
         "{failures:#?}"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn gate_061_an_assert_suite_rejects_a_compile_red() {
+    let tests = "tests = [\"apps/api/src/**/*.test.ts\"]\n";
+    let config =
+        config_without_setup().replacen(tests, &format!("{tests}red_on_base = \"assert\"\n"), 1);
+    assert!(config.contains("red_on_base = \"assert\""));
+    let repo = repo_with(&config, BUGGY, true);
+    add_auth_004(
+        &repo,
+        "import { refreshToken } from './auth'\n\
+         it(\"AUTH-004 rejects expired token\", () => { expect(refreshToken('old')).toBe(null) })\n",
+        "export const refreshToken = (t) => rejectExpired(t)\n",
+    );
+    let bin = tempfile::tempdir().unwrap();
+    let (mut cmd, _) = gate(&repo, &bin);
+    let out = cmd.arg("--json").output().unwrap();
+    let report: serde_json::Value =
+        serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    assert_eq!(out.status.code(), Some(1), "{report:#}");
+    let failures = failures(&report);
+    assert!(
+        failures.contains(
+            &"compile-red AUTH-004 rejects expired token (suite requires an assertion failure on base)"
+        ),
+        "{failures:#?}"
+    );
+    let proven = report["proven"].as_array().unwrap();
+    assert!(!proven.iter().any(|p| p["id"] == "AUTH-004"), "{report:#}");
 }
