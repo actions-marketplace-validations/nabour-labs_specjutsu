@@ -156,9 +156,9 @@ pub struct Input {
     pub baseline_added: BTreeSet<BaselineEntry>,
     /// The base run's failure message for target tests that failed there, keyed like `base`.
     pub base_messages: BTreeMap<(String, String), String>,
-    /// Files the change added in a helper folder ([`crate::config::HELPER_DIRS`]) that were
-    /// not overlaid on base (GATE-056).
-    pub added_helpers: Vec<String>,
+    /// Files the change added or modified in a helper folder ([`crate::config::HELPER_DIRS`])
+    /// that were not overlaid on base (GATE-056/062).
+    pub changed_helpers: Vec<String>,
 }
 
 /// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
@@ -173,8 +173,10 @@ fn label(id: &str, name: &str) -> String {
 
 /// The first of `helpers` that a base failure message of test `t` names (GATE-056): by its
 /// path from the repository, the test's package or the test's folder, with or without its
-/// extension.
+/// extension, and with `\` or `/` as the separator.
 fn missing_helper(t: &trace::TestRef, message: &str, helpers: &[String]) -> Option<String> {
+    // Windows runners may write `\` in paths.
+    let message = &message.replace('\\', "/");
     let file = t.file.to_string_lossy().replace('\\', "/");
     let folder = file.rsplit_once('/').map_or("", |(d, _)| d);
     let bases = [t.package.as_deref().unwrap_or(""), folder];
@@ -409,13 +411,13 @@ pub fn evaluate(input: &Input) -> GateReport {
             }
             let key = (id.to_string(), t.name.clone());
             let red = input.base.get(&key);
-            // GATE-056: a test that fails to load because of a helper the change added but
-            // didn't overlay shows nothing about the old code, keep test or not.
+            // GATE-056/062: a test that fails to load because of a helper the change added or
+            // modified but didn't overlay shows nothing about the old code, keep test or not.
             if red == Some(&Red::Compile) {
                 if let Some(file) = input
                     .base_messages
                     .get(&key)
-                    .and_then(|msg| missing_helper(t, msg, &input.added_helpers))
+                    .and_then(|msg| missing_helper(t, msg, &input.changed_helpers))
                 {
                     ok = false;
                     r.failures.push(format!(
@@ -840,8 +842,6 @@ pub struct Prepared {
     pub baseline: Baseline,
     /// Entries of the head baseline that the base baseline doesn't list.
     pub baseline_added: BTreeSet<BaselineEntry>,
-    /// Every file path on the merge base, repository-relative.
-    pub base_files: BTreeSet<String>,
 }
 
 /// Gather the gate's inputs against the merge-base of `base` and `HEAD`, without running tests.
@@ -994,7 +994,6 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
         exemptions,
         baseline,
         baseline_added,
-        base_files: base_paths.into_iter().collect(),
     })
 }
 
@@ -1038,7 +1037,6 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         exemptions,
         baseline,
         baseline_added,
-        base_files,
     } = prepare(root, &opts.spec_root, &config, &opts.base)?;
 
     let targets: Vec<&String> = changes
@@ -1154,7 +1152,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     // Red-on-base.
     let mut base = BTreeMap::new();
     let mut base_messages = BTreeMap::new();
-    let mut added_helpers = Vec::new();
+    let mut changed_helpers = Vec::new();
     let mut reasons = BTreeMap::new();
     if !skip_red && !targets.is_empty() {
         for (id, name, file) in &cargo_jobs {
@@ -1200,14 +1198,13 @@ pub fn run(opts: &Options) -> Result<GateReport> {
                 (is_test_support(f) || overlay_globs.is_match(f.as_str())) && root.join(f).is_file()
             })
             .collect();
-        // GATE-056: helpers the change added (absent on base) that weren't overlaid.
-        added_helpers = changed_files
+        // GATE-056/062: helpers the change added or modified that weren't overlaid.
+        changed_helpers = changed_files
             .iter()
             .filter(|f| {
                 f.rsplit_once('/')
                     .is_some_and(|(dir, _)| dir.split('/').any(crate::config::is_helper_dir))
                     && !overlay.contains(f)
-                    && !base_files.contains(*f)
                     && root.join(f).is_file()
             })
             .cloned()
@@ -1246,7 +1243,7 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         baseline,
         baseline_added,
         base_messages,
-        added_helpers,
+        changed_helpers,
     });
     // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
     let audit = crate::audit::run(&crate::audit::Options {
@@ -1631,7 +1628,7 @@ mod tests {
     }
 
     #[test]
-    fn gate_056_a_failure_message_names_a_helper_by_its_paths() {
+    fn missing_helper_matches_whole_paths() {
         let admin = "apps/api/src/testing/admin.ts";
         let hit = Some(admin.to_string());
         // From the test's folder, the package and the repository, with or without extension.
@@ -1662,5 +1659,17 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn missing_helper_matches_backslash_paths() {
+        let admin = "apps/api/src/testing/admin.ts";
+        let hit = Some(admin.to_string());
+        assert_eq!(named(r"Failed to load url .\testing\admin", &[admin]), hit);
+        assert_eq!(
+            named(r"ENOENT C:\x\base\apps\api\src\testing\admin.ts", &[admin]),
+            hit
+        );
+        assert_eq!(named(r"Failed to load url .\other\testing\admin", &[admin]), None);
     }
 }
