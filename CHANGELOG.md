@@ -6,6 +6,47 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `red_on_base = "assert"` suite policy: only an assertion failure on base counts as red,
+  and a test that fails to compile or load there fails as
+  `compile-red <ID> <test> (suite requires an assertion failure on base)`. It takes no
+  `reason` and applies to Cargo suites too.
+- `green:linked`: an implemented scenario (one that gains its first test) whose tests pass
+  on base and at head passes the gate instead of failing as `green-on-base`. It doesn't
+  count as specifying a source change, so a change that also edits source still needs a
+  red-on-base scenario or an exemption. `--json` lists it in `proven` with
+  `"red": "green:linked"`; `--format markdown` lists it under **Linked existing behaviour**.
+- `sj ids [--write] [<target>...]` takes capability names or paths to spec files or
+  folders (resolved against `--root`, or absolute) and lists and writes only those whole
+  capabilities. Prefix checks and numbering still cover the whole spec root. A target
+  that selects nothing exits 2 and lists the known capabilities. A capability named
+  `prefixes` can only be targeted by path.
+- `sj adopt` declares each package's test helper folders (`testing`, `test-utils`,
+  `test-helpers`, `testutils`, `fixtures`, `__fixtures__`, `mocks`, `__mocks__`) as
+  `support` globs on its non-Cargo suites.
+- `sj spec validate` says to run `sj ids --write <capability>` first when a MODIFIED
+  scenario's original in `specs/` has no ID: as a warning when the delta scenario has an
+  ID, appended to the missing-ID error when it has none.
+
+### Changed
+- `sj verify` and `sj task done` classify scenarios against the merge-base like the gate
+  and need a red run only for added and modified scenarios. Unchanged scenarios, such as
+  ones copied into a MODIFIED requirement, and implemented ones need only a passing latest
+  run. On the default branch itself, or when `sj task done` can't classify (it warns),
+  every scenario needs a red run. `sj task done` always compares with the default branch.
+  In `sj verify`, an implemented scenario with no red run doesn't cover a source change.
+- `sj ids --write` gives a `specs/` scenario without an ID the ID its MODIFIED copy in an
+  open change already has, matching a RENAMED requirement by its old name. When that ID is
+  taken, or copies in two changes disagree, it assigns a new number and prints a `note:`
+  line; `--json` carries it as a `note` object.
+
+### Fixed
+- A test that failed to load on base because it imports a test helper the change added but
+  didn't overlay no longer passes as `red:compile`. The gate fails it as
+  `not-overlaid <ID> <test> (<file>; add it to the suite's support globs)`, matching the
+  helper's path in the base failure message (non-Cargo suites). A new source module missing
+  on base is still `red:compile`.
+
 ## [0.5.1] - 2026-11-23
 
 ### Changed
