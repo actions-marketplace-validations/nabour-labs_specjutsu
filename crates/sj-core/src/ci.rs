@@ -85,20 +85,27 @@ pub fn render_markdown(report: &GateReport, base: &str) -> String {
     enum Item {
         Row(String),
         Kept(String),
+        Linked(String),
         Other(String),
         Warn(String),
         Exempt(String),
     }
     // GATE-043: passing keep scenarios get their own section; failing ones stay in the table
     // with their fix hint.
-    let (kept, mut rows): (Vec<&Row>, Vec<&Row>) =
+    let (kept, rows): (Vec<&Row>, Vec<&Row>) =
         report.rows.iter().partition(|r| r.keep && !r.failed);
+    // GATE-059: so do passing linked scenarios.
+    let (linked, mut rows): (Vec<&Row>, Vec<&Row>) = rows
+        .into_iter()
+        .partition(|r| r.evidence == "green:linked" && !r.failed);
     rows.sort_by_key(|r| !r.failed); // failures first, order otherwise kept
-    let mut items: Vec<Item> = rows.iter().map(|r| Item::Row(table_row(r))).collect();
-    items.extend(kept.iter().map(|r| {
+    let line = |r: &Row| {
         let tests: Vec<String> = r.tests.iter().map(|t| format!("`{}`", cell(t))).collect();
-        Item::Kept(format!("- {} {} ({})", r.id, r.evidence, tests.join(", ")))
-    }));
+        format!("- {} {} ({})", r.id, r.evidence, tests.join(", "))
+    };
+    let mut items: Vec<Item> = rows.iter().map(|r| Item::Row(table_row(r))).collect();
+    items.extend(kept.iter().map(|r| Item::Kept(line(r))));
+    items.extend(linked.iter().map(|r| Item::Linked(line(r))));
     items.extend(other_failures(report).into_iter().map(Item::Other));
     items.extend(report.warnings.iter().cloned().map(Item::Warn));
     items.extend(report.exemptions.iter().cloned().map(Item::Exempt));
@@ -114,6 +121,7 @@ pub fn render_markdown(report: &GateReport, base: &str) -> String {
                 l.clone(),
             ),
             Item::Kept(l) => ("kept", "\n**Kept behaviour**\n\n", l.clone()),
+            Item::Linked(l) => ("linked", "\n**Linked existing behaviour**\n\n", l.clone()),
             Item::Other(l) => (
                 "other",
                 "\n**Other problems**\n\n",

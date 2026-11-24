@@ -69,6 +69,10 @@ pub enum Red {
     /// [`Proven`] kind; base runs report a keep test's pass as [`Red::Green`].
     #[serde(rename = "green:keep")]
     Keep,
+    /// An implemented scenario whose tests pass on base and at head (GATE-059): the test links
+    /// existing behaviour, so it covers no source change. Only ever a [`Proven`] kind.
+    #[serde(rename = "green:linked")]
+    Linked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -279,17 +283,18 @@ pub fn exemption_failures(exemptions: &[Exemption], base: &str) -> Vec<String> {
 }
 
 /// `unspecified change: <files>` when source files changed with no changed scenario and no
-/// exemption.
+/// exemption. `linked` scenarios (`green:linked`) don't count as changed (GATE-060).
 pub fn unspecified(
     changes: &BTreeMap<String, Change>,
+    linked: &BTreeSet<String>,
     changed_files: &[String],
     exemptions: &[Exemption],
     classifier: &Classifier,
     spec_root: &str,
 ) -> Option<String> {
-    let targets = changes
-        .values()
-        .any(|c| matches!(c, Change::Added | Change::Modified | Change::Implemented));
+    let targets = changes.iter().any(|(id, c)| {
+        matches!(c, Change::Added | Change::Modified | Change::Implemented) && !linked.contains(id)
+    });
     if targets || !exemptions.is_empty() {
         return None;
     }
@@ -375,8 +380,10 @@ pub fn evaluate(input: &Input) -> GateReport {
             });
             continue;
         };
+        let implemented = input.changes.get(*id) == Some(&Change::Implemented);
         let mut ok = true;
         let mut weakest: Option<Red> = None;
+        let mut green_on_base = false;
         let failures_before = r.failures.len();
         for t in &m.tests {
             let head = if is_cargo(t) {
@@ -421,6 +428,8 @@ pub fn evaluate(input: &Input) -> GateReport {
                 // GATE-039/040: a keep test must pass on base; failing there means the
                 // scenario describes new behaviour.
                 Some(Red::Green) if keep => {}
+                // GATE-059: an implemented scenario's test may link existing behaviour.
+                Some(Red::Green) if implemented => green_on_base = true,
                 Some(Red::Assert | Red::Compile) if keep => {
                     ok = false;
                     r.failures.push(format!(
@@ -456,7 +465,7 @@ pub fn evaluate(input: &Input) -> GateReport {
                         r.failures.push(msg);
                     }
                 }
-                Some(Red::NotRun | Red::Keep) | None => {
+                Some(Red::NotRun | Red::Keep | Red::Linked) | None => {
                     ok = false;
                     r.failures.push(format!("not-run-on-base {what}"));
                 }
@@ -464,6 +473,10 @@ pub fn evaluate(input: &Input) -> GateReport {
         }
         if ok && keep && !skip_red {
             weakest = Some(Red::Keep);
+        }
+        // Linked only when no test failed on base; a red-on-base test is the proof instead.
+        if ok && green_on_base && weakest.is_none() {
+            weakest = Some(Red::Linked);
         }
         if ok {
             if let Some(red) = weakest {
@@ -481,6 +494,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         let evidence = match (&first_failure, weakest) {
             (Some(kind), _) => kind.clone(),
             (None, Some(Red::Keep)) => "green:keep".to_string(),
+            (None, Some(Red::Linked)) => "green:linked".to_string(),
             (None, Some(Red::Compile)) => "red:compile".to_string(),
             (None, Some(_)) => "red:assert".to_string(),
             (None, None) => "green (exempt)".to_string(),
@@ -542,8 +556,15 @@ pub fn evaluate(input: &Input) -> GateReport {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
 
+    let linked: BTreeSet<String> = r
+        .proven
+        .iter()
+        .filter(|p| p.red == Red::Linked)
+        .map(|p| p.id.clone())
+        .collect();
     r.failures.extend(unspecified(
         &input.changes,
+        &linked,
         &input.changed_files,
         &input.exemptions,
         &input.classifier,
@@ -621,6 +642,7 @@ fn pass_summary(proven: &[Proven]) -> String {
         (Red::Assert, "red:assert"),
         (Red::Compile, "red:compile"),
         (Red::Keep, "green:keep"),
+        (Red::Linked, "green:linked"),
     ] {
         if n(k) > 0 {
             kinds.push(format!("{} {label}", n(k)));

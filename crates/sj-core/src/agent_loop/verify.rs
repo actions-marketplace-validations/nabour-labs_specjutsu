@@ -197,8 +197,10 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
     for f in gate::exemption_failures(&prep.exemptions, &base) {
         r.problems.push(problem("gate", None, f));
     }
+    // Verify doesn't run base, so it can't tell which scenarios are linked: none are.
     if let Some(f) = gate::unspecified(
         &prep.changes,
+        &std::collections::BTreeSet::new(),
         &prep.changed_files,
         &prep.exemptions,
         &prep.classifier,

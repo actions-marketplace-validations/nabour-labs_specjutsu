@@ -661,7 +661,11 @@ fn staff_063_repo() -> Repo {
         "## Requirements\n\n### Requirement: Staff\nThe system SHALL list staff.\n\n\
          #### Scenario: STAFF-063 Lists admins\n- **WHEN** x\n- **THEN** y\n",
     );
-    write(r, "apps/api/src/users.ts", "export const roles = ['admin']\n");
+    write(
+        r,
+        "apps/api/src/users.ts",
+        "export const roles = ['admin']\n",
+    );
     repo.commit("STAFF-063 spec");
     repo.git(&["checkout", "-q", "-B", "feature"]);
     write(
@@ -720,5 +724,8 @@ fn gate_060_a_linked_scenario_does_not_cover_a_source_change() {
         vec!["unspecified change: apps/api/src/users.ts"],
         "{report:#}"
     );
-    assert!(proven_as(&report, "STAFF-063", "green:linked"), "{report:#}");
+    assert!(
+        proven_as(&report, "STAFF-063", "green:linked"),
+        "{report:#}"
+    );
 }
