@@ -39,6 +39,11 @@ All notable changes are recorded here. The format follows
   scenario as STAFF-100; give the delta copy STAFF-100`.
 
 ### Changed
+- `sj-explore` covers brainstorming: its description names it, so "let's brainstorm"
+  triggers it; it lists many ideas before narrowing to two or three options; and the new
+  reference `sj-explore/brainstorming.md` holds idea prompts, a YAGNI pass, and presenting
+  the design one section at a time. The skill check enforces all three, and the
+  `brainstorming` row of `skills/COVERAGE.md` now has depth `brainstorming.md`.
 - `sj verify` and `sj task done` classify scenarios against the merge-base like the gate
   and need a red run only for added and modified scenarios. Unchanged scenarios, such as
   ones copied into a MODIFIED requirement, and implemented ones need only a passing latest

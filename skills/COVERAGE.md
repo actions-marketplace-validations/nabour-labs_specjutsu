@@ -9,7 +9,7 @@ and have no counterpart.
 
 | Tool | Item | Skill | Depth |
 | --- | --- | --- | --- |
-| Superpowers | brainstorming | sj-explore | SKILL.md |
+| Superpowers | brainstorming | sj-explore | brainstorming.md |
 | Superpowers | writing-plans | sj-propose | SKILL.md |
 | Superpowers | executing-plans | sj-apply | SKILL.md |
 | Superpowers | test-driven-development | sj-apply | writing-good-tests.md |
