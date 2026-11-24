@@ -485,3 +485,117 @@ fn ids_016_an_unknown_target_is_refused() {
         );
     assert_eq!(snapshot(dir.path()), before);
 }
+
+/// IDS-015 with a delta file as the target: it selects the capability, `specs/` file included.
+#[test]
+fn ids_015_a_delta_file_target_selects_its_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    staff_and_billing(dir.path());
+    put(
+        dir.path(),
+        "openspec/changes/add/specs/staff/spec.md",
+        USER_AUTH,
+    );
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .arg("openspec/changes/add/specs/staff/spec.md")
+        .assert()
+        .code(1)
+        .stdout(
+            "4 scenarios without IDs\n\
+             STAFF-001 Valid registration (openspec/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/specs/staff/spec.md:10)\n\
+             STAFF-001 Valid registration (openspec/changes/add/specs/staff/spec.md:6)\n\
+             STAFF-002 Password too short (openspec/changes/add/specs/staff/spec.md:10)\n",
+        );
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+#[test]
+fn ids_017_a_target_still_stops_on_colliding_prefixes() {
+    let dir = tempfile::tempdir().unwrap();
+    for cap in ["staff", "st-aff"] {
+        put(
+            dir.path(),
+            &format!("openspec/specs/{cap}/spec.md"),
+            USER_AUTH,
+        );
+    }
+    let before = snapshot(dir.path());
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("`st-aff`").and(predicate::str::contains("`staff`")));
+    assert_eq!(snapshot(dir.path()), before);
+}
+
+const ROLE_SPEC: &str = "## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL audit role changes.\n\n\
+#### Scenario: Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n\n\
+#### Scenario: STAFF-099 Role change is visible\n- **WHEN** a role changes\n- **THEN** it is shown\n";
+
+const ROLE_DELTA: &str = "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL audit role changes.\n\n\
+#### Scenario: STAFF-057 Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded with its author\n";
+
+#[test]
+fn ids_018_the_original_takes_the_deltas_id() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    let delta = std::fs::read(
+        dir.path()
+            .join("openspec/changes/audit/specs/staff/spec.md"),
+    )
+    .unwrap();
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert_eq!(
+        read(dir.path(), "openspec/specs/staff/spec.md"),
+        ROLE_SPEC.replace(
+            "#### Scenario: Role change is recorded",
+            "#### Scenario: STAFF-057 Role change is recorded"
+        )
+    );
+    assert_eq!(
+        std::fs::read(
+            dir.path()
+                .join("openspec/changes/audit/specs/staff/spec.md")
+        )
+        .unwrap(),
+        delta
+    );
+}
+
+/// IDS-018 when the delta's ID is already used by another scenario: a new number, and a line
+/// naming both scenarios.
+#[test]
+fn ids_018_a_taken_id_gets_a_new_number_and_a_note() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    put(
+        dir.path(),
+        "openspec/specs/billing/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-057 Valid")
+            .replace("Scenario: Password", "Scenario: BILLING-001 Password"),
+    );
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "note: STAFF-057 Role change is recorded (openspec/changes/audit/specs/staff/spec.md:6) \
+             is taken by STAFF-057 Valid registration (openspec/specs/billing/spec.md:6); \
+             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100",
+        ));
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-100 Role change is recorded"));
+}
