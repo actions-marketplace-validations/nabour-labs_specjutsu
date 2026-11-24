@@ -495,13 +495,8 @@ pub fn plan_for(
     // With targets, only prefixes a selected capability uses are checked (IDS-017, IDS-021).
     let selected = |prefix: &str| {
         only.map_or(true, |caps| {
-            caps.iter().any(|c| {
-                prefixes
-                    .get(c)
-                    .cloned()
-                    .unwrap_or_else(|| derive_prefix(c))
-                    == prefix
-            })
+            caps.iter()
+                .any(|c| prefixes.get(c).cloned().unwrap_or_else(|| derive_prefix(c)) == prefix)
         })
     };
     let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
