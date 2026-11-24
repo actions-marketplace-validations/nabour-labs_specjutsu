@@ -697,8 +697,9 @@ fn loop_035_an_unchanged_scenario_in_a_modified_requirement_needs_no_red_run() {
     assert!(!ledger.contains("\"failed\""), "{ledger}");
 }
 
+// Regression: pins behaviour verify had before this change, so it carries no scenario ID.
 #[test]
-fn loop_035_a_failing_unchanged_scenario_is_still_reported() {
+fn regression_a_failing_unchanged_scenario_is_still_reported() {
     let repo = unchanged_repo();
     repo.write(
         "tests/auth.rs",
@@ -711,8 +712,9 @@ fn loop_035_a_failing_unchanged_scenario_is_still_reported() {
         .stdout(predicate::str::is_match(r"failing \S+  AUTH-002\n").unwrap());
 }
 
+// Regression: pins behaviour verify had before this change, so it carries no scenario ID.
 #[test]
-fn loop_034_a_linked_scenario_proven_red_covers_a_source_change() {
+fn regression_a_linked_scenario_proven_red_covers_a_source_change() {
     let repo = linked_repo();
     repo.write(
         "tests/staff.rs",
