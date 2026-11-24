@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
+use crate::authoring::blocks;
 use crate::spec;
 
 /// One ID `sj ids --write` would insert.
@@ -19,9 +20,8 @@ pub struct Assignment {
     pub file: PathBuf,
     pub line: usize,
     title_offset: usize,
-    /// Set when the ID of the scenario's MODIFIED copy is held by another scenario, so it
-    /// gets a new number instead (IDS-018).
-    pub taken: Option<Taken>,
+    /// Why a scenario with MODIFIED copies gets a new number, not their ID (IDS-018, IDS-019).
+    pub note: Option<Note>,
 }
 
 /// An identified scenario heading: its ID, name and place.
@@ -33,11 +33,13 @@ pub struct Scenario {
     pub line: usize,
 }
 
-/// A MODIFIED copy whose ID its original cannot take, and the scenario that holds it.
+/// Why an original does not take the ID of its MODIFIED copies.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Taken {
-    pub copy: Scenario,
-    pub by: Scenario,
+pub enum Note {
+    /// Another scenario already holds the copy's ID.
+    Taken { copy: Scenario, by: Scenario },
+    /// Copies in open changes carry different IDs.
+    Disagree { copies: Vec<Scenario> },
 }
 
 /// Whether `s` is a valid ID prefix: an uppercase letter, then uppercase letters or digits.
@@ -509,7 +511,7 @@ pub fn plan_for(
     let key = |cap: &str, l: &spec::Located| -> Key {
         (
             cap.to_string(),
-            l.requirement.clone().unwrap_or_default(),
+            blocks::normalize_name(l.requirement.as_deref().unwrap_or_default()),
             l.scenario.name.clone(),
         )
     };
@@ -525,39 +527,84 @@ pub fn plan_for(
         }
     }
 
-    // The first identified copy per key in an open change's MODIFIED requirement (IDS-018).
-    let mut modified: BTreeMap<Key, Scenario> = BTreeMap::new();
-    for (file, place, located, content) in &files {
+    // Identified copies per key in open changes' MODIFIED requirements, a RENAMED requirement
+    // under its old name (IDS-018, IDS-020).
+    let mut modified: BTreeMap<Key, Vec<Scenario>> = BTreeMap::new();
+    for (file, place, _, content) in &files {
         let (false, Some(cap)) = (place.in_specs, &place.capability) else {
             continue;
         };
-        for l in located {
-            if let (Some(id), true) = (&l.scenario.id, under_modified(content, l.scenario.line)) {
-                modified.entry(key(cap, l)).or_insert_with(|| Scenario {
-                    id: id.clone(),
-                    name: l.scenario.name.clone(),
+        let lines: Vec<&str> = content.split('\n').collect();
+        let mask = blocks::fence_mask(&lines);
+        let delta = blocks::parse_delta(content);
+        for b in &delta.modified {
+            let requirement = delta
+                .renamed
+                .iter()
+                .find(|r| r.to == b.name)
+                .map_or(b.name.as_str(), |r| r.from.as_str());
+            for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
+                let Some(id) = s.id else { continue };
+                let k = (
+                    cap.clone(),
+                    blocks::normalize_name(requirement),
+                    s.name.clone(),
+                );
+                modified.entry(k).or_default().push(Scenario {
+                    id,
+                    name: s.name,
                     file: file.clone(),
-                    line: l.scenario.line,
+                    line: s.line,
                 });
             }
         }
     }
-    // Who else holds a MODIFIED copy's ID: a scenario under another key, archive included.
-    let taken_by = |id: &str, k: &Key| -> Result<Option<Scenario>> {
+    // Every identified scenario by ID, archive included, to find who else holds a copy's ID.
+    let mut by_id: BTreeMap<String, Vec<(Key, Scenario)>> = BTreeMap::new();
+    if !modified.is_empty() {
         for file in all_spec_files(spec_root)? {
             let cap = place(spec_root, &file).capability.unwrap_or_default();
             for l in spec::locate_scenarios(&file, &read(&file)?) {
-                if l.scenario.id.as_deref() == Some(id) && key(&cap, &l) != *k {
-                    return Ok(Some(Scenario {
-                        id: id.to_string(),
-                        name: l.scenario.name,
-                        file,
-                        line: l.scenario.line,
-                    }));
+                if let Some(id) = &l.scenario.id {
+                    by_id.entry(id.clone()).or_default().push((
+                        key(&cap, &l),
+                        Scenario {
+                            id: id.clone(),
+                            name: l.scenario.name.clone(),
+                            file: file.clone(),
+                            line: l.scenario.line,
+                        },
+                    ));
                 }
             }
         }
-        Ok(None)
+    }
+    // The ID an original takes from its MODIFIED copies, or why it gets a new number.
+    let from_copies = |k: &Key| -> (Option<String>, Option<Note>) {
+        let Some(copies) = modified.get(k) else {
+            return (None, None);
+        };
+        let first = &copies[0];
+        if copies.iter().any(|c| c.id != first.id) {
+            let copies = copies.clone();
+            return (None, Some(Note::Disagree { copies }));
+        }
+        // A copy under a renamed requirement has another key but is not another scenario.
+        let holder = by_id.get(&first.id).and_then(|v| {
+            v.iter().find(|(other, s)| {
+                other != k
+                    && !copies
+                        .iter()
+                        .any(|c| (&c.file, c.line) == (&s.file, s.line))
+            })
+        });
+        match holder {
+            None => (Some(first.id.clone()), None),
+            Some((_, by)) => {
+                let (copy, by) = (first.clone(), by.clone());
+                (None, Some(Note::Taken { copy, by }))
+            }
+        }
     };
 
     let mut out = Vec::new();
@@ -571,22 +618,12 @@ pub fn plan_for(
             }
             let k = key(cap, l);
             let is_origin = origin.get(&k).is_some_and(|o| (o.0, o.1) == (fi, li));
-            let mut taken = None;
-            let copied = if !place.in_specs {
-                origin.get(&k).and_then(|(_, _, id)| id.clone())
-            } else if let (true, Some(copy)) = (is_origin, modified.get(&k)) {
-                match taken_by(&copy.id, &k)? {
-                    None => Some(copy.id.clone()),
-                    Some(by) => {
-                        taken = Some(Taken {
-                            copy: copy.clone(),
-                            by,
-                        });
-                        None
-                    }
-                }
+            let (copied, note) = if !place.in_specs {
+                (origin.get(&k).and_then(|(_, _, id)| id.clone()), None)
+            } else if is_origin {
+                from_copies(&k)
             } else {
-                None
+                (None, None)
             };
             let id = match copied {
                 Some(id) => id,
@@ -610,7 +647,7 @@ pub fn plan_for(
                 file: file.clone(),
                 line: l.scenario.line,
                 title_offset: l.title_offset,
-                taken,
+                note,
             });
         }
     }
@@ -623,16 +660,6 @@ pub fn plan_for(
         });
     }
     Ok(out)
-}
-
-/// Whether the 1-based `line` of `content` sits under a `## MODIFIED` heading.
-fn under_modified(content: &str, line: usize) -> bool {
-    content
-        .lines()
-        .take(line.saturating_sub(1))
-        .filter(|l| l.starts_with("## "))
-        .last()
-        .is_some_and(|l| l.contains("MODIFIED"))
 }
 
 /// Insert each planned ID before its scenario name. Returns the number of files written.

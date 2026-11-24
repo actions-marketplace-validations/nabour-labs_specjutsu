@@ -2174,12 +2174,34 @@ fn ids_cmd(
         let assignments: Vec<serde_json::Value> = plan
             .iter()
             .map(|a| {
-                serde_json::json!({
+                let mut v = serde_json::json!({
                     "id": a.id,
                     "name": a.name,
                     "file": rel(&a.file, root),
                     "line": a.line,
-                })
+                });
+                if let Some(note) = &a.note {
+                    let scn = |s: &sj_core::ids::Scenario| {
+                        serde_json::json!({
+                            "id": s.id,
+                            "name": s.name,
+                            "file": rel(&s.file, root),
+                            "line": s.line,
+                        })
+                    };
+                    v["note"] = match note {
+                        sj_core::ids::Note::Taken { copy, by } => serde_json::json!({
+                            "kind": "taken",
+                            "copy": scn(copy),
+                            "by": scn(by),
+                        }),
+                        sj_core::ids::Note::Disagree { copies } => serde_json::json!({
+                            "kind": "disagree",
+                            "copies": copies.iter().map(scn).collect::<Vec<_>>(),
+                        }),
+                    };
+                }
+                v
             })
             .collect();
         let v = serde_json::json!({
@@ -2197,24 +2219,27 @@ fn ids_cmd(
         for a in &plan {
             println!("{} {} ({}:{})", a.id, a.name, rel(&a.file, root), a.line);
         }
+        let scn = |s: &sj_core::ids::Scenario| {
+            format!("{} {} ({}:{})", s.id, s.name, rel(&s.file, root), s.line)
+        };
         for a in &plan {
-            if let Some(t) = &a.taken {
-                println!(
-                    "note: {} {} ({}:{}) is taken by {} {} ({}:{}); {} ({}:{}) gets {}",
-                    t.copy.id,
-                    t.copy.name,
-                    rel(&t.copy.file, root),
-                    t.copy.line,
-                    t.by.id,
-                    t.by.name,
-                    rel(&t.by.file, root),
-                    t.by.line,
-                    a.name,
-                    rel(&a.file, root),
-                    a.line,
-                    a.id
-                );
-            }
+            let why = match &a.note {
+                None => continue,
+                Some(sj_core::ids::Note::Taken { copy, by }) => {
+                    format!("{} is taken by {}", scn(copy), scn(by))
+                }
+                Some(sj_core::ids::Note::Disagree { copies }) => format!(
+                    "copies disagree: {}",
+                    copies.iter().map(scn).collect::<Vec<_>>().join(", ")
+                ),
+            };
+            println!(
+                "note: {why}; {} ({}:{}) gets {}",
+                a.name,
+                rel(&a.file, root),
+                a.line,
+                a.id
+            );
         }
         if !write {
             for (cap, long, short) in
