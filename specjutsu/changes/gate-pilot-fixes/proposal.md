@@ -36,8 +36,10 @@ pre-existing scenarios, which passed only because their tests failed to load, in
 - An implemented scenario whose test passes on base and at head is recorded as `green:linked`
   and passes the gate. It doesn't count as specifying a source change, so a change that edits
   source still needs a scenario that is red on base, or an exemption.
-- `sj verify` and `sj task done` don't report an implemented scenario as unproven when its
-  latest run is green.
+- `sj verify` and `sj task done` judge scenarios against the merge-base like the gate does.
+  They ask for a red run only for added and modified scenarios. An unchanged scenario copied
+  into a MODIFIED requirement, or an implemented scenario whose latest run is green, is no
+  longer reported as unproven.
 - `sj ids` and `sj ids --write` take capability names or spec paths and limit the listing and
   the write to them. ID numbers still continue from the highest one used anywhere.
 - `sj spec validate` explains the clash: when a MODIFIED scenario's original in `specs/` has no
