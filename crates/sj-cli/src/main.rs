@@ -192,6 +192,8 @@ enum Command {
         spec_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        /// Capabilities, or paths to spec files or folders, to limit the run to. All when none.
+        targets: Vec<String>,
     },
     /// Convert another tool's spec folders into the specjutsu layout (dry run unless --write).
     Import {
@@ -662,7 +664,8 @@ fn run() -> Result<ExitCode> {
             root,
             spec_root,
             json,
-        } => ids_cmd(write, &root, spec_root, json),
+            targets,
+        } => ids_cmd(write, &root, spec_root, json, &targets),
         Command::Import {
             command:
                 ImportCommand::Speckit {
@@ -2139,10 +2142,26 @@ fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>, write: bool) -> Res
     Ok(ExitCode::SUCCESS)
 }
 
-fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> Result<ExitCode> {
+fn ids_cmd(
+    write: bool,
+    root: &Path,
+    spec_root: Option<PathBuf>,
+    json: bool,
+    targets: &[String],
+) -> Result<ExitCode> {
     let config = sj_core::config::load(root)?;
     let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
-    let plan = sj_core::ids::plan(&root.join(&spec_root), &config.id_prefixes)?;
+    let only = if targets.is_empty() {
+        None
+    } else {
+        Some(sj_core::ids::resolve_targets(
+            root,
+            &root.join(&spec_root),
+            targets,
+        )?)
+    };
+    let plan =
+        sj_core::ids::plan_for(&root.join(&spec_root), &config.id_prefixes, only.as_deref())?;
     let files = if write {
         sj_core::ids::write(&plan)?
     } else {

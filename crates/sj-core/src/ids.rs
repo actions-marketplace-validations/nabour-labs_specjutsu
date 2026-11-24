@@ -373,18 +373,77 @@ pub fn highest_numbers(spec_root: &Path) -> Result<BTreeMap<String, u64>> {
     Ok(out)
 }
 
+/// The capability folders `targets` name (IDS-014..016): each target is a capability name or
+/// a path, relative to `project_root`, to a spec file or a folder holding spec files. Errors
+/// naming the target and the known capabilities when one resolves to none.
+pub fn resolve_targets(
+    project_root: &Path,
+    spec_root: &Path,
+    targets: &[String],
+) -> Result<Vec<String>> {
+    let files = spec::discover_spec_files(spec_root)?;
+    let mut known: Vec<String> = files
+        .iter()
+        .filter_map(|f| place(spec_root, f).capability)
+        .collect();
+    known.sort();
+    known.dedup();
+    let mut out: Vec<String> = Vec::new();
+    for target in targets {
+        let mut caps: Vec<String> = Vec::new();
+        if known.contains(target) {
+            caps.push(target.clone());
+        } else if let Ok(path) = project_root.join(target).canonicalize() {
+            for file in &files {
+                let under = file.canonicalize().is_ok_and(|f| f.starts_with(&path));
+                if let (true, Some(cap)) = (under, place(spec_root, file).capability) {
+                    caps.push(cap);
+                }
+            }
+        }
+        if caps.is_empty() {
+            bail!(
+                "`{target}` names no capability and no spec file or folder; \
+                 known capabilities: {}",
+                known.join(", ")
+            );
+        }
+        for cap in caps {
+            if !out.contains(&cap) {
+                out.push(cap);
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// The IDs `sj ids --write` would assign, in file and heading order. Errors when a capability
 /// has no usable prefix or two capabilities that need IDs share one.
 pub fn plan(spec_root: &Path, prefixes: &BTreeMap<String, String>) -> Result<Vec<Assignment>> {
+    plan_for(spec_root, prefixes, None)
+}
+
+/// [`plan`] limited to the capabilities in `only`, when given: their `specs/` files and their
+/// delta copies in open changes. Numbers still continue after every ID under the spec root.
+pub fn plan_for(
+    spec_root: &Path,
+    prefixes: &BTreeMap<String, String>,
+    only: Option<&[String]>,
+) -> Result<Vec<Assignment>> {
     // Highest number ever used per prefix, archive included (IDS-006).
     let mut next = highest_numbers(spec_root)?;
 
     // The files we may write, parsed once.
     let mut files = Vec::new();
     for file in spec::discover_spec_files(spec_root)? {
+        let place = place(spec_root, &file);
+        if let Some(only) = only {
+            if !place.capability.as_ref().is_some_and(|c| only.contains(c)) {
+                continue;
+            }
+        }
         let content = read(&file)?;
         let located = spec::locate_scenarios(&file, &content);
-        let place = place(spec_root, &file);
         files.push((file, place, located));
     }
 

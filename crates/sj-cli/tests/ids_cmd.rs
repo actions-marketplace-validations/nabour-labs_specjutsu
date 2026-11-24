@@ -433,14 +433,22 @@ fn ids_014_a_target_keeps_numbering_and_delta_copies() {
         "openspec/changes/archive/2026-01-01-old/specs/staff/spec.md",
         &USER_AUTH.replace("Scenario: Valid", "Scenario: STAFF-007 Valid"),
     );
-    put(dir.path(), "openspec/changes/add/specs/staff/spec.md", USER_AUTH);
-    put(dir.path(), "openspec/changes/add/specs/billing/spec.md", USER_AUTH);
+    put(
+        dir.path(),
+        "openspec/changes/add/specs/staff/spec.md",
+        USER_AUTH,
+    );
+    put(
+        dir.path(),
+        "openspec/changes/add/specs/billing/spec.md",
+        USER_AUTH,
+    );
     sj(dir.path()).arg("staff").assert().code(1).stdout(
         "4 scenarios without IDs\n\
-         STAFF-008 Valid registration (openspec/changes/add/specs/staff/spec.md:6)\n\
-         STAFF-009 Password too short (openspec/changes/add/specs/staff/spec.md:10)\n\
          STAFF-008 Valid registration (openspec/specs/staff/spec.md:6)\n\
-         STAFF-009 Password too short (openspec/specs/staff/spec.md:10)\n",
+         STAFF-009 Password too short (openspec/specs/staff/spec.md:10)\n\
+         STAFF-008 Valid registration (openspec/changes/add/specs/staff/spec.md:6)\n\
+         STAFF-009 Password too short (openspec/changes/add/specs/staff/spec.md:10)\n",
     );
 }
 
@@ -471,8 +479,9 @@ fn ids_016_an_unknown_target_is_refused() {
         .assert()
         .code(2)
         .stderr(
-            predicate::str::contains("`staf`")
-                .and(predicate::str::contains("known capabilities: billing, staff")),
+            predicate::str::contains("`staf`").and(predicate::str::contains(
+                "known capabilities: billing, staff",
+            )),
         );
     assert_eq!(snapshot(dir.path()), before);
 }
