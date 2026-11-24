@@ -14,7 +14,7 @@
 - [x] 3.3 `sj verify` and `sj task done` need red only for added and modified scenarios (LOOP-034..036)
 
 ## 4. IDs for one capability
-- [ ] 4.1 [P] `sj ids` capability and path targets (IDS-014..016)
+- [ ] 4.1 [P] `sj ids` capability and path targets, an original takes its MODIFIED copy's ID (IDS-014..018)
 - [ ] 4.2 [P] `sj spec validate` hint for MODIFIED scenarios whose original has no ID (SPEC-045, SPEC-046)
 
 ## 5. Docs
