@@ -347,3 +347,96 @@ fn audit_011_an_allowed_removal_is_reported_not_failed() {
     assert!(out.contains("allow without reason"), "{out}");
     assert_eq!(code, Some(1));
 }
+
+/// Commit `body` as `tests/cfg.rs` on the change branch and run `sj audit`.
+fn audit_rust_test(body: &str) -> (Option<i32>, String) {
+    let f = Fixture::new(&[("tests/cfg.rs", "use std::fmt;\n")]);
+    f.write("tests/cfg.rs", &format!("use std::fmt;\n\n{body}"));
+    f.commit("add test");
+    f.audit(&[])
+}
+
+#[test]
+fn audit_015_a_multi_line_raw_string_fixture_keeps_the_tests_asserts() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn parses() {\n    let j = r#\"{\n  \"k\": \"v \\\" }\"\n}\"#;\n    assert!(j.contains(\"k\"));\n}\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_016_a_string_continued_with_a_backslash_keeps_the_tests_asserts() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn reads() {\n    let t = \"{\\\n    \\\"x\\\": 1\\\n}\";\n    assert!(t.contains(\"x\"));\n}\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_017_char_literals_of_braces_and_quotes_do_not_move_the_body_end() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn chars() {\n    let cs = ['{', '\"', '}'];\n    assert_eq!(cs.len(), 3);\n}\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_018_a_fixture_only_test_stays_assertion_free() {
+    let (code, out) = audit_rust_test(
+        "#[test]\nfn only_fixture() {\n    let _j = r#\"{\n}\"#;\n}\n\n#[test]\nfn checks() { assert!(true); }\n",
+    );
+    assert!(
+        out.contains("assertion-free-test tests/cfg.rs › only_fixture"),
+        "{out}"
+    );
+    assert!(!out.contains("checks"), "{out}");
+    assert_eq!(code, Some(1));
+}
+
+/// Commit `content` at `rel` (which starts as `seed`) on the change branch and run `sj audit`.
+fn audit_new_test(rel: &str, seed: &str, content: &str) -> (Option<i32>, String) {
+    let f = Fixture::new(&[(rel, seed)]);
+    f.write(rel, content);
+    f.commit("add test");
+    f.audit(&[])
+}
+
+#[test]
+fn audit_019_a_column_0_triple_quoted_fixture_keeps_a_pytest_tests_asserts() {
+    let (code, out) = audit_new_test(
+        "tests/test_cfg.py",
+        "import os\n",
+        "import os\n\ndef test_parses():\n    data = \"\"\"\n[tool]\nname = \"x\"\n\"\"\"\n    assert \"x\" in data\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_020_a_backslash_continued_js_string_does_not_shift_later_tests() {
+    let (code, out) = audit_new_test(
+        "src/a.test.js",
+        "const x = 1\n",
+        "const x = 1\n\nit(\"first\", () => {\n  const s = \"a\\\nb\"\n  expect(s).toBe(\"ab\")\n})\n\nit(\"second\", () => {\n  const y = 2\n  expect(y).toBe(2) })\n",
+    );
+    assert_eq!(out.trim(), "audit: clean", "{out}");
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn audit_021_a_pytest_test_still_ends_at_the_next_top_level_def() {
+    let (code, out) = audit_new_test(
+        "tests/test_cfg.py",
+        "import os\n",
+        "import os\n\ndef test_a():\n    x = 1\n\ndef test_b():\n    assert True\n",
+    );
+    assert!(
+        out.contains("assertion-free-test tests/test_cfg.py › test_a"),
+        "{out}"
+    );
+    assert!(!out.contains("test_b"), "{out}");
+    assert_eq!(code, Some(1));
+}

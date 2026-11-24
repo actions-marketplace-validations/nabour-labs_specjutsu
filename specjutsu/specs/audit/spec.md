@@ -87,3 +87,41 @@ A commit in the range with a trailer `Specjutsu-Allow: <kind> <target> — <reas
 #### Scenario: AUDIT-013 Skipping a test fails the gate
 - **WHEN** every changed scenario is proven, but the change also adds `#[ignore]` to an existing test
 - **THEN** `sj gate` fails with the reason `skipped-test tests/trace.rs › trace_004_matches_ids`
+
+### Requirement: Rust test bodies end at their own closing brace
+The scanner SHALL find the end of a Rust test at the `}` that closes its body, skipping braces
+and quotes inside string literals that span lines (normal strings, `\` continuations, raw strings
+`r"…"` and `r#"…"#`, and their byte forms), inside char literals and inside comments.
+
+#### Scenario: AUDIT-015 A multi-line raw string fixture keeps the test's asserts
+- **WHEN** the change adds `#[test] fn parses()` to `tests/cfg.rs` whose body holds `let j = r#"{` and `  "k": "v \" }"` and `}"#;` on three lines, then `assert!(j.contains("k"));`
+- **THEN** `sj audit` prints `audit: clean` and exits 0
+
+#### Scenario: AUDIT-016 A string continued with a backslash keeps the test's asserts
+- **WHEN** the change adds `#[test] fn reads()` to `tests/cfg.rs` whose body holds `let t = "{\` and `    \"x\": 1\` and `}";` on three lines, then `assert!(t.contains("x"));`
+- **THEN** `sj audit` prints `audit: clean` and exits 0
+
+#### Scenario: AUDIT-017 [keep] Char literals of braces and quotes do not move the body end
+- **WHEN** the change adds `#[test] fn chars()` to `tests/cfg.rs` whose body holds `let cs = ['{', '"', '}'];` and then `assert_eq!(cs.len(), 3);` on the next line
+- **THEN** `sj audit` prints `audit: clean` and exits 0
+
+#### Scenario: AUDIT-018 [keep] A fixture-only test stays assertion-free
+- **WHEN** the change adds `#[test] fn only_fixture()` whose body is just `let _j = r#"{` and `}"#;` over two lines, followed by `#[test] fn checks() { assert!(true); }`
+- **THEN** `sj audit` reports `assertion-free-test tests/cfg.rs › only_fixture` and no finding for `checks`
+
+### Requirement: Python and JS test bodies are read past multi-line strings
+The Python scanner SHALL end a test at the first line indented no deeper than its `def` that is
+not inside a triple-quoted string. The JS/TS scanner SHALL count the newline a `\` continues a
+quoted string over, so test line numbers after it stay right.
+
+#### Scenario: AUDIT-019 A column-0 triple-quoted fixture keeps a pytest test's asserts
+- **WHEN** the change adds `def test_parses():` to `tests/test_cfg.py` whose body holds `data = """` and then `[tool]`, `name = "x"` and `"""` at column 0, then `    assert "x" in data`
+- **THEN** `sj audit` prints `audit: clean` and exits 0
+
+#### Scenario: AUDIT-020 A backslash-continued JS string does not shift later tests
+- **WHEN** the change adds to `src/a.test.js` `it("first", …)` holding `const s = "a\` and `b"` on two lines with `expect(s).toBe("ab")`, then `it("second", () => {` with `const y = 2` and `expect(y).toBe(2) })`
+- **THEN** `sj audit` prints `audit: clean` and exits 0
+
+#### Scenario: AUDIT-021 [keep] A pytest test still ends at the next top-level def
+- **WHEN** the change adds `def test_a():` with body `x = 1`, then `def test_b():` with body `assert True`, to `tests/test_cfg.py`
+- **THEN** `sj audit` reports `assertion-free-test tests/test_cfg.py › test_a` and no finding for `test_b`

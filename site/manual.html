@@ -132,7 +132,7 @@
 
   <main class="prose">
     <header>
-      <p class="eyebrow">User manual · v0.5.0</p>
+      <p class="eyebrow">User manual · v0.5.1</p>
       <h1>Using <span class="grad-text">specjutsu</span></h1>
       <p class="lead">Everything you need to go from an <code>openspec/</code> folder, a Spec Kit project or a Superpowers setup to pull requests that can't merge unless every scenario is tested and every test was red first.</p>
     </header>
@@ -155,7 +155,9 @@
           <tr><td>Codex, Cursor, Cline and <code>AGENTS.md</code> adapters</td><td><span class="badge live">v0.4.0</span></td><td><code>sj init --agents auto</code>; Codex and Cursor get the pre-edit TDD hook.</td></tr>
           <tr><td><code>sj spec show</code>, <code>sj view</code>, <code>sj instructions</code>, <code>sj templates</code></td><td><span class="badge live">v0.4.0</span></td><td>Read specs and changes in the terminal; next-step instructions for agents.</td></tr>
           <tr><td>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared and global skills</td><td><span class="badge live">v0.5.0</span></td><td>A pre-edit hook in each; <code>.agents/skills/</code> beside <code>.claude/skills/</code>; <code>--global</code> installs the skills for every project.</td></tr>
-          <tr><td>Token benchmark</td><td><span class="badge plan">v0.6</span></td><td>Public comparison against the tools specjutsu replaces.</td></tr>
+          <tr><td>Trace baseline, <code>sj ids prefixes</code>, <code>sj migrate --diff</code> and <code>--undo</code></td><td><span class="badge live">v0.5.1</span></td><td>Gradual adoption: old gaps and orphans counted, not listed; short ID prefixes; a migration you can read and roll back.</td></tr>
+          <tr><td>One-line installers, Homebrew, <code>cargo binstall</code>, <code>sj gain</code></td><td><span class="badge live">v0.5.1</span></td><td><code>install.sh</code> and <code>install.ps1</code> check <code>SHA256SUMS</code>; <code>sj gain</code> counts the bytes the agent-loop commands saved.</td></tr>
+          <tr><td>Token benchmark</td><td><span class="badge plan">v0.6</span></td><td>Public comparison against the tools specjutsu replaces. <code>sj gain</code> is its local half: byte counts on your machine.</td></tr>
         </tbody>
       </table></div>
       <div class="callout"><p><b>In practice today:</b> specjutsu runs the whole loop on its own, from <code>sj spec new</code> to <code>sj spec archive</code>. You don't need OpenSpec, Spec Kit or Superpowers alongside it, and <code>sj migrate</code> removes them for you.</p></div>
@@ -178,7 +180,7 @@ cargo binstall specjutsu
 cargo install specjutsu
 
 sj --version</pre>
-      <p>Both installers read <code>SJ_VERSION</code> (a release such as <code>0.5.0</code>, default the latest) and <code>SJ_INSTALL_DIR</code>. <code>install.ps1</code> also reads <code>SJ_NO_MODIFY_PATH=1</code>, which leaves your <code>PATH</code> alone. <code>install.sh</code> never edits shell profiles. To update, run the installer again or <code>brew upgrade specjutsu</code>.</p>
+      <p>Both installers read <code>SJ_VERSION</code> (a release such as <code>0.5.1</code>, default the latest) and <code>SJ_INSTALL_DIR</code>. <code>install.ps1</code> also reads <code>SJ_NO_MODIFY_PATH=1</code>, which leaves your <code>PATH</code> alone. <code>install.sh</code> never edits shell profiles. To update, run the installer again or <code>brew upgrade specjutsu</code>.</p>
       <p>The archives are on the <a href="https://github.com/nabour-labs/specjutsu/releases">releases page</a>:</p>
       <div class="tbl"><table>
         <thead><tr><th>Platform</th><th>Archive</th></tr></thead>
@@ -225,7 +227,7 @@ cargo install --git https://github.com/nabour-labs/specjutsu --branch main specj
 
 <span class="c-m"># which build is installed, and where it came from</span>
 cargo install --list | grep -A1 specjutsu</pre>
-      <p><code>sj --version</code> names the build. One made from a git checkout, including <code>cargo install --git</code>, prints the short commit after the version, such as <code>sj 0.5.0 (f62a48b)</code>. One from crates.io or a release archive prints only the version. <code>cargo install --list</code> also names the source: a build from GitHub shows the repository URL and commit in brackets after the version.</p>
+      <p><code>sj --version</code> names the build. One made from a git checkout, including <code>cargo install --git</code>, prints the short commit after the version, such as <code>sj 0.5.1 (f62a48b)</code>. One from crates.io or a release archive prints only the version. <code>cargo install --list</code> also names the source: a build from GitHub shows the repository URL and commit in brackets after the version.</p>
       <p>Agent hooks call <code>sj</code> from <code>PATH</code>, so sessions that are already open use the new binary on their next edit, with no restart. Then run <code>sj update</code> in each project, so the generated skills, hooks and agent instructions match the new version. Files you edited by hand are kept and reported.</p>
     </section>
 
@@ -241,8 +243,9 @@ sj adopt
 sj init --agents claude
 
 <span class="c-m"># a project on OpenSpec, Spec Kit or Superpowers</span>
-sj migrate --from openspec --from superpowers           <span class="c-m"># dry run</span>
+sj migrate --from openspec --from superpowers           <span class="c-m"># dry run; --diff shows each file's diff</span>
 sj migrate --from openspec --from superpowers --write   <span class="c-m"># needs a clean git tree</span>
+sj migrate --undo                                       <span class="c-m"># put back what the write changed</span>
 
 <span class="c-m"># then check it</span>
 sj doctor</pre>
@@ -325,6 +328,8 @@ The system SHALL reject tokens older than 24 hours.
           <tr><td><span class="c-r">gap</span></td><td>The scenario has no test.</td></tr>
           <tr><td><span class="c-a">orphan</span></td><td>A test names an ID that no spec contains any more.</td></tr>
           <tr><td>without ID</td><td>A scenario heading has no ID. <code>sj ids --write</code> fixes it.</td></tr>
+          <tr><td>known</td><td>A gap or orphan listed in <code>trace-baseline.txt</code>: counted, not listed.</td></tr>
+          <tr><td>stale</td><td>A baseline entry that is no longer a gap or orphan. Remove its line, or rerun <code>sj trace --write-baseline</code>.</td></tr>
         </tbody>
       </table></div>
 
@@ -452,7 +457,7 @@ sj doctor                        <span class="c-m"># hook, instructions or hook 
       <span class="c-m"># set up your toolchains and install dependencies here</span>
       - <span class="c-k">uses:</span> nabour-labs/specjutsu@v0</pre>
       <p>Inputs: <code>fail-on: never</code> reports without failing the step, <code>comment: false</code> writes only the job summary, and <code>badge: true</code> (on pushes to the default branch, with <code>contents: write</code>) publishes a spec coverage badge to the <code>sj-badge</code> branch. Other CI systems can run <code>sj gate --base origin/main</code> directly, or <code>--format markdown</code> for the comment body.</p>
-      <p>Not ready to gate? Start with a report: <code>sj trace | tee -a "$GITHUB_STEP_SUMMARY"</code> prints coverage on every run without failing it. Add <code>--strict</code> when you want gaps to fail.</p>
+      <p>Not ready to gate? Start with a report: <code>sj trace | tee -a "$GITHUB_STEP_SUMMARY"</code> prints coverage on every run without failing it. Add <code>--strict</code> when you want gaps to fail. With a <a href="#baseline">trace baseline</a>, <code>--strict</code> fails only on new gaps and orphans and on stale baseline entries.</p>
 
       <h3>What fails the gate</h3>
       <div class="tbl"><table>
@@ -464,7 +469,8 @@ sj doctor                        <span class="c-m"># hook, instructions or hook 
           <tr><td><code>not-run AUTH-004 &lt;test&gt;</code></td><td>A mapped test didn't run.</td></tr>
           <tr><td><code>green-on-base AUTH-004 &lt;test&gt;</code></td><td>The new test already passes on the old code.</td></tr>
           <tr><td><code>unverifiable AUTH-004 &lt;test&gt;</code></td><td>The test can't run on base: inline in a Rust source file, or in a suite with <code>red_on_base = "skip"</code>. Pass <code>--allow-unverifiable</code> to warn instead.</td></tr>
-          <tr><td><code>orphan AUTH-003 &lt;test&gt;</code></td><td>A test points at a scenario that was removed.</td></tr>
+          <tr><td><code>orphan AUTH-003 &lt;test&gt;</code></td><td>A test points at a scenario that was removed, and the base branch's baseline doesn't list it.</td></tr>
+          <tr><td><code>baseline-added &lt;entry&gt;</code></td><td>The change adds an entry to <code>trace-baseline.txt</code> without a <code>config</code> exemption.</td></tr>
           <tr><td><code>unspecified change</code></td><td>Source files changed with no added or modified scenario and no exemption.</td></tr>
           <tr><td><code>exemption needs a reason</code></td><td>An exemption line has no reason.</td></tr>
           <tr><td><code>spike cannot merge to main</code></td><td>A spike exemption targets <code>main</code>.</td></tr>
@@ -472,6 +478,41 @@ sj doctor                        <span class="c-m"># hook, instructions or hook 
       </table></div>
       <p>The gate fails closed: any changed file is source unless it's a test, a spec, documentation or media, repository metadata (<code>.github/</code>, <code>.gitignore</code>, <code>LICENSE</code>) or a manifest or lockfile. When a package declares <code>sources</code>, only files matching them count, and a top-level <code>non_source = ["infra/**"]</code> adds your own globs. With no test suite configured, the gate exits 2 and suggests <code>sj adopt</code> instead of passing changes it can't test.</p>
       <p>Unchanged scenarios without tests show up as warnings, not failures, so you can adopt specjutsu in an existing repo and tighten coverage as you go. A commit that only adds IDs counts as unchanged.</p>
+
+      <h3 id="baseline">Adopting a baseline</h3>
+      <p>A repo with thousands of old gaps, or old orphans that would fail every PR, records them once in <code>&lt;spec_root&gt;/trace-baseline.txt</code>. <code>sj trace --write-baseline</code> writes every current gap and orphan, one sorted entry per line, and replaces any earlier file:</p>
+<pre class="code">$ sj trace --write-baseline
+baseline: 3 entries → ./specjutsu/trace-baseline.txt
+$ cat specjutsu/trace-baseline.txt
+gap AUTH-002
+gap AUTH-005
+orphan AUTH-009 tests/auth.rs auth_009_old</pre>
+      <p>An orphan is keyed by its ID, test file and test name. Test file paths with spaces aren't supported: such an orphan never matches its line, so it always counts as new. With a baseline, <code>sj trace</code> lists only the entries it doesn't hold and counts the known ones, and reports entries that are no longer true as stale:</p>
+<pre class="code">$ sj trace --strict
+trace: 2 mapped, 2 gaps (1 known), 1 orphan (1 known), 1 without ID
+gap     AUTH-006 Expired  (specjutsu/specs/auth/spec.md:23)
+stale gap AUTH-002 (remove from trace-baseline.txt)</pre>
+      <p><code>--strict</code> exits 1 only for new entries and stale ones, so CI notices both new debt and lines left behind. In <code>--json</code>, each gap and orphan carries <code>"known"</code>, and a <code>stale</code> array lists stale entries as their baseline lines.</p>
+      <p>The gate reads the baseline <strong>as it is on the merge base</strong>:</p>
+      <ul>
+        <li>Known gaps collapse into one warning, <code>known gaps: 2981 (trace-baseline.txt)</code>.</li>
+        <li>Known orphans don't fail the gate.</li>
+        <li>Added, modified and newly implemented scenarios are gated as before, listed or not.</li>
+        <li>Stale entries are <code>stale gap AUTH-002</code> warnings and never fail the gate. Run <code>sj trace --strict</code> in CI to enforce the cleanup.</li>
+        <li>Entries the PR adds fail as <code>baseline-added &lt;entry&gt;</code>, so a PR can't hide its own orphans. With a <code>config</code> exemption they're honoured and listed as warnings.</li>
+      </ul>
+      <p>So the first baseline lands in its own commit, with the exemption as a trailer:</p>
+<pre class="code">sj trace --write-baseline
+git add specjutsu/trace-baseline.txt
+git commit -m <span class="c-s">"chore: adopt trace baseline"</span> -m <span class="c-s">"Specjutsu-Exempt: config — adopt trace baseline"</span>
+
+<span class="c-m"># its gate run</span>
+gate: pass — no changed scenarios to prove
+warn    baseline-added gap AUTH-002
+warn    baseline-added gap AUTH-005
+warn    baseline-added orphan AUTH-009 tests/auth.rs auth_009_old
+warn    known gaps: 2 (trace-baseline.txt)
+exempt  config — adopt trace baseline</pre>
     </section>
 
     <section id="exemptions">
@@ -499,7 +540,10 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj trace</h3>
         <p>Map spec scenario IDs to tests; list gaps and orphans. Each test in <code>--json</code> carries its package, suite and whether it's skipped.</p>
-        <dl><dt>--strict</dt><dd>Exit 1 when there are gaps or orphans.</dd></dl>
+        <dl>
+          <dt>--strict</dt><dd>Exit 1 when there are gaps or orphans. With a <a href="#baseline">baseline</a>, only entries it doesn't list and stale entries count.</dd>
+          <dt>--write-baseline</dt><dd>Write every current gap and orphan to <code>&lt;spec_root&gt;/trace-baseline.txt</code>, dropping stale entries, and print <code>baseline: N entries → &lt;path&gt;</code>. With <code>--json</code> or <code>--strict</code> it exits 2 and writes nothing.</dd>
+        </dl>
       </div>
       <div class="cmd">
         <h3>sj gate</h3>
@@ -521,6 +565,18 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj ledger [ID]</h3>
         <p>Per scenario: the latest result, and whether red-before-green is proven.</p>
+      </div>
+      <div class="cmd">
+        <h3>sj gain</h3>
+        <p>Bytes saved. <code>sj test</code>, <code>sj verify</code>, <code>sj next</code> and <code>sj status</code> each record, per run, the bytes they printed and the raw bytes they stand in for (the runners' output, or the change files) in <code>.specjutsu/ledger/gain.jsonl</code>. Nothing is recorded with <code>sj test --no-ledger</code> or outside a git repository, and recording never changes output or exit codes. <code>sj gain</code> prints one line per command (runs, printed bytes, raw bytes, % saved) and a total with the tokens saved, estimated as (raw − printed) / 4. specjutsu never calls a model; the numbers are bytes, a proxy. Unreadable lines are skipped with a warning on stderr, and with no records it prints <code>no gain records yet</code>.</p>
+<pre class="code">test   2   500  50000  99%
+next   1  1000   4000  75%
+total  3  1500  54000  97%  ~13125 tokens saved</pre>
+        <dl>
+          <dt>--json</dt><dd><code>commands</code> (<code>command</code>, <code>runs</code>, <code>printed</code>, <code>raw</code>, <code>saved_pct</code>), <code>total</code>, which adds <code>tokens_saved</code>, and <code>skipped</code>, the number of unreadable lines. With no records, <code>commands</code> is empty and the totals are zero.</dd>
+          <dt>--since &lt;time&gt;</dt><dd>Only records at or after an RFC 3339 timestamp, e.g. one session.</dd>
+          <dt>--reset</dt><dd>Delete the records and print <code>removed N gain records</code>.</dd>
+        </dl>
       </div>
 
       <h3>Project setup</h3>
@@ -553,8 +609,13 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       </div>
       <div class="cmd">
         <h3>sj ids</h3>
-        <p>List scenarios without IDs and the IDs they would get; exits 1 when there are any.</p>
+        <p>List scenarios without IDs and the IDs they would get; exits 1 when there are any. A prefix derived from a folder name longer than six letters ends the list with <code>hint: distribution would use DISTRIBUTION; sj ids prefixes --write maps it to DIST</code>.</p>
         <dl><dt>--write</dt><dd>Insert them, changing only the headings.</dd></dl>
+      </div>
+      <div class="cmd">
+        <h3>sj ids prefixes</h3>
+        <p>Print an <code>[ids.prefixes]</code> table with a short prefix for every capability folder, sorted; writes nothing. A mapped prefix is kept, then the prefix a capability's IDs already use. Otherwise the folder's letters, uppercased: six or fewer kept whole (<code>gate</code> → <code>GATE</code>), longer cut to four (<code>distribution</code> → <code>DIST</code>). Clashing suggestions are lengthened together until they differ (<code>transactions</code> → <code>TRANSA</code>, <code>transfers</code> → <code>TRANSF</code>). When names run out of letters and still clash (<code>bill</code> beside <code>billing = "BILL"</code>), it exits 2 naming both capabilities and the prefix, with or without <code>--write</code>, and writes nothing; map one by hand. Run it before <code>sj ids --write</code>.</p>
+        <dl><dt>--write</dt><dd>Append the missing lines to <code>[ids.prefixes]</code> in <code>specjutsu.toml</code> (creating the table at the end if needed), change no other byte, and print <code>added N prefixes to specjutsu.toml</code>. Exits 2 without a <code>specjutsu.toml</code> (run <code>sj init</code>), and, changing nothing, when it can't find a table to splice into, printing the lines to add by hand. <code>sj ids --write prefixes</code> and <code>sj ids --json prefixes</code> exit 2.</dd></dl>
       </div>
 
       <h3>Authoring</h3>
@@ -607,7 +668,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       </div>
       <div class="cmd">
         <h3>sj verify [change]</h3>
-        <p>The local check before a PR: the change's scenario tests, unproven scenarios, orphans, <code>sj spec check</code> problems, and the gate's rules against the merge-base, without red-on-base.</p>
+        <p>The local check before a PR: the change's scenario tests, unproven scenarios, orphans, <code>sj spec check</code> problems, and the gate's rules against the merge-base, without red-on-base. The gate's <a href="#baseline">baseline</a> rules apply too: orphans the base's baseline lists aren't problems, and entries the branch adds without a <code>config</code> exemption are <code>baseline-added &lt;entry&gt;</code> problems.</p>
         <dl><dt>--base &lt;ref&gt;</dt><dd>Base to compare against.</dd></dl>
       </div>
 
@@ -619,20 +680,36 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <div class="cmd">
         <h3>sj migrate --from &lt;tool&gt;</h3>
         <p>Replace <code>openspec</code>, <code>speckit</code> or <code>superpowers</code> (repeatable). A dry run unless <code>--write</code>, which needs a clean git tree and leaves the changes uncommitted.</p>
+        <dl>
+          <dt>--diff</dt><dd>With the preview, print a unified diff of every file it would create or change. Can't be combined with <code>--write</code>.</dd>
+          <dt>--write</dt><dd>Apply the plan, record an undo manifest and end with <code>rollback: sj migrate --undo</code>.</dd>
+          <dt>--undo</dt><dd>Put back what the last <code>--write</code> changed. Takes no <code>--from</code>. See <a href="#migrating">Migrating from other tools</a>.</dd>
+        </dl>
       </div>
     </section>
 
     <section id="migrating">
       <h2>Migrating from other tools</h2>
-      <p><code>sj migrate</code> replaces the old tool in one step, so two workflows don't compete for your agent. Every run writes <code>specjutsu.toml</code> if it's missing, installs the Claude Code adapter, then prints <code>sj doctor</code> and <code>sj spec validate</code>. Review with <code>git diff</code>; undo with <code>git restore . &amp;&amp; git clean -fd</code>.</p>
+      <p><code>sj migrate</code> replaces the old tool in one step, so two workflows don't compete for your agent. Every run writes <code>specjutsu.toml</code> if it's missing, installs the Claude Code adapter, then prints <code>sj doctor</code> and <code>sj spec validate</code>. Review with <code>git diff</code>; undo with <code>sj migrate --undo</code>.</p>
       <div class="tbl"><table>
         <thead><tr><th>From</th><th>What <code>sj migrate</code> does</th></tr></thead>
         <tbody>
-          <tr><td><code>openspec</code></td><td>Keeps <code>openspec/</code> as the spec root and gives every scenario an ID. Moves <code>config.yaml</code>'s guidance to <code>principles.md</code>. Removes OpenSpec's generated skills and <code>/opsx</code> commands; your own skills stay.</td></tr>
+          <tr><td><code>openspec</code></td><td>Keeps <code>openspec/</code> as the spec root and gives every scenario an ID, first pinning the short prefixes <code>sj ids prefixes</code> suggests (<code>DIST-001</code>, not <code>DISTRIBUTION-001</code>). Moves <code>config.yaml</code>'s guidance to <code>principles.md</code>. Removes OpenSpec's generated skills and <code>/opsx</code> commands; your own skills stay.</td></tr>
           <tr><td><code>speckit</code></td><td>Imports every feature, then removes <code>.specify/</code>, the imported <code>specs/NNN-*/</code> folders and the agent files Spec Kit's manifests list.</td></tr>
           <tr><td><code>superpowers</code></td><td>Removes the plugin, its marketplace and its permission rules from <code>.claude/settings.json</code>, keeping every other byte. Lists files under <code>docs/superpowers/</code> for you to review.</td></tr>
         </tbody>
       </table></div>
+      <h3>Preview, apply, undo</h3>
+      <p>The preview lists every file it would create, change or remove; the <code>.claude/settings.json</code> line says your hooks stay, as in <code>change .claude/settings.json (adapter) (merged: 1 existing hook kept)</code>. <code>--diff</code> adds a unified diff per file, a new file diffed against nothing. The preview runs on a copy without gitignored files, so a step that reads one, such as a gitignored <code>.claude/settings.json</code>, can preview differently from the write.</p>
+<pre class="code">$ sj migrate --from openspec --from superpowers --write
+<span class="c-m">…</span>
+git: 20 created, 2 changed, 0 removed
+rollback: sj migrate --undo
+
+$ sj migrate --undo
+migrate: undone (2 files restored, 20 deleted; left uncommitted)</pre>
+      <p><code>--write</code> records the start commit and every file it touched, gitignored files included, with its hash and its content before the write, in <code>sj-migrate-undo.json</code> in the git directory, so it's never committed. <code>sj migrate --undo</code> restores changed and removed files to their content before the write, byte for byte, deletes created files and the folders they leave empty, deletes the manifest, and touches nothing else: files you made since stay. It works after you commit the migration, and leaves the result uncommitted. It refuses, exiting 2 and changing nothing, when a recorded file was edited since, naming each one; with no manifest it says there is nothing to undo. Limits: a restored file doesn't get its executable bit back, and an empty folder that held created files goes even if it existed before.</p>
+
       <h3>Where each workflow went</h3>
       <div class="tbl"><table>
         <thead><tr><th>You used</th><th>specjutsu</th></tr></thead>
@@ -660,7 +737,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <h2>FAQ</h2>
       <details class="faq"><summary>Does specjutsu call an AI model?</summary><div><p>No. It's a deterministic binary. Your agent calls it; it never calls your agent or any LLM.</p></div></details>
       <details class="faq"><summary>Which languages work today?</summary><div><p>Rust (<code>cargo test</code>), TypeScript and JavaScript (vitest, Jest, Playwright) and Python (pytest), plus any runner that writes a JUnit XML report through a <code>junit</code> suite with your own <code>command</code>. Native test discovery for Go, dotnet, PHPUnit and RSpec is on the roadmap.</p></div></details>
-      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Run <code>sj adopt</code> and <code>sj ids --write</code>, or <code>sj migrate</code> if you're on OpenSpec, Spec Kit or Superpowers. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings.</p></div></details>
+      <details class="faq"><summary>Can I adopt it in an existing repo?</summary><div><p>Yes. Run <code>sj adopt</code> and <code>sj ids --write</code>, or <code>sj migrate</code> if you're on OpenSpec, Spec Kit or Superpowers. Only scenarios a change adds or modifies must be tested; existing untested scenarios are warnings. With thousands of them, or old orphan tests, commit a <a href="#baseline">trace baseline</a> so each PR shows only what it adds. Run <code>sj ids prefixes --write</code> before <code>sj ids --write</code> for short IDs.</p></div></details>
       <details class="faq"><summary>Does it work in a monorepo?</summary><div><p>Yes. Each package in <code>specjutsu.toml</code> has its own suites, and a file belongs to the package with the longest matching path. <code>sj test apps/api</code> runs one package; the gate runs red-on-base per suite.</p></div></details>
       <details class="faq"><summary>Do my tests have to live in <code>tests/</code>?</summary><div><p>Only Rust's. Red-on-base overlays every changed file that matches a suite's <code>tests</code> globs, so co-located <code>*.test.ts</code> files work. Rust tests inline in a source file can't be moved without the new code, so they're reported as unverifiable.</p></div></details>
       <details class="faq"><summary>Is the local ledger trusted by CI?</summary><div><p>No. A local file is easy to forge, so CI recomputes red and green itself with red-on-base. The ledger is local evidence for the agent loop, the pre-edit hook and strict mode.</p></div></details>

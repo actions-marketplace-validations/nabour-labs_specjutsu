@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {"command": "sj hook cursor pre-edit", "matcher": "Write|Delete"}
+    ]
+  }
+}

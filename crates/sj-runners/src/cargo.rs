@@ -92,6 +92,9 @@ pub struct Detailed {
     pub build_errors: Vec<String>,
     /// libtest path → captured failure output, for each failing test.
     pub failures: BTreeMap<String, String>,
+    /// Combined stdout and stderr bytes of the cargo processes.
+    #[serde(skip)]
+    pub output_bytes: u64,
 }
 
 /// Most build-error lines kept from cargo's stderr.
@@ -112,6 +115,7 @@ pub fn cargo_test_detailed(dir: &Path, cargo_args: &[&str], filters: &[&str]) ->
         return Ok(Detailed {
             build_failed: true,
             build_errors: parse_build_errors(&stderr, BUILD_ERROR_CAP),
+            output_bytes: output_bytes(&build),
             ..Detailed::default()
         });
     }
@@ -132,7 +136,12 @@ pub fn cargo_test_detailed(dir: &Path, cargo_args: &[&str], filters: &[&str]) ->
         build_failed: false,
         build_errors: Vec::new(),
         failures: parse_failures(&stdout),
+        output_bytes: output_bytes(&build) + output_bytes(&out),
     })
+}
+
+fn output_bytes(out: &std::process::Output) -> u64 {
+    (out.stdout.len() + out.stderr.len()) as u64
 }
 
 /// Parse libtest's `---- <path> stdout ----` sections into path → failure text.

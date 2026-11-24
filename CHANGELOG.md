@@ -6,7 +6,41 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-23
+
+### Changed
+- **Breaking (output only):** `sj migrate --write` ends with `rollback: sj migrate --undo`
+  instead of `rollback: git restore . && git clean -fd`, which also deleted untracked
+  files made after the migration. Scripts that parse the line need updating.
+
 ### Added
+- `sj trace --write-baseline` records every current gap and orphan in
+  `<spec_root>/trace-baseline.txt`, one sorted `gap <ID>` or
+  `orphan <ID> <file> <test>` line each. With a baseline, `sj trace` lists only new
+  entries and counts the rest (`3 gaps (2 known)`), reports entries that are no longer
+  true as `stale <entry> (remove from trace-baseline.txt)`, and `--strict` fails only
+  on new or stale entries. `--json` marks each gap and orphan `"known"` and lists a
+  `stale` array.
+- `sj gate` reads the baseline from the merge base: known gaps collapse into one
+  `known gaps: N (trace-baseline.txt)` warning, known orphans no longer fail, and
+  stale entries are `stale <entry>` warnings. Changed scenarios are still gated.
+  Entries a change adds fail as `baseline-added <entry>` unless it declares a `config`
+  exemption, such as the trailer `Specjutsu-Exempt: config — adopt trace baseline`.
+- `sj verify` applies the same baseline rules: known orphans aren't problems, and
+  `baseline-added <entry>` is a problem without a `config` exemption.
+- `sj ids prefixes` prints a short, collision-free `[ids.prefixes]` table, keeping
+  prefixes already mapped or in use (`distribution = "DIST"`). `--write` adds the
+  missing lines to `specjutsu.toml` and changes no other byte. A clash it can't
+  lengthen away exits 2 naming both capabilities and the prefix. `sj ids` ends with a
+  `hint:` line when a derived prefix is longer than six letters.
+- `sj migrate --from openspec` pins those short prefixes in `specjutsu.toml` before it
+  assigns IDs, so `distribution` gets `DIST-001`.
+- `sj migrate --diff` prints a unified diff of every file the preview would create or
+  change. The `.claude/settings.json` preview line says how many existing hooks it
+  keeps, as `(merged: 1 existing hook kept)`.
+- `sj migrate --undo` puts back what the last `sj migrate --write` touched, from an
+  undo manifest in the git directory, and keeps every other file. It works after the
+  migration is committed and refuses, naming the files, when one was edited since.
 - One-line installers: `curl -fsSL https://nabour-labs.github.io/specjutsu/install.sh | sh`
   on macOS and Linux, `irm https://nabour-labs.github.io/specjutsu/install.ps1 | iex` on
   Windows. Both verify the download against `SHA256SUMS`; `SJ_VERSION` pins a release.
@@ -26,6 +60,11 @@ All notable changes are recorded here. The format follows
   evidence. Both, and `sj-apply`, list rationalizations and red flags.
 - `skills/COVERAGE.md` has a Depth column naming the file that carries each Superpowers
   technique; the skill check fails when it's missing.
+- `sj gain` totals the bytes `sj test`, `sj verify`, `sj next` and `sj status`
+  printed against the raw output they stand in for, per command, with an estimate
+  of tokens saved (bytes / 4). Each of those commands appends one record per run
+  to `.specjutsu/ledger/gain.jsonl`; `--json`, `--since <time>` and `--reset`.
+  The numbers are bytes, the local half of the v0.6 token benchmark.
 
 ## [0.5.0] - 2026-11-21
 
@@ -38,6 +77,14 @@ All notable changes are recorded here. The format follows
   or remove `spec_root`.
 
 ### Fixed
+- `sj audit` and `sj gate` no longer report a Rust test as `assertion-free-test` when
+  its body holds a string that spans lines, such as a raw `r#"{ … }"#` JSON fixture or
+  a `"…\` continued string. The test scanner now keeps string, raw string, char literal
+  and block comment state across lines when it looks for the test's closing brace.
+- `sj audit` and `sj gate` no longer report a pytest test as `assertion-free-test` when
+  its body holds a triple-quoted string with lines at column 0, such as a TOML or INI
+  fixture. In JS/TS test files, a `\`-continued string no longer shifts the line numbers
+  of the tests after it, which made their assertions miss the audit.
 - The Antigravity hook goes under a `specjutsu` hook name in `.agents/hooks.json`,
   the shape Antigravity documents; the earlier `hooks.PreToolUse` entry was never
   read. Reinstalling or removing takes out the old entry.
@@ -320,7 +367,8 @@ All notable changes are recorded here. The format follows
 - `sj gate --since <commit>`: check every `feat(ID)` commit has an earlier `test(ID): red`.
 - `cargo test` runner with libtest result parsing.
 
-[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/nabour-labs/specjutsu/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nabour-labs/specjutsu/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nabour-labs/specjutsu/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nabour-labs/specjutsu/compare/v0.3.0...v0.3.1
