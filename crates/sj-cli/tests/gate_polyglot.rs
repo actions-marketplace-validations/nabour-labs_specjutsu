@@ -686,6 +686,10 @@ fn gate_059_a_test_linked_to_existing_behaviour_passes_the_gate() {
     assert_eq!(code, Some(0), "{report:#}");
     assert_eq!(report["pass"], true, "{report:#}");
     assert_eq!(
+        report["summary"], "gate: pass — 1 scenario proven (1 green:linked)",
+        "{report:#}"
+    );
+    assert_eq!(
         report["proven"],
         serde_json::json!([{ "id": "STAFF-063", "red": "green:linked" }]),
         "{report:#}"

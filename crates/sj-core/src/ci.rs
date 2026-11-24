@@ -97,7 +97,7 @@ pub fn render_markdown(report: &GateReport, base: &str) -> String {
     // GATE-059: so do passing linked scenarios.
     let (linked, mut rows): (Vec<&Row>, Vec<&Row>) = rows
         .into_iter()
-        .partition(|r| r.evidence == "green:linked" && !r.failed);
+        .partition(|r| r.linked && !r.failed);
     rows.sort_by_key(|r| !r.failed); // failures first, order otherwise kept
     let line = |r: &Row| {
         let tests: Vec<String> = r.tests.iter().map(|t| format!("`{}`", cell(t))).collect();

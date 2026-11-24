@@ -265,6 +265,8 @@ pub struct Row {
     pub failed: bool,
     /// A `[keep]` scenario (GATE-043).
     pub keep: bool,
+    /// An implemented scenario whose tests all pass on base (GATE-059).
+    pub linked: bool,
 }
 
 /// Failures of the exemption rules: unknown kinds, missing reasons, and a spike merging to main.
@@ -285,7 +287,8 @@ pub fn exemption_failures(exemptions: &[Exemption], base: &str) -> Vec<String> {
 }
 
 /// `unspecified change: <files>` when source files changed with no changed scenario and no
-/// exemption. `linked` scenarios (`green:linked`) don't count as changed (GATE-060).
+/// exemption. `linked` scenarios (implemented, every test passing on base) don't count as
+/// changed (GATE-060).
 pub fn unspecified(
     changes: &BTreeMap<String, Change>,
     linked: &BTreeSet<String>,
@@ -369,6 +372,27 @@ pub fn evaluate(input: &Input) -> GateReport {
         .filter(|(_, c)| matches!(c, Change::Added | Change::Modified | Change::Implemented))
         .map(|(id, _)| id)
         .collect();
+    // GATE-060: implemented scenarios whose tests all pass on base link existing behaviour,
+    // and so cover no source change, whether or not they pass at head.
+    let linked: BTreeSet<String> = targets
+        .iter()
+        .filter(|id| input.changes.get(**id) == Some(&Change::Implemented))
+        .filter(|id| !input.keep.contains(**id))
+        .filter(|id| {
+            input
+                .trace
+                .mapped
+                .iter()
+                .find(|m| &&m.id == *id)
+                .is_some_and(|m| {
+                    !m.tests.is_empty()
+                        && m.tests.iter().all(|t| {
+                            input.base.get(&(id.to_string(), t.name.clone())) == Some(&Red::Green)
+                        })
+                })
+        })
+        .map(|id| id.to_string())
+        .collect();
     for id in &targets {
         let keep = input.keep.contains(*id);
         let Some(m) = input.trace.mapped.iter().find(|m| &&m.id == id) else {
@@ -379,6 +403,7 @@ pub fn evaluate(input: &Input) -> GateReport {
                 tests: Vec::new(),
                 failed: true,
                 keep,
+                linked: false,
             });
             continue;
         };
@@ -507,6 +532,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             tests: m.tests.iter().map(|t| t.name.clone()).collect(),
             failed: !ok,
             keep,
+            linked: linked.contains(*id),
         });
     }
 
@@ -558,12 +584,6 @@ pub fn evaluate(input: &Input) -> GateReport {
         r.failures.push(format!("orphan {} {}", o.id, o.test.name));
     }
 
-    let linked: BTreeSet<String> = r
-        .proven
-        .iter()
-        .filter(|p| p.red == Red::Linked)
-        .map(|p| p.id.clone())
-        .collect();
     r.failures.extend(unspecified(
         &input.changes,
         &linked,
