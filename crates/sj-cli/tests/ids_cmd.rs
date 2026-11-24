@@ -599,3 +599,118 @@ fn ids_018_a_taken_id_gets_a_new_number_and_a_note() {
     assert!(read(dir.path(), "openspec/specs/staff/spec.md")
         .contains("#### Scenario: STAFF-100 Role change is recorded"));
 }
+
+#[test]
+fn ids_019_copies_that_disagree_get_a_new_number_and_a_note() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/c1/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    put(
+        dir.path(),
+        "openspec/changes/c2/specs/staff/spec.md",
+        &ROLE_DELTA.replace("STAFF-057", "STAFF-058"),
+    );
+    let deltas = |root: &Path| {
+        ["c1", "c2"].map(|c| {
+            std::fs::read(root.join(format!("openspec/changes/{c}/specs/staff/spec.md"))).unwrap()
+        })
+    };
+    let before = deltas(dir.path());
+    let out = sj(dir.path()).args(["--json", "staff"]).assert().code(1);
+    let v: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+    let note = &v["assignments"][0]["note"];
+    assert_eq!(note["kind"], "disagree");
+    assert_eq!(note["copies"][0]["id"], "STAFF-057");
+    assert_eq!(
+        note["copies"][0]["file"],
+        "openspec/changes/c1/specs/staff/spec.md"
+    );
+    assert_eq!(note["copies"][1]["id"], "STAFF-058");
+    sj(dir.path())
+        .args(["--write", "staff"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "note: copies disagree: \
+             STAFF-057 Role change is recorded (openspec/changes/c1/specs/staff/spec.md:6), \
+             STAFF-058 Role change is recorded (openspec/changes/c2/specs/staff/spec.md:6); \
+             Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100",
+        ));
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-100 Role change is recorded"));
+    assert_eq!(deltas(dir.path()), before);
+}
+
+/// IDS-018's JSON carries the taken note too.
+#[test]
+fn ids_018_json_carries_the_taken_note() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        ROLE_DELTA,
+    );
+    put(
+        dir.path(),
+        "openspec/specs/billing/spec.md",
+        &USER_AUTH
+            .replace("Scenario: Valid", "Scenario: STAFF-057 Valid")
+            .replace("Scenario: Password", "Scenario: BILLING-001 Password"),
+    );
+    let out = sj(dir.path()).args(["--json", "staff"]).assert().code(1);
+    let v: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+    let note = &v["assignments"][0]["note"];
+    assert_eq!(v["assignments"][0]["id"], "STAFF-100");
+    assert_eq!(note["kind"], "taken");
+    assert_eq!(
+        note["copy"]["file"],
+        "openspec/changes/audit/specs/staff/spec.md"
+    );
+    assert_eq!(note["by"]["name"], "Valid registration");
+    assert_eq!(note["by"]["file"], "openspec/specs/billing/spec.md");
+}
+
+/// IDS-018: a `## ` line inside fenced code does not end the MODIFIED section.
+#[test]
+fn ids_018_a_fenced_heading_does_not_hide_the_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        &ROLE_DELTA.replace(
+            "The system SHALL audit role changes.\n",
+            "The system SHALL audit role changes.\n\n```\n## ADDED Requirements\n```\n",
+        ),
+    );
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-057 Role change is recorded"));
+}
+
+#[test]
+fn ids_020_a_renamed_requirement_matches_by_its_old_name() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "openspec/specs/staff/spec.md", ROLE_SPEC);
+    put(
+        dir.path(),
+        "openspec/changes/audit/specs/staff/spec.md",
+        "## RENAMED Requirements\n\
+         - FROM: `### Requirement: Role changes are audited`\n\
+         - TO: `### Requirement: Role changes are logged`\n\n\
+         ## MODIFIED Requirements\n\n\
+         ### Requirement: Role changes are logged\n\
+         The system SHALL log role changes.\n\n\
+         #### Scenario: STAFF-057 Role change is recorded\n\
+         - **WHEN** a role changes\n\
+         - **THEN** it is recorded with its author\n",
+    );
+    sj(dir.path()).args(["--write", "staff"]).assert().success();
+    assert!(read(dir.path(), "openspec/specs/staff/spec.md")
+        .contains("#### Scenario: STAFF-057 Role change is recorded"));
+}
