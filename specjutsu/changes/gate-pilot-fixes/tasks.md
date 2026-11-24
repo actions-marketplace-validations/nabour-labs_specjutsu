@@ -19,3 +19,11 @@
 
 ## 5. Docs
 - [x] 5.1 README and site/manual.html: gate results, suite `red_on_base` and `support`, `sj adopt`, `sj ids` targets, `sj verify`, `sj spec validate`; CHANGELOG entry (no-scenario: docs)
+
+## 6. Final review fixes
+- [ ] 6.1 Gate: modified helpers, `\` paths, linked scenarios judged from base results, typed linked rows; no ID on the inline unit test (GATE-062, GATE-056, GATE-059, GATE-060)
+- [ ] 6.2 Verify: never-red implemented scenarios cover no source change; LOOP-036 is keep; extra edge tests carry no ID (LOOP-034..037)
+- [ ] 6.3 Adopt: one line per support glob, skip folders under tests/, report walk errors (CONF-039, CONF-041)
+- [ ] 6.4 [P] `sj spec validate` warns on a copy whose ID differs from its original's; shared RENAMED lookup; no ID on the extra edge test (SPEC-045, SPEC-047)
+- [ ] 6.5 [P] `sj ids`: collision checks only for selected prefixes; notes say to renumber the copies (IDS-019, IDS-021)
+- [ ] 6.6 README, manual and CHANGELOG for 6.1–6.5 (no-scenario: docs)

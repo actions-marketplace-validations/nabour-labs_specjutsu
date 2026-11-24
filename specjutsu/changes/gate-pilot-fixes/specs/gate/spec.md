@@ -2,12 +2,12 @@
 
 ### Requirement: A test helper missing on base is not red
 When a target test fails to load on base, the gate SHALL check every file the change added
-that lies in a helper folder (a path segment named `testing`, `test-utils`, `test-helpers`,
+or modified that lies in a helper folder (a path segment named `testing`, `test-utils`, `test-helpers`,
 `testutils`, `fixtures`, `__fixtures__`, `mocks` or `__mocks__`) and that was not overlaid. If
 the base failure message for that test names such a file, by its path from the repository, the
 package or the test's folder, with or without its extension, the gate MUST fail with
 `not-overlaid <ID> <test name> (<file>; add it to the suite's support globs)` instead of
-recording `red:compile`.
+recording `red:compile`. Paths in the message SHALL match with `\` or `/` as the separator.
 
 #### Scenario: GATE-056 A helper the change added but did not overlay fails the gate
 - **WHEN** the change adds `apps/api/src/testing/admin.ts` and `apps/api/src/users.test.ts`, whose test for STAFF-073 imports `./testing/admin`, no `support` glob matches `admin.ts`, and the base run reports `users.test.ts` as a failed file with the message `Failed to load url ./testing/admin`
@@ -16,6 +16,10 @@ recording `red:compile`.
 #### Scenario: GATE-057 [keep] An overlaid helper lets the test fail on an assertion
 - **WHEN** the same change runs with `support = ["apps/api/src/testing/**"]` on the vitest suite, and STAFF-073's test loads on base and fails an assertion
 - **THEN** STAFF-073 is recorded `red:assert`
+
+#### Scenario: GATE-062 A helper the change modified but did not overlay fails the gate
+- **WHEN** base already has `apps/api/src/testing/index.ts`, the change adds an export `makeAdmin` to it and a test for STAFF-074 in `apps/api/src/staff.test.ts` that imports it, no `support` glob matches the file, and the base run reports `staff.test.ts` as a failed file with the message `The requested module './testing/index.ts' does not provide an export named 'makeAdmin'`
+- **THEN** the gate fails with reason `not-overlaid STAFF-074 <test name> (apps/api/src/testing/index.ts; add it to the suite's support globs)`
 
 #### Scenario: GATE-058 [keep] A new source module missing on base is still red:compile
 - **WHEN** the change adds `apps/api/src/usage.ts` and a test for USAGE-001 that imports it, and the base run fails to load the test because `./usage` does not exist
@@ -43,7 +47,9 @@ A scenario that is unchanged in text but had no linked test on base and has one
 at head SHALL be classified as **implemented** and treated like an added
 scenario by every gate rule, so a change that implements a spec merged earlier
 must prove it. The one exception is a test that passes on base, which is
-`green:linked` rather than `green-on-base`.
+`green:linked` rather than `green-on-base`. When an implemented scenario has several tests and
+at least one fails on base, that failure proves the scenario, and its tests that pass on base
+are accepted.
 
 #### Scenario: GATE-023 Implementing a previously untested scenario is gated
 - **WHEN** base already has scenario MATH-001 with no test, and the change adds a test for MATH-001 and edits `src/lib.rs`

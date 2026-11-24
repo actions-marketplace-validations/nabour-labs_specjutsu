@@ -84,6 +84,18 @@ and accept paths too.
 - [`green:linked` lets a vacuous test link to old behaviour] → The same is true of `[keep]`.
   Reviewers still check each test against its scenario (sj-review), and the link covers no
   source change.
+- [`sj adopt` marks a product folder named like a helper (`mocks/`, `testing/`) as `support`] →
+  Support files are not source and are overlaid on base, so edits there would need no scenario
+  and could make a linked test pass on base. Adopt prints one line per support glob it adds,
+  telling the user to remove it if the folder holds product code (CONF-041).
 - [`sj task done` in strict mode now needs git to classify scenarios] → It already reads the
   ledger and the change folder. With no merge-base it falls back to today's rule and asks for
   a red run.
+
+## Principles
+
+- **Commit the failing test first.** A few review-fix commits (6941d02, 245d54f, e8c9ba9) add
+  regression tests in the same commit as the code they guard. Those tests pin behaviour that
+  already held, or cases inside a scenario whose red was already recorded. The branch isn't
+  rewritten, so the history is left as is, and the ledger still records each scenario's red
+  before its green.

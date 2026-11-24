@@ -7,7 +7,10 @@ an open change. The command SHALL list and write only the scenarios of the selec
 capabilities: their `specs/` files and their delta copies in open changes. It selects whole
 capabilities so that a MODIFIED copy and its original always get the same ID.
 
-The prefix checks (IDS-005) and the numbering SHALL still cover the whole spec root. A new
+The prefix checks (IDS-005) SHALL cover every capability whose prefix a selected capability
+uses, anywhere under the spec root, and numbering SHALL still cover the whole spec root; a
+collision between two capabilities that aren't selected and don't share a selected prefix SHALL
+NOT stop the run. A new
 number SHALL continue from the highest one used with the prefix anywhere under the spec root.
 A target that selects no capability SHALL exit 2, list the known capabilities, and write
 nothing.
@@ -28,6 +31,10 @@ nothing.
 - **WHEN** capabilities `staff` and `st-aff` both produce `STAFF` and have scenarios without IDs, and `sj ids --write staff` runs
 - **THEN** it changes no file and exits 2 naming `staff` and `st-aff`
 
+#### Scenario: IDS-021 An unrelated collision does not stop a target
+- **WHEN** capabilities `billing` and `bill-ing` both produce `BILLING`, `staff` has scenarios without IDs, and `sj ids --write staff` runs
+- **THEN** it writes IDs in `specs/staff/spec.md` and exits 0
+
 ### Requirement: An original takes the ID its MODIFIED copy already has
 When a `specs/` scenario without an ID has a copy in an open change's MODIFIED requirement, and
 that copy already has an ID, `sj ids --write` SHALL give the original that ID, not a new number.
@@ -39,6 +46,8 @@ The original SHALL get a new number instead, and `sj ids` SHALL print a note lin
 scenarios involved, in two cases:
 - another scenario already uses that ID;
 - copies in two open changes carry different IDs.
+
+The note SHALL end by saying to give the delta copies the original's new ID.
 
 `--json` SHALL carry the same note.
 
