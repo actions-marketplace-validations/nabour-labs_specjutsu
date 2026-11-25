@@ -199,7 +199,7 @@ sj --version</pre>
       </table></div>
       <p>macOS quarantines a binary downloaded in a browser, and Gatekeeper then refuses to run it. Clear the flag with <code>xattr -d com.apple.quarantine sj</code>. The installers and Homebrew download without it.</p>
       <h3>Let your agent install it</h3>
-      <p>The <code>specjutsu</code> setup skill takes an agent from no <code>sj</code> to a checked setup: it installs <code>sj</code> (asking first), runs <code>sj adopt</code> on an existing project or <code>sj init</code> on a new one, installs the adapters with <code>sj init --agents auto</code>, and ends with <code>sj doctor</code> and <code>sj status</code>. It never replaces an existing <code>specjutsu.toml</code>. Add it with the skills CLI (in Claude Code it is also the <code>/specjutsu</code> command), or paste the prompt into any agent:</p>
+      <p>The <code>specjutsu</code> setup skill takes an agent from no <code>sj</code> to a checked setup: it installs <code>sj</code> (asking first), runs <code>sj adopt</code> on an existing project or <code>sj init</code> on a new one, installs the adapters with <code>sj init --agents auto</code>, and ends with <code>sj doctor</code> and <code>sj status</code>. On a project with tests it offers <code>sj spec infer</code> to draft their scenarios. It never replaces an existing <code>specjutsu.toml</code>. Add it with the skills CLI (in Claude Code it is also the <code>/specjutsu</code> command), or paste the prompt into any agent:</p>
 <pre class="code">npx skills add nabour-labs/specjutsu --skill specjutsu
 
 <span class="c-m"># or tell any agent:</span>
