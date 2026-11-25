@@ -1078,3 +1078,72 @@ fn spec_070_a_capability_that_is_not_kebab_case_is_refused() {
     }
     assert!(!r.join("specjutsu").exists());
 }
+
+/// Runs a SPEC-071 case as a dry run and with `--write`: each exits 2 naming `test` and `id`,
+/// asks for the test to be renamed, and leaves the tree as committed.
+fn refused_name_id(r: &Path, test: &str, id: &str) {
+    for write in [false, true] {
+        let mut args = vec!["tests/billing.rs", "--capability", "billing"];
+        if write {
+            args.push("--write");
+        }
+        let out = sj(r, &args).output().unwrap();
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert_eq!(String::from_utf8(out.stdout).unwrap(), "");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        for part in [test, id, "rename the test"] {
+            assert!(stderr.contains(part), "stderr should name {part}: {stderr}");
+        }
+        assert_eq!(
+            git(r, &["status", "--porcelain", "--untracked-files=all"]),
+            ""
+        );
+    }
+}
+
+#[test]
+fn spec_071_a_name_id_that_is_shared_or_was_used_before_is_refused() {
+    // Another scanned test, outside the target, carries the same ID.
+    let dir = project();
+    let r = dir.path();
+    put(
+        r,
+        "tests/billing.rs",
+        "#[test]\nfn billing_007_inside() {}\n",
+    );
+    put(
+        r,
+        "tests/other.rs",
+        "#[test]\nfn billing_007_outside() {}\n",
+    );
+    commit_all(r);
+    refused_name_id(r, "billing_007_inside", "BILLING-007");
+
+    // Two selected tests carry the same ID.
+    let dir = project();
+    let r = dir.path();
+    put(
+        r,
+        "tests/billing.rs",
+        "#[test]\nfn billing_007_a() {}\n\n#[test]\nfn billing_007_b() {}\n",
+    );
+    commit_all(r);
+    refused_name_id(r, "billing_007_", "BILLING-007");
+
+    // An archived change once used the ID.
+    let dir = project();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu/changes/archive/2026-01-01-billing/specs/billing/spec.md",
+        "## ADDED Requirements\n\n### Requirement: Charge\nThe system SHALL charge.\n\n\
+         #### Scenario: BILLING-015 Charge a card\n- **WHEN** a card is charged\n- **THEN** it is billed\n",
+    );
+    put(
+        r,
+        "tests/billing.rs",
+        "#[test]\nfn billing_015_revived() {}\n",
+    );
+    commit_all(r);
+    refused_name_id(r, "billing_015_revived", "BILLING-015");
+}
