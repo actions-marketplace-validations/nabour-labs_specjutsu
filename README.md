@@ -2,7 +2,7 @@
 
 **Master the art of the spec.**
 
-**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
+**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[Benchmarks](https://nabour-labs.github.io/specjutsu-bench/)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-specjutsu%20gate-2ea44f?logo=github)](https://github.com/marketplace/actions/specjutsu-gate)
 
@@ -28,7 +28,9 @@ specjutsu does in the binary and in CI what other spec-driven tools hand to the 
   agent a few lines, not whole folders and raw test logs. `sj next` gives the agent
   one task's scenarios, files and test commands; a green test run prints one line;
   a red one prints only the failing tests and their scenarios. Every command takes
-  `--json`.
+  `--json`. The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) runs the same three tasks with
+  specjutsu, Spec Kit, OpenSpec and Superpowers and counts every byte each puts into
+  the agent's context.
 
 ## One Action, every pull request
 
@@ -78,7 +80,8 @@ and it checks it deterministically:
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
 | Runtime needed | Node | Python + uv | IDE | None | **None: single binary** |
 
-specjutsu is not ahead everywhere yet: a public token benchmark is planned for v0.6,
+The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) is out: see how many context bytes each workflow
+spends on the same feature, bug fix and change. specjutsu is not ahead everywhere yet:
 the rest of OpenSpec parity (custom workflow schemas, multi-repo spec stores) for
 v0.7, and property scenarios go further. Specs for code that already exists ship as
 `sj spec infer`, which drafts `[keep]` scenarios from untraced tests. See [How specjutsu compares](docs/competitive-analysis.md) for the full
@@ -86,7 +89,7 @@ comparison, its sources, and the change that closes each gap.
 
 ## Status
 
-**Pre-alpha, v0.5.1. Beta is next**: it opens once specjutsu has fully replaced
+**Pre-alpha, v0.6.0. Beta is next**: it opens once specjutsu has fully replaced
 OpenSpec and Superpowers in our own production monorepo. `sj trace`, `sj test` and
 `sj gate` work with Rust, vitest, Jest, Playwright and pytest, and any runner that
 writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline, Copilot,
@@ -111,7 +114,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://nabour-labs.github.io/specjut
 
 Both download the latest release for your platform, check it against the release's
 `SHA256SUMS` and install `sj` into `~/.local/bin` (Windows: `%LOCALAPPDATA%\Programs\sj`,
-added to your user `PATH`). Set `SJ_VERSION=0.5.1` to pin a release or `SJ_INSTALL_DIR`
+added to your user `PATH`). Set `SJ_VERSION=0.6.0` to pin a release or `SJ_INSTALL_DIR`
 to choose the folder. Or use a package manager:
 
 ```bash
@@ -136,7 +139,7 @@ cargo install --list | grep -A1 specjutsu   # the installed build and its source
 ```
 
 `sj --version` prints the commit after the version for a build from a git
-checkout, such as `sj 0.5.1 (f62a48b)`, and only the version for a crates.io
+checkout, such as `sj 0.6.0 (f62a48b)`, and only the version for a crates.io
 install. Open agent sessions use the new binary on their next hook call.
 
 ### Let your agent install it
@@ -1505,7 +1508,8 @@ two in step:
 | v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
 | v0.5 | Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills; bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; `specjutsu/` as the default spec root |
 | v0.5.1 | Trace baseline for gradual adoption, `sj ids prefixes`, `sj migrate --diff` and `--undo`; one-line installers, Homebrew and `cargo binstall`; `sj gain` |
-| v0.6 (beta) | Public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); beta launch |
+| v0.6 | Public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); `red_on_base = "assert"` and `green:linked` in the gate; `sj ids` for selected capabilities; brainstorming in `sj-explore` |
+| Beta | Opens once specjutsu has fully replaced OpenSpec and Superpowers in our own production monorepo |
 | v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing

@@ -103,6 +103,7 @@
       <a href="index.html#compare">Compare</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="manual.html" style="color:var(--text)">Manual</a>
+      <a href="https://nabour-labs.github.io/specjutsu-bench/">Benchmarks</a>
     </div>
     <a class="btn" href="https://github.com/nabour-labs/specjutsu">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.6.3 2.8.1 3.2.8.8 1.2 1.9 1.2 3.1 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z"/></svg>
@@ -132,14 +133,14 @@
 
   <main class="prose">
     <header>
-      <p class="eyebrow">User manual · v0.5.1</p>
+      <p class="eyebrow">User manual · v0.6.0</p>
       <h1>Using <span class="grad-text">specjutsu</span></h1>
       <p class="lead">Everything you need to go from an <code>openspec/</code> folder, a Spec Kit project or a Superpowers setup to pull requests that can't merge unless every scenario is tested and every test was red first.</p>
     </header>
 
     <section id="status">
       <h2>What works today</h2>
-      <p>specjutsu is pre-alpha and built in the open; the beta opens with v0.6. This manual marks every feature with its state, so you know what you can rely on.</p>
+      <p>specjutsu is pre-alpha and built in the open; the beta opens once specjutsu has fully replaced OpenSpec and Superpowers in our own production monorepo. This manual marks every feature with its state, so you know what you can rely on.</p>
       <div class="tbl"><table>
         <thead><tr><th>Feature</th><th>State</th><th>Notes</th></tr></thead>
         <tbody>
@@ -157,8 +158,10 @@
           <tr><td>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared and global skills</td><td><span class="badge live">v0.5.0</span></td><td>A pre-edit hook in each; <code>.agents/skills/</code> beside <code>.claude/skills/</code>; <code>--global</code> installs the skills for every project.</td></tr>
           <tr><td>Trace baseline, <code>sj ids prefixes</code>, <code>sj migrate --diff</code> and <code>--undo</code></td><td><span class="badge live">v0.5.1</span></td><td>Gradual adoption: old gaps and orphans counted, not listed; short ID prefixes; a migration you can read and roll back.</td></tr>
           <tr><td>One-line installers, Homebrew, <code>cargo binstall</code>, <code>sj gain</code></td><td><span class="badge live">v0.5.1</span></td><td><code>install.sh</code> and <code>install.ps1</code> check <code>SHA256SUMS</code>; <code>sj gain</code> counts the bytes the agent-loop commands saved.</td></tr>
+          <tr><td><code>red_on_base = "assert"</code>, <code>green:linked</code></td><td><span class="badge live">v0.6.0</span></td><td>A suite can require an assertion failure on base; a new test for behaviour that already existed is linked instead of failing the gate.</td></tr>
+          <tr><td><code>sj ids</code> for selected capabilities, brainstorming in <code>sj-explore</code></td><td><span class="badge live">v0.6.0</span></td><td>Number only the capabilities you name; <code>sj-explore</code> also handles "let's brainstorm".</td></tr>
+          <tr><td><a href="https://nabour-labs.github.io/specjutsu-bench/">Token benchmark</a></td><td><span class="badge live">published</span></td><td>Public comparison against the tools specjutsu replaces: <a href="https://nabour-labs.github.io/specjutsu-bench/">see the results</a>. <code>sj gain</code> is its local half: byte counts on your machine.</td></tr>
           <tr><td><code>sj spec infer</code></td><td><span class="badge next">Unreleased</span></td><td>Draft <code>[keep]</code> scenarios from the untraced tests of an existing project.</td></tr>
-          <tr><td>Token benchmark</td><td><span class="badge plan">v0.6</span></td><td>Public comparison against the tools specjutsu replaces. <code>sj gain</code> is its local half: byte counts on your machine.</td></tr>
         </tbody>
       </table></div>
       <div class="callout"><p><b>In practice today:</b> specjutsu runs the whole loop on its own, from <code>sj spec new</code> to <code>sj spec archive</code>. You don't need OpenSpec, Spec Kit or Superpowers alongside it, and <code>sj migrate</code> removes them for you.</p></div>
@@ -181,7 +184,7 @@ cargo binstall specjutsu
 cargo install specjutsu
 
 sj --version</pre>
-      <p>Both installers read <code>SJ_VERSION</code> (a release such as <code>0.5.1</code>, default the latest) and <code>SJ_INSTALL_DIR</code>. <code>install.ps1</code> also reads <code>SJ_NO_MODIFY_PATH=1</code>, which leaves your <code>PATH</code> alone. <code>install.sh</code> never edits shell profiles. To update, run the installer again or <code>brew upgrade specjutsu</code>.</p>
+      <p>Both installers read <code>SJ_VERSION</code> (a release such as <code>0.6.0</code>, default the latest) and <code>SJ_INSTALL_DIR</code>. <code>install.ps1</code> also reads <code>SJ_NO_MODIFY_PATH=1</code>, which leaves your <code>PATH</code> alone. <code>install.sh</code> never edits shell profiles. To update, run the installer again or <code>brew upgrade specjutsu</code>.</p>
       <p>The archives are on the <a href="https://github.com/nabour-labs/specjutsu/releases">releases page</a>:</p>
       <div class="tbl"><table>
         <thead><tr><th>Platform</th><th>Archive</th></tr></thead>
@@ -228,7 +231,7 @@ cargo install --git https://github.com/nabour-labs/specjutsu --branch main specj
 
 <span class="c-m"># which build is installed, and where it came from</span>
 cargo install --list | grep -A1 specjutsu</pre>
-      <p><code>sj --version</code> names the build. One made from a git checkout, including <code>cargo install --git</code>, prints the short commit after the version, such as <code>sj 0.5.1 (f62a48b)</code>. One from crates.io or a release archive prints only the version. <code>cargo install --list</code> also names the source: a build from GitHub shows the repository URL and commit in brackets after the version.</p>
+      <p><code>sj --version</code> names the build. One made from a git checkout, including <code>cargo install --git</code>, prints the short commit after the version, such as <code>sj 0.6.0 (f62a48b)</code>. One from crates.io or a release archive prints only the version. <code>cargo install --list</code> also names the source: a build from GitHub shows the repository URL and commit in brackets after the version.</p>
       <p>Agent hooks call <code>sj</code> from <code>PATH</code>, so sessions that are already open use the new binary on their next edit, with no restart. Then run <code>sj update</code> in each project, so the generated skills, hooks and agent instructions match the new version. Files you edited by hand are kept and reported.</p>
     </section>
 
@@ -784,6 +787,7 @@ migrate: undone (2 files restored, 20 deleted; left uncommitted)</pre>
       <a href="index.html">Home</a>
       <a href="https://github.com/nabour-labs/specjutsu">GitHub</a>
       <a href="https://github.com/nabour-labs/specjutsu/releases">Releases</a>
+      <a href="https://nabour-labs.github.io/specjutsu-bench/">Benchmarks</a>
       <a href="https://github.com/nabour-labs/specjutsu/blob/main/CONTRIBUTING.md">Contributing</a>
     </nav>
   </div>
