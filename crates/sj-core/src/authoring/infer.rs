@@ -302,12 +302,15 @@ fn first_header_line(lines: &[&str], decl: usize, python: bool) -> usize {
 }
 
 /// The 0-based first line of the attribute or decorator that ends on 0-based line `end`:
-/// `end` itself for a one-line `#[...]` (not Python) or `@...`, or the `@` line of a Python
-/// decorator whose brackets stay open until exactly `end`.
+/// `end` itself for a line that is a whole `#[...]` attribute (not Python; an attribute that
+/// shares its line with an item belongs to that item) or an `@...` decorator, or the `@` line
+/// of a Python decorator whose brackets stay open until exactly `end`.
 fn header_start(lines: &[&str], end: usize, python: bool) -> Option<usize> {
     let decorator = |l: &str| l.trim_start().starts_with('@');
     let line = lines[end];
-    if (!python && line.trim_start().starts_with("#[")) || decorator(line) {
+    let t = line.trim();
+    let rust_attr = t.starts_with("#[") && t.ends_with(']') && bracket_balance(t) == 0;
+    if (!python && rust_attr) || decorator(line) {
         return Some(end);
     }
     if !python || line.trim().is_empty() {
@@ -390,14 +393,10 @@ fn requirement_names<T>(files: &[(String, T)], existing: &[String]) -> Result<Ve
     Ok(names)
 }
 
-/// A test file's root-relative path in words: its folders and its name before the first
-/// `.`, with `/`, `_` and `-` as spaces, the first letter upper-cased.
+/// A test file's root-relative path in words, extensions included: `/`, `_`, `-` and `.` as
+/// spaces, the first letter upper-cased.
 fn path_words(file: &str) -> String {
-    let (folders, name) = file.rsplit_once('/').unwrap_or(("", file));
-    let stem = name.split('.').next().unwrap_or(name);
-    upper_first(&join(
-        folders.split(['/', '_', '-']).chain(stem.split(['_', '-'])),
-    ))
+    upper_first(&join(file.split(['/', '_', '-', '.'])))
 }
 
 /// A test file's name in words: the name before its first `.`, `_` and `-` as spaces, the
