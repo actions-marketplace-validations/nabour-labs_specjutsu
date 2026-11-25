@@ -34,13 +34,15 @@ folder already exists.
 ### Requirement: Inferred headings come from the test name
 The scenario name SHALL be the test's name made into words: a leading `test` word dropped (`test_`,
 or `test` followed by an upper-case letter, never `test` inside a longer word),
-`_` and `-` turned into spaces, the first letter upper-cased. A pytest `Class::func` SHALL become
-the class name without its `Test` prefix followed by the function's words. JS and TS titles SHALL
-be joined with a space, keeping their own text.
+`_` and `-` turned into spaces, the first letter upper-cased. When nothing is left after the
+`test` word is dropped, the heading SHALL be `Test`. A pytest `Class::func` (or
+`Outer::Inner::func`) SHALL become each class name, in order, with a leading `Test` word dropped
+by the same rule, followed by the function's words. JS and TS titles SHALL be joined with a space,
+keeping their own text.
 
 #### Scenario: SPEC-052 Names from Rust, pytest and JS become headings
-- **WHEN** the selected tests are Rust `refund_under_100_auto_approves`, pytest `TestRefunds::test_partial_refund`, JS `Refunds > auto-approves under $100`, and Rust `testimony_is_recorded`
-- **THEN** their headings are `Refund under 100 auto approves`, `Refunds partial refund`, `Refunds auto-approves under $100` and `Testimony is recorded`
+- **WHEN** the selected tests are Rust `refund_under_100_auto_approves`, pytest `TestRefunds::test_partial_refund`, JS `Refunds > auto-approves under $100`, Rust `testimony_is_recorded`, pytest `TestimonyRecords::test_saved`, pytest `TestOuter::TestInner::test_x`, and Rust `test_`
+- **THEN** their headings are `Refund under 100 auto approves`, `Refunds partial refund`, `Refunds auto-approves under $100`, `Testimony is recorded`, `TestimonyRecords saved`, `Outer Inner x` and `Test`
 
 ### Requirement: Inferred scenario bodies ask for the behaviour
 Each drafted scenario SHALL have a WHEN and a THEN step whose text is
