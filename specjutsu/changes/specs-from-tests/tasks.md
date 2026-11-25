@@ -11,5 +11,5 @@
 - [x] 2.3 End-to-end: a filled-in inferred change passes the gate as green:keep (SPEC-060)
 
 ## 3. Skill and docs
-- [ ] 3.1 Add the From existing tests section to sj-propose and regenerate adapters (SKILL-021)
+- [x] 3.1 Add the From existing tests section to sj-propose and regenerate adapters (SKILL-021)
 - [ ] 3.2 CLI reference, brownfield guide, CHANGELOG and competitive-analysis row (no-scenario: docs)
