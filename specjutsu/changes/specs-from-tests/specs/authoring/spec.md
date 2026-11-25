@@ -91,7 +91,7 @@ capability's stops the run with exit 2.
 - **THEN** the drafts use capability `checkout` and prefix `CHECKOUT`
 
 #### Scenario: SPEC-059 A colliding prefix stops the run
-- **WHEN** capability `payments` uses prefix `PAY` and `sj spec infer tests/payroll --capability payroll` would derive `PAY`
+- **WHEN** `specjutsu.toml` maps `payments = "PAY"`, `specs/payments/spec.md` has PAY-001, and `sj spec infer tests/pay --capability pay` runs, whose derived prefix is also `PAY`
 - **THEN** it exits 2 naming both capabilities and the prefix, and writes nothing
 
 ### Requirement: An inferred change passes the gate as keep
