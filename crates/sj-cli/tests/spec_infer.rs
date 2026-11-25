@@ -163,3 +163,110 @@ fn spec_056_skipped_tests_are_counted_not_drafted() {
          1 test drafted, 1 linked and 2 skipped left out\n"
     );
 }
+
+#[test]
+fn spec_057_an_existing_capability_keeps_its_prefix_and_numbering() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        &format!("{CONFIG}\n[ids.prefixes]\nbilling = \"BILL\"\n"),
+    );
+    put(
+        r,
+        "specjutsu/specs/billing/spec.md",
+        "# billing Specification\n\n## Purpose\nCharge customers.\n\n## Requirements\n\n\
+         ### Requirement: Charge\nThe system SHALL charge.\n\n\
+         #### Scenario: BILL-014 Charge a card\n- **WHEN** a card is charged\n- **THEN** it is billed\n",
+    );
+    put(
+        r,
+        "specjutsu/changes/archive/2026-01-01-refunds/specs/billing/spec.md",
+        "## ADDED Requirements\n\n### Requirement: Refund\nThe system SHALL refund.\n\n\
+         #### Scenario: BILL-015 Refund a card\n- **WHEN** a card is refunded\n- **THEN** it is credited\n",
+    );
+    put(r, "tests/invoices.rs", "#[test]\nfn invoice_is_sent() {}\n");
+
+    let out = sj(r, &["tests/invoices.rs", "--capability", "billing"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.starts_with("BILL-016 [keep] "),
+        "first draft is not BILL-016: {stdout}"
+    );
+}
+
+#[test]
+fn spec_058_the_capability_is_taken_from_the_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        "schema = 1\n\n[[package]]\npath = \"packages/checkout\"\nsources = [\"packages/checkout/src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"vitest\"\ntests = [\"packages/checkout/tests/**/*.test.ts\"]\n",
+    );
+    put(
+        r,
+        "packages/checkout/tests/cart.test.ts",
+        "describe(\"cart\", () => {\n  it(\"adds an item\", () => {})\n})\n",
+    );
+
+    let out = sj(r, &["packages/checkout/tests/cart.test.ts"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(
+        stdout,
+        "CHECKOUT-001 [keep] Cart adds an item  (packages/checkout/tests/cart.test.ts:2)\n\
+         1 test drafted\n"
+    );
+}
+
+#[test]
+fn spec_059_a_colliding_prefix_stops_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        &format!("{CONFIG}\n[ids.prefixes]\npayments = \"PAY\"\npayroll = \"PAY\"\n"),
+    );
+    put(
+        r,
+        "specjutsu/specs/payments/spec.md",
+        "# payments Specification\n\n## Purpose\nTake payments.\n\n## Requirements\n\n\
+         ### Requirement: Pay\nThe system SHALL take payments.\n\n\
+         #### Scenario: PAY-001 Take a payment\n- **WHEN** a card is charged\n- **THEN** it is paid\n",
+    );
+    put(r, "tests/payroll/runs.rs", "#[test]\nfn payroll_runs_monthly() {}\n");
+    git(r, &["init", "-q"]);
+    git(r, &["add", "."]);
+    git(
+        r,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "init",
+        ],
+    );
+
+    sj(r, &["tests/payroll", "--capability", "payroll"])
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "capabilities `payments` and `payroll` both use prefix PAY",
+        ));
+    assert_eq!(git(r, &["status", "--porcelain"]), "");
+}
