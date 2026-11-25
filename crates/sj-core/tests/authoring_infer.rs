@@ -21,4 +21,13 @@ fn spec_052_names_from_rust_pytest_and_js_become_headings() {
         heading_from_test("testimony_is_recorded", Some(Runner::Cargo)),
         "Testimony is recorded"
     );
+    assert_eq!(
+        heading_from_test("TestimonyRecords::test_saved", Some(Runner::Pytest)),
+        "TestimonyRecords saved"
+    );
+    assert_eq!(
+        heading_from_test("TestOuter::TestInner::test_x", Some(Runner::Pytest)),
+        "Outer Inner x"
+    );
+    assert_eq!(heading_from_test("test_", Some(Runner::Cargo)), "Test");
 }
