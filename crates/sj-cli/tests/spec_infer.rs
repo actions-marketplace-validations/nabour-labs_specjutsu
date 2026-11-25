@@ -65,7 +65,17 @@ fn spec_048_a_dry_run_lists_the_drafts_and_writes_nothing() {
     git(r, &["add", "."]);
     git(
         r,
-        &["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-qm", "init"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "init",
+        ],
     );
 
     let out = sj(r, &["tests/refunds.rs", "--capability", "refunds"])
@@ -108,7 +118,9 @@ fn spec_049_a_target_with_no_untraced_test_is_refused() {
         .assert()
         .code(2)
         .stdout("")
-        .stderr(predicate::str::contains("no untraced tests under tests/billing"));
+        .stderr(predicate::str::contains(
+            "no untraced tests under tests/billing",
+        ));
     assert_eq!(
         std::fs::read_to_string(r.join("tests/billing/charges.rs")).unwrap(),
         before

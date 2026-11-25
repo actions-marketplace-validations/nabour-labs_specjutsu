@@ -371,6 +371,17 @@ enum SpecCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Draft `[keep]` scenarios from the untraced tests under the given paths (dry run).
+    Infer {
+        /// Test files or folders, relative to --root or absolute.
+        #[arg(required = true, num_args = 1..)]
+        paths: Vec<PathBuf>,
+        /// The capability the drafts belong to; its prefix numbers them.
+        #[arg(long)]
+        capability: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+    },
     /// Apply each change's deltas to specs/ and move it to changes/archive/. With several
     /// changes, all are checked and merged first; one failure archives none.
     Archive {
@@ -1707,6 +1718,36 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
             })
         }
         SpecCommand::Show { item, args, json } => show_cmd(&item, &args, json),
+        SpecCommand::Infer {
+            paths,
+            capability,
+            args,
+        } => {
+            let (root, spec_root) = spec_paths(&args)?;
+            let config = sj_core::config::load(&root)?;
+            let run = authoring::infer::dry_run(
+                &root,
+                &config,
+                &spec_root,
+                &paths,
+                capability.as_deref(),
+            )?;
+            for d in &run.drafts {
+                println!(
+                    "{} [keep] {}  ({}:{})",
+                    d.id,
+                    d.heading,
+                    rel(&d.file, Path::new("")),
+                    d.line
+                );
+            }
+            let mut count = format!("{} drafted", plural(run.drafts.len(), "test"));
+            if run.skipped > 0 {
+                count.push_str(&format!(", {} skipped left out", run.skipped));
+            }
+            println!("{count}");
+            Ok(ExitCode::SUCCESS)
+        }
         SpecCommand::Archive {
             changes,
             all_done,

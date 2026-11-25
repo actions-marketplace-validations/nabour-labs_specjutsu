@@ -47,6 +47,7 @@ pub struct TestFn {
 }
 
 /// Find test functions (`fn` items carrying a `#[...test...]` attribute) in one Rust file.
+/// An `#[ignore]` attribute marks the test skipped.
 pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
     static ATTR: OnceLock<Regex> = OnceLock::new();
     static FN: OnceLock<Regex> = OnceLock::new();
@@ -66,6 +67,7 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
     // State gathered from the run of attribute/comment/blank lines above the current line.
     let mut pending_test = false;
     let mut pending_ids: Vec<String> = Vec::new();
+    let mut pending_skip = false;
     for (i, line) in content.lines().enumerate() {
         if let Some(c) = spec_re.captures(line) {
             pending_ids.extend(c[1].split(',').map(|s| s.trim().to_string()));
@@ -76,6 +78,10 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
             continue;
         }
         let t = line.trim();
+        if t.starts_with("#[ignore") {
+            pending_skip = true;
+            continue;
+        }
         if t.is_empty() || t.starts_with("//") || attr.is_match(line) {
             continue;
         }
@@ -88,11 +94,13 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
                     end_line: rust_body_end(content, i),
                     comment_ids: std::mem::take(&mut pending_ids),
                     name_ids: ids_in_name(&c[1]),
+                    skipped: pending_skip,
                     ..TestFn::default()
                 });
             }
         }
         pending_test = false;
+        pending_skip = false;
         pending_ids.clear();
     }
     out

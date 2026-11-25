@@ -1,6 +1,85 @@
 //! `sj spec infer`: draft scenarios from existing tests.
 
-use crate::config::Runner;
+use std::path::{Path, PathBuf};
+
+use anyhow::{bail, Result};
+
+use crate::config::{Config, Runner};
+use crate::{ids, spec, testscan, trace};
+
+/// One scenario `sj spec infer` would draft from an untraced test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Draft {
+    pub id: String,
+    pub heading: String,
+    /// The test's file, relative to the project root.
+    pub file: PathBuf,
+    pub line: usize,
+}
+
+/// What a dry run would draft, and how many untraced skipped tests it left out.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DryRun {
+    pub drafts: Vec<Draft>,
+    pub skipped: usize,
+}
+
+/// Draft scenarios for the untraced tests in suite files under `paths` (SPEC-048, SPEC-049,
+/// SPEC-056). Paths are relative to `root` or absolute. Tests that carry a scenario ID and
+/// skipped tests are left out; drafts are numbered after the highest number the capability's
+/// prefix has used under `spec_root`. Errors when no untraced test is left, and writes nothing.
+pub fn dry_run(
+    root: &Path,
+    config: &Config,
+    spec_root: &Path,
+    paths: &[PathBuf],
+    capability: Option<&str>,
+) -> Result<DryRun> {
+    let scenarios = spec::load_scenarios(spec_root)?;
+    let scan = testscan::scan_project(root, config)?;
+    let targets: Vec<PathBuf> = paths.iter().map(|p| resolve(root, p)).collect();
+    let (skipped, selected): (Vec<_>, Vec<_>) = trace::untraced(&scenarios, &scan.tests)
+        .into_iter()
+        .filter(|t| {
+            let file = resolve(root, &t.file);
+            targets.iter().any(|p| file.starts_with(p))
+        })
+        .partition(|t| t.skipped);
+    if selected.is_empty() {
+        let given: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+        bail!("no untraced tests under {}", given.join(" "));
+    }
+    let Some(capability) = capability else {
+        bail!("pass --capability to name the capability the drafts belong to");
+    };
+    let prefix = ids::derive_prefix(capability);
+    let mut next = ids::highest_numbers(spec_root)?
+        .get(&prefix)
+        .copied()
+        .unwrap_or(0);
+    let drafts = selected
+        .into_iter()
+        .map(|t| {
+            next += 1;
+            Draft {
+                id: format!("{prefix}-{next:03}"),
+                heading: heading_from_test(&t.name, t.suite),
+                file: t.file.clone(),
+                line: t.line,
+            }
+        })
+        .collect();
+    Ok(DryRun {
+        drafts,
+        skipped: skipped.len(),
+    })
+}
+
+/// `path` joined to `root` when relative, canonical when it exists.
+fn resolve(root: &Path, path: &Path) -> PathBuf {
+    let joined = root.join(path);
+    joined.canonicalize().unwrap_or(joined)
+}
 
 /// The scenario heading for a test named as the scanners report it (SPEC-052).
 ///
