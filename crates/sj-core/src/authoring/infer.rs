@@ -65,7 +65,7 @@ pub fn dry_run(
         .collect();
     let untraced = trace::untraced(&scenarios, &targeted);
     let linked = targeted.len() - untraced.len();
-    let (skipped, mut selected): (Vec<_>, Vec<_>) = untraced.into_iter().partition(|t| t.skipped);
+    let (skipped, selected): (Vec<_>, Vec<_>) = untraced.into_iter().partition(|t| t.skipped);
     if selected.is_empty() {
         let given: Vec<String> = paths.iter().map(|p| shown(p)).collect();
         bail!("no untraced tests under {}", given.join(" "));
@@ -93,15 +93,26 @@ pub fn dry_run(
         .chain(in_specs)
         .max()
         .unwrap_or(0);
-    // Tests whose names already carry an ID with this prefix are numbered last, so the
-    // others keep the lowest free numbers (SPEC-068).
-    selected.sort_by_key(|t| t.name_ids.iter().any(|id| number(id).is_some()));
+    // A test whose name carries an ID with this prefix keeps it; the first test to claim an
+    // ID wins, and the others are numbered after the highest number in use (SPEC-068).
+    let mut claimed: Vec<String> = Vec::new();
     let drafts = selected
         .into_iter()
         .map(|t| {
-            next += 1;
+            let own = t
+                .name_ids
+                .iter()
+                .find(|id| number(id).is_some() && !claimed.contains(id));
+            let id = match own {
+                Some(id) => id.clone(),
+                None => {
+                    next += 1;
+                    format!("{prefix}-{next:03}")
+                }
+            };
+            claimed.push(id.clone());
             Draft {
-                id: format!("{prefix}-{next:03}"),
+                id,
                 heading: heading_from_test(&t.name, t.suite),
                 file: t.file.clone(),
                 line: t.line,
