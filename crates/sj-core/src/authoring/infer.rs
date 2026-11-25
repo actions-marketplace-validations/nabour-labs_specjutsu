@@ -5,48 +5,44 @@ use crate::config::Runner;
 /// The scenario heading for a test named as the scanners report it (SPEC-052).
 ///
 /// JS and TS titles (`Refunds > auto-approves under $100`) are joined with a space and keep
-/// their own text. Rust and pytest names are identifiers: a leading `test` word is
-/// dropped and `_` and `-` become spaces; a pytest `Class::func` becomes the class name
-/// without its `Test` prefix followed by the function's words. The first letter is
-/// upper-cased.
+/// their own text. Rust and pytest names are identifiers: a leading `test` word is dropped
+/// and `_` and `-` become spaces. A pytest `Class::func` (or `Outer::Inner::func`) becomes
+/// each class name in order, with a leading `Test` word dropped by the same rule, followed
+/// by the function's words. The first letter is upper-cased; when nothing is left the
+/// heading is `Test`.
 pub fn heading_from_test(name: &str, runner: Option<Runner>) -> String {
     let words = match runner {
-        Some(Runner::Jest | Runner::Vitest | Runner::Playwright) => name
-            .split(" > ")
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .collect::<Vec<_>>()
-            .join(" "),
-        _ => match name.rsplit_once("::") {
-            Some((class, func)) => {
-                let class = class.rsplit("::").next().unwrap_or(class);
-                let class = class.strip_prefix("Test").unwrap_or(class);
-                [identifier_words(class), identifier_words(func)]
-                    .into_iter()
-                    .filter(|w| !w.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            }
-            None => identifier_words(name),
-        },
+        Some(Runner::Jest | Runner::Vitest | Runner::Playwright) => join(name.split(" > ")),
+        _ => {
+            let mut parts: Vec<&str> = name.split("::").collect();
+            let func = parts.pop().unwrap_or_default();
+            let classes = parts.into_iter().map(|c| identifier_words(c, "Test"));
+            join(classes.chain([identifier_words(func, "test")]))
+        }
     };
+    if words.is_empty() {
+        return "Test".to_string();
+    }
     upper_first(&words)
 }
 
-/// An identifier's words: a leading `test` word dropped (`test_`, or `test` before an
-/// upper-case letter, never `test` inside a longer word), `_` and `-` as spaces.
-fn identifier_words(name: &str) -> String {
-    let rest = name
-        .strip_prefix("test_")
-        .or_else(|| {
-            name.strip_prefix("test")
-                .filter(|r| r.starts_with(|c: char| c.is_uppercase()))
-        })
-        .unwrap_or(name);
-    rest.split(['_', '-'])
-        .filter(|w| !w.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+/// The non-empty parts, trimmed and joined with a space.
+fn join<S: AsRef<str>>(parts: impl Iterator<Item = S>) -> String {
+    let parts: Vec<String> = parts
+        .map(|p| p.as_ref().trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect();
+    parts.join(" ")
+}
+
+/// An identifier's words: a leading `word` dropped when it is a whole word (the whole name,
+/// `word_`, or `word` before an upper-case letter), then `_` and `-` as spaces.
+fn identifier_words(name: &str, word: &str) -> String {
+    let rest = match name.strip_prefix(word) {
+        Some(r) if r.is_empty() || r.starts_with(|c: char| c == '_' || c.is_uppercase()) => r,
+        _ => name,
+    };
+    join(rest.split(['_', '-']))
 }
 
 fn upper_first(s: &str) -> String {
