@@ -861,7 +861,8 @@ fn spec_054_attributes_on_an_item_line_are_not_walked_past() {
 mod support;
 
 const REFUNDS_LIB: &str = "pub fn auto_approves(amount: u32) -> bool { amount < 100 }\n";
-const REFUNDS_TESTS: &str = "#[test]\nfn refund_under_100_auto_approves() { assert!(demo::auto_approves(50)); }\n\n\
+const REFUNDS_TESTS: &str =
+    "#[test]\nfn refund_under_100_auto_approves() { assert!(demo::auto_approves(50)); }\n\n\
      #[test]\nfn refund_over_limit_needs_review() { assert!(!demo::auto_approves(150)); }\n";
 
 /// Replace each `[NEEDS CLARIFICATION: ...]` step with concrete WHEN/THEN text.
@@ -889,13 +890,19 @@ fn spec_060_the_filled_in_change_passes_the_gate() {
     repo.branch("infer");
     let r = repo.path();
 
-    let out = sj(r, &["tests/refunds.rs", "--capability", "refunds", "--write"])
-        .output()
-        .unwrap();
+    let out = sj(
+        r,
+        &["tests/refunds.rs", "--capability", "refunds", "--write"],
+    )
+    .output()
+    .unwrap();
     assert!(out.status.success(), "{out:?}");
     let spec_path = ["openspec", "specjutsu"]
         .iter()
-        .map(|root| r.join(root).join("changes/infer-refunds/specs/refunds/spec.md"))
+        .map(|root| {
+            r.join(root)
+                .join("changes/infer-refunds/specs/refunds/spec.md")
+        })
         .find(|p| p.is_file())
         .expect("infer-refunds delta");
     let spec = std::fs::read_to_string(&spec_path).unwrap();
@@ -910,8 +917,8 @@ fn spec_060_the_filled_in_change_passes_the_gate() {
         .arg(r)
         .output()
         .unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {out:?}"));
     assert_eq!(out.status.code(), Some(0), "{v}");
     assert_eq!(v["pass"], true, "{v}");
     for id in ["REFUNDS-001", "REFUNDS-002"] {
