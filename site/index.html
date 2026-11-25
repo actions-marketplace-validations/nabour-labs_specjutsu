@@ -243,7 +243,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
           <tr>
             <th scope="row">Existing projects</th>
             <td>Via extension</td><td>Good</td><td>Best</td><td>Weak</td><td>Good</td>
-            <td class="sj"><code>sj adopt</code>, incremental<span class="tag live">LIVE</span></td>
+            <td class="sj"><code>sj adopt</code>, incremental<span class="tag live">LIVE</span> · <code>sj spec infer</code> drafts specs from existing tests (next release)</td>
           </tr>
           <tr>
             <th scope="row">Monorepo-aware</th>
@@ -362,6 +362,7 @@ sj --version</pre>
 <pre class="code">sj adopt          <span class="c-m"># write specjutsu.toml</span>
 sj ids --write    <span class="c-m"># add scenario IDs</span>
 sj trace          <span class="c-m"># list gaps and orphans</span>
+sj spec infer tests/  <span class="c-m"># draft specs from untraced tests (next release)</span>
 sj init --agents claude  <span class="c-m"># skills + hooks</span>
 
 <span class="c-m"># or replace your old tool in one go</span>
