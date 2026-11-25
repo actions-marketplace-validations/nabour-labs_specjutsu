@@ -147,7 +147,8 @@ install. Open agent sessions use the new binary on their next hook call.
 The `specjutsu` setup skill takes an agent from no `sj` to a checked setup: it
 installs `sj` (asking first), runs `sj adopt` on an existing project or `sj init` on
 a new one, installs the agent adapters with `sj init --agents auto`, and finishes
-with `sj doctor` and `sj status`. It never replaces an existing `specjutsu.toml`.
+with `sj doctor` and `sj status`. On a project with tests it offers `sj spec infer` to
+draft their scenarios. It never replaces an existing `specjutsu.toml`.
 Add it with the [skills CLI](https://skills.sh), where it is also the `/specjutsu`
 command in Claude Code:
 
