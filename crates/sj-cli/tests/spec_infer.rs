@@ -932,3 +932,146 @@ fn spec_060_the_filled_in_change_passes_the_gate() {
         );
     }
 }
+
+#[test]
+fn spec_067_markers_point_at_the_test_after_the_comments_shift_it() {
+    let dir = refunds_project();
+    let r = dir.path();
+
+    let out = write_refunds(r);
+    assert!(out.status.success(), "{out:?}");
+    let test = std::fs::read_to_string(r.join("tests/refunds.rs")).unwrap();
+    let lines: Vec<&str> = test.lines().collect();
+    assert_eq!(lines[2], "fn refund_under_100_auto_approves() {}", "{test}");
+    assert_eq!(lines[6], "fn refund_over_limit_needs_review() {}", "{test}");
+
+    let spec =
+        std::fs::read_to_string(r.join("specjutsu/changes/infer-refunds/specs/refunds/spec.md"))
+            .unwrap();
+    for (id, line) in [("REFUNDS-001", 3), ("REFUNDS-002", 7)] {
+        let start = spec
+            .find(&format!("#### Scenario: {id} "))
+            .unwrap_or_else(|| panic!("no {id}: {spec}"));
+        let block: Vec<&str> = spec[start..].lines().take(3).collect();
+        let at = format!("see tests/refunds.rs:{line}]");
+        assert!(block[1].contains(&at), "{id} WHEN should name {at}: {spec}");
+        assert!(block[2].contains(&at), "{id} THEN should name {at}: {spec}");
+    }
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains("REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:3)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("REFUNDS-002 [keep] Refund over limit needs review  (tests/refunds.rs:7)"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn spec_068_drafted_ids_skip_numbers_tests_already_carry() {
+    let dir = project();
+    let r = dir.path();
+    put(
+        r,
+        "tests/billing.rs",
+        "#[test]\nfn billing_007_named_early() {}\n\n#[test]\nfn counts_invoices() {}\n",
+    );
+    commit_all(r);
+
+    let out = sj(r, &["tests/billing.rs", "--capability", "billing"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains("BILLING-008 [keep] Counts invoices  (tests/billing.rs:5)"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn spec_069_a_second_run_on_the_same_capability_does_not_clash_with_an_open_change() {
+    let dir = project();
+    let r = dir.path();
+    put(r, "tests/one/cart.rs", "#[test]\nfn adds_an_item() {}\n");
+    put(r, "tests/two/cart.rs", "#[test]\nfn removes_an_item() {}\n");
+    commit_all(r);
+
+    let out = sj(
+        r,
+        &[
+            "tests/one",
+            "--capability",
+            "shop",
+            "--change",
+            "one",
+            "--write",
+        ],
+    )
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let one = std::fs::read_to_string(r.join("specjutsu/changes/one/specs/shop/spec.md")).unwrap();
+    assert_eq!(requirement_names(&one), ["Cart"], "{one}");
+
+    let out = sj(
+        r,
+        &[
+            "tests/two",
+            "--capability",
+            "shop",
+            "--change",
+            "two",
+            "--write",
+        ],
+    )
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let change = r.join("specjutsu/changes/two");
+    let spec = std::fs::read_to_string(change.join("specs/shop/spec.md")).unwrap();
+    assert_eq!(requirement_names(&spec), ["Tests two cart rs"], "{spec}");
+    let proposal = std::fs::read_to_string(change.join("proposal.md")).unwrap();
+    assert!(
+        proposal_section(&proposal, "Modified Capabilities").contains("`shop`"),
+        "{proposal}"
+    );
+    assert!(
+        !proposal_section(&proposal, "New Capabilities").contains("`shop`"),
+        "{proposal}"
+    );
+
+    sj_spec(r, &["archive", "one", "--force"])
+        .assert()
+        .success();
+    sj_spec(r, &["archive", "two", "--force"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn spec_070_a_capability_that_is_not_kebab_case_is_refused() {
+    let dir = project();
+    let r = dir.path();
+    put(r, "tests/x.rs", "#[test]\nfn x_works() {}\n");
+    commit_all(r);
+
+    for (value, extra) in [("../../oops", Some("--write")), ("Billing Stuff", None)] {
+        let mut args = vec!["tests/x.rs", "--capability", value];
+        args.extend(extra);
+        sj(r, &args)
+            .assert()
+            .code(2)
+            .stdout("")
+            .stderr(predicate::str::contains(format!(
+                "capability `{value}` must be kebab-case"
+            )));
+        assert_eq!(
+            git(r, &["status", "--porcelain", "--untracked-files=all"]),
+            "",
+            "{value}"
+        );
+    }
+    assert!(!r.join("specjutsu").exists());
+}
