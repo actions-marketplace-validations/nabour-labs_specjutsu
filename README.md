@@ -2,7 +2,7 @@
 
 **Master the art of the spec.**
 
-**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
+**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[Benchmarks](https://nabour-labs.github.io/specjutsu-bench/)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-specjutsu%20gate-2ea44f?logo=github)](https://github.com/marketplace/actions/specjutsu-gate)
 
@@ -28,7 +28,9 @@ specjutsu does in the binary and in CI what other spec-driven tools hand to the 
   agent a few lines, not whole folders and raw test logs. `sj next` gives the agent
   one task's scenarios, files and test commands; a green test run prints one line;
   a red one prints only the failing tests and their scenarios. Every command takes
-  `--json`.
+  `--json`. The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) runs the same three tasks with
+  specjutsu, Spec Kit, OpenSpec and Superpowers and counts every byte each puts into
+  the agent's context.
 
 ## One Action, every pull request
 
@@ -78,7 +80,8 @@ and it checks it deterministically:
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
 | Runtime needed | Node | Python + uv | IDE | None | **None: single binary** |
 
-specjutsu is not ahead everywhere yet: a public token benchmark is planned for v0.6,
+The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) is out: see how many context bytes each workflow
+spends on the same feature, bug fix and change. specjutsu is not ahead everywhere yet:
 the rest of OpenSpec parity (custom workflow schemas, multi-repo spec stores) for
 v0.7, and specs inferred from existing tests and property scenarios go further. See [How specjutsu compares](docs/competitive-analysis.md) for the full
 comparison, its sources, and the change that closes each gap.
