@@ -234,7 +234,7 @@ fn spec_059_a_colliding_prefix_stops_the_run() {
     put(
         r,
         "specjutsu.toml",
-        &format!("{CONFIG}\n[ids.prefixes]\npayments = \"PAY\"\npayroll = \"PAY\"\n"),
+        &format!("{CONFIG}\n[ids.prefixes]\npayments = \"PAY\"\n"),
     );
     put(
         r,
@@ -245,8 +245,8 @@ fn spec_059_a_colliding_prefix_stops_the_run() {
     );
     put(
         r,
-        "tests/payroll/runs.rs",
-        "#[test]\nfn payroll_runs_monthly() {}\n",
+        "tests/pay/runs.rs",
+        "#[test]\nfn pay_runs_monthly() {}\n",
     );
     git(r, &["init", "-q"]);
     git(r, &["add", "."]);
@@ -265,12 +265,12 @@ fn spec_059_a_colliding_prefix_stops_the_run() {
         ],
     );
 
-    sj(r, &["tests/payroll", "--capability", "payroll"])
+    sj(r, &["tests/pay", "--capability", "pay"])
         .assert()
         .code(2)
         .stdout("")
         .stderr(predicate::str::contains(
-            "capabilities `payments` and `payroll` both use prefix PAY",
+            "capabilities `pay` and `payments` both use prefix PAY",
         ));
     assert_eq!(git(r, &["status", "--porcelain"]), "");
 }
