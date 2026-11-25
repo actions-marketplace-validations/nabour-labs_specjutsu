@@ -274,39 +274,56 @@ fn with_spec_comments(content: &str, comments: &[(usize, String)], python: bool)
 }
 
 /// The 0-based line of the first attribute (`#[...]`) or decorator (`@...`, possibly spanning
-/// lines in Python) directly above the declaration on 0-based line `decl`, or `decl` itself.
+/// lines in Python) above the declaration on 0-based line `decl`, or `decl` itself. Comment
+/// lines between attributes or decorators are walked past; comments above the first stay above.
 fn first_header_line(lines: &[&str], decl: usize, python: bool) -> usize {
-    let rust_attr = |l: &str| l.trim_start().starts_with("#[");
-    let decorator = |l: &str| l.trim_start().starts_with('@');
+    let comment = |l: &str| {
+        let t = l.trim_start();
+        if python {
+            t.starts_with('#')
+        } else {
+            t.starts_with("//")
+        }
+    };
     let mut k = decl.min(lines.len());
-    while k > 0 {
-        let above = lines[k - 1];
-        if (!python && rust_attr(above)) || decorator(above) {
-            k -= 1;
-            continue;
+    loop {
+        let mut m = k;
+        while m > 0 && comment(lines[m - 1]) {
+            m -= 1;
         }
-        // The last line of a Python decorator that spans lines: its `@` line opens brackets
-        // that stay open until exactly this line.
-        if python && !above.trim().is_empty() && !above.trim_start().starts_with('#') {
-            if let Some(j) = (0..k - 1).rev().find(|&j| decorator(lines[j])) {
-                let mut depth = 0;
-                let closes_here = (j..k).all(|i| {
-                    depth += bracket_balance(lines[i]);
-                    if i + 1 == k {
-                        depth == 0
-                    } else {
-                        depth > 0
-                    }
-                });
-                if closes_here {
-                    k = j;
-                    continue;
-                }
-            }
+        match m
+            .checked_sub(1)
+            .and_then(|end| header_start(lines, end, python))
+        {
+            Some(start) => k = start,
+            None => return k,
         }
-        break;
     }
-    k
+}
+
+/// The 0-based first line of the attribute or decorator that ends on 0-based line `end`:
+/// `end` itself for a one-line `#[...]` (not Python) or `@...`, or the `@` line of a Python
+/// decorator whose brackets stay open until exactly `end`.
+fn header_start(lines: &[&str], end: usize, python: bool) -> Option<usize> {
+    let decorator = |l: &str| l.trim_start().starts_with('@');
+    let line = lines[end];
+    if (!python && line.trim_start().starts_with("#[")) || decorator(line) {
+        return Some(end);
+    }
+    if !python || line.trim().is_empty() {
+        return None;
+    }
+    let start = (0..end).rev().find(|&j| decorator(lines[j]))?;
+    let mut depth = 0;
+    let closes_here = (start..=end).all(|i| {
+        depth += bracket_balance(lines[i]);
+        if i == end {
+            depth == 0
+        } else {
+            depth > 0
+        }
+    });
+    closes_here.then_some(start)
 }
 
 /// Opening minus closing brackets on a line.
