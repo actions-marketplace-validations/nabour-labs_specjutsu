@@ -37,6 +37,8 @@ None.
 
 - `authoring`: `sj spec infer`.
 - `skills`: `sj-propose` covers specs drafted from tests.
+- `trace`: Rust `#[ignore]` tests are marked skipped, so infer leaves them out (this also
+  changes `sj trace --json` and the badge for ignored Rust tests).
 
 ## Impact
 
