@@ -56,8 +56,8 @@ fn spec_048_a_dry_run_lists_the_drafts_and_writes_nothing() {
     put(
         r,
         "tests/refunds.rs",
-        "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
-         #[test]\nfn refund_over_limit_needs_review() {}\n",
+        "#[test]\nfn refund_under_100_auto_approves() {}\n\
+         \n#[test]\nfn refund_over_limit_needs_review() {}\n",
     );
     // Untraced, but outside the target path.
     put(r, "tests/other.rs", "#[test]\nfn other_thing_works() {}\n");
@@ -135,8 +135,8 @@ fn spec_056_skipped_tests_are_counted_not_drafted() {
     put(
         r,
         "tests/refunds/refunds.rs",
-        "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
-         #[test]\n#[ignore]\nfn refund_over_limit_needs_review() {}\n\n\
+        "#[test]\nfn refund_under_100_auto_approves() {}\n\
+         \n#[test]\n#[ignore]\nfn refund_over_limit_needs_review() {}\n\n\
          // spec: ORD-001\n#[test]\nfn refund_closes_the_order() {}\n",
     );
     put(
@@ -396,8 +396,8 @@ fn refunds_project() -> tempfile::TempDir {
     put(
         dir.path(),
         "tests/refunds.rs",
-        "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
-         #[test]\nfn refund_over_limit_needs_review() {}\n",
+        "#[test]\nfn refund_under_100_auto_approves() {}\n\
+         \n#[test]\nfn refund_over_limit_needs_review() {}\n",
     );
     commit_all(dir.path());
     dir
@@ -626,8 +626,8 @@ fn spec_054_tests_gain_a_spec_comment_and_nothing_else() {
     put(
         r,
         "tests/refunds.rs",
-        "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
-         #[test]\nfn refund_over_limit_needs_review() {}\n",
+        "#[test]\nfn refund_under_100_auto_approves() {}\n\
+         \n#[test]\nfn refund_over_limit_needs_review() {}\n",
     );
     put(
         r,
@@ -862,8 +862,8 @@ mod support;
 
 const REFUNDS_LIB: &str = "pub fn auto_approves(amount: u32) -> bool { amount < 100 }\n";
 const REFUNDS_TESTS: &str =
-    "#[test]\nfn refund_under_100_auto_approves() { assert!(demo::auto_approves(50)); }\n\n\
-     #[test]\nfn refund_over_limit_needs_review() { assert!(!demo::auto_approves(150)); }\n";
+    "#[test]\nfn refund_under_100_auto_approves() { assert!(demo::auto_approves(50)); }\n\
+     \n#[test]\nfn refund_over_limit_needs_review() { assert!(!demo::auto_approves(150)); }\n";
 
 /// Replace each `[NEEDS CLARIFICATION: ...]` step with concrete WHEN/THEN text.
 fn fill_in(spec: &str) -> String {
@@ -1081,24 +1081,28 @@ fn spec_070_a_capability_that_is_not_kebab_case_is_refused() {
 
 /// Runs a SPEC-071 case as a dry run and with `--write`: each exits 2 naming `test` and `id`,
 /// asks for the test to be renamed, and leaves the tree as committed.
-fn refused_name_id(r: &Path, test: &str, id: &str) {
-    for write in [false, true] {
-        let mut args = vec!["tests/billing.rs", "--capability", "billing"];
-        if write {
-            args.push("--write");
+/// Assert that a dry run and `--write` are both refused for a name ID, naming the test
+/// and the ID, and that nothing is written.
+macro_rules! assert_name_id_refused {
+    ($r:expr, $test:expr, $id:expr) => {
+        for write in [false, true] {
+            let mut args = vec!["tests/billing.rs", "--capability", "billing"];
+            if write {
+                args.push("--write");
+            }
+            let out = sj($r, &args).output().unwrap();
+            assert_eq!(out.status.code(), Some(2), "{out:?}");
+            assert_eq!(String::from_utf8(out.stdout).unwrap(), "");
+            let stderr = String::from_utf8(out.stderr).unwrap();
+            for part in [$test, $id, "rename the test"] {
+                assert!(stderr.contains(part), "stderr should name {part}: {stderr}");
+            }
+            assert_eq!(
+                git($r, &["status", "--porcelain", "--untracked-files=all"]),
+                ""
+            );
         }
-        let out = sj(r, &args).output().unwrap();
-        assert_eq!(out.status.code(), Some(2), "{out:?}");
-        assert_eq!(String::from_utf8(out.stdout).unwrap(), "");
-        let stderr = String::from_utf8(out.stderr).unwrap();
-        for part in [test, id, "rename the test"] {
-            assert!(stderr.contains(part), "stderr should name {part}: {stderr}");
-        }
-        assert_eq!(
-            git(r, &["status", "--porcelain", "--untracked-files=all"]),
-            ""
-        );
-    }
+    };
 }
 
 #[test]
@@ -1117,7 +1121,7 @@ fn spec_071_a_name_id_that_is_shared_or_was_used_before_is_refused() {
         "#[test]\nfn billing_007_outside() {}\n",
     );
     commit_all(r);
-    refused_name_id(r, "billing_007_inside", "BILLING-007");
+    assert_name_id_refused!(r, "billing_007_inside", "BILLING-007");
 
     // Two selected tests carry the same ID.
     let dir = project();
@@ -1128,7 +1132,7 @@ fn spec_071_a_name_id_that_is_shared_or_was_used_before_is_refused() {
         "#[test]\nfn billing_007_a() {}\n\n#[test]\nfn billing_007_b() {}\n",
     );
     commit_all(r);
-    refused_name_id(r, "billing_007_", "BILLING-007");
+    assert_name_id_refused!(r, "billing_007_", "BILLING-007");
 
     // An archived change once used the ID.
     let dir = project();
@@ -1145,5 +1149,5 @@ fn spec_071_a_name_id_that_is_shared_or_was_used_before_is_refused() {
         "#[test]\nfn billing_015_revived() {}\n",
     );
     commit_all(r);
-    refused_name_id(r, "billing_015_revived", "BILLING-015");
+    assert_name_id_refused!(r, "billing_015_revived", "BILLING-015");
 }
