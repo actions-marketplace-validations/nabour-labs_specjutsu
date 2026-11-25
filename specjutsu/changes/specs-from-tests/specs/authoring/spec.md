@@ -77,10 +77,14 @@ todo or fixme. The count line SHALL be `<N> test(s) drafted`, followed by
 
 ### Requirement: Inferred IDs follow the ID rules
 The capability SHALL be `--capability`, or else the name of the nearest folder above the test file
-that is not `tests`, `test`, `__tests__` or `spec`, in kebab-case. Its prefix and numbering SHALL
-follow the `ids` rules: a configured `[ids.prefixes]` entry wins, numbers continue after the
-capability's current, open-change and archived IDs, and a prefix that collides with another
-capability's stops the run with exit 2.
+that is not `tests`, `test`, `__tests__`, `spec`, `unit`, `integration`, `e2e` or `src` (compared
+case-insensitively), in kebab-case. All selected tests SHALL name the same capability: tests whose
+folders name different capabilities, or a test with no such folder above it, stop the run with
+exit 2 and a hint to pass `--capability`. Its prefix and numbering SHALL follow the `ids` rules: a
+configured `[ids.prefixes]` entry wins, numbers continue after the capability's current,
+open-change and archived IDs, a prefix that collides with another capability's stops the run with
+exit 2, and a capability with no letters to make a prefix stops the run with exit 2 as `sj ids`
+does.
 
 #### Scenario: SPEC-057 An existing capability keeps its prefix and numbering
 - **WHEN** `specjutsu.toml` maps `billing = "BILL"`, `specs/billing/spec.md` ends at BILL-014, an archived change used BILL-015, and `sj spec infer tests/invoices.rs --capability billing` runs
@@ -90,9 +94,25 @@ capability's stops the run with exit 2.
 - **WHEN** `sj spec infer packages/checkout/tests/cart.test.ts` runs without `--capability`
 - **THEN** the drafts use capability `checkout` and prefix `CHECKOUT`
 
+#### Scenario: SPEC-061 Test folders are skipped and the name is kebab-cased
+- **WHEN** `sj spec infer packages/CartItems/Tests/unit/cart.test.ts` runs without `--capability`
+- **THEN** the capability is `cart-items` and the first draft is `CARTITEMS-001`
+
 #### Scenario: SPEC-059 A colliding prefix stops the run
 - **WHEN** `specjutsu.toml` maps `payments = "PAY"`, `specs/payments/spec.md` has PAY-001, and `sj spec infer tests/pay --capability pay` runs, whose derived prefix is also `PAY`
 - **THEN** it exits 2 naming both capabilities and the prefix, and writes nothing
+
+#### Scenario: SPEC-062 Tests in different capability folders need --capability
+- **WHEN** `sj spec infer packages/cart packages/orders` runs without `--capability`, and both folders hold untraced tests
+- **THEN** it exits 2 with `the tests' folders name capabilities cart, orders; pass --capability to pick one`, and writes nothing
+
+#### Scenario: SPEC-063 A test with no capability folder needs --capability
+- **WHEN** `sj spec infer tests/top.rs` runs without `--capability`
+- **THEN** it exits 2 with `tests/top.rs is in no capability folder; pass --capability`, and writes nothing
+
+#### Scenario: SPEC-064 A capability with no letters is refused
+- **WHEN** `sj spec infer tests/x.rs --capability 2024` runs
+- **THEN** it exits 2 with ``capability `2024` has no letters to make a prefix; map it in [ids.prefixes]``, and writes nothing
 
 ### Requirement: An inferred change passes the gate as keep
 Once its markers are replaced, a change written by `sj spec infer` SHALL pass `sj gate` with every
