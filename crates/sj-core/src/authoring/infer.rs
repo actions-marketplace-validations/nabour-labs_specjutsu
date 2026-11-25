@@ -5,7 +5,7 @@ use crate::config::Runner;
 /// The scenario heading for a test named as the scanners report it (SPEC-052).
 ///
 /// JS and TS titles (`Refunds > auto-approves under $100`) are joined with a space and keep
-/// their own text. Rust and pytest names are identifiers: a leading `test_` or `test` is
+/// their own text. Rust and pytest names are identifiers: a leading `test` word is
 /// dropped and `_` and `-` become spaces; a pytest `Class::func` becomes the class name
 /// without its `Test` prefix followed by the function's words. The first letter is
 /// upper-cased.
@@ -33,11 +33,15 @@ pub fn heading_from_test(name: &str, runner: Option<Runner>) -> String {
     upper_first(&words)
 }
 
-/// An identifier's words: a leading `test_` or `test` dropped, `_` and `-` as spaces.
+/// An identifier's words: a leading `test` word dropped (`test_`, or `test` before an
+/// upper-case letter, never `test` inside a longer word), `_` and `-` as spaces.
 fn identifier_words(name: &str) -> String {
     let rest = name
         .strip_prefix("test_")
-        .or_else(|| name.strip_prefix("test"))
+        .or_else(|| {
+            name.strip_prefix("test")
+                .filter(|r| r.starts_with(|c: char| c.is_uppercase()))
+        })
         .unwrap_or(name);
     rest.split(['_', '-'])
         .filter(|w| !w.is_empty())
