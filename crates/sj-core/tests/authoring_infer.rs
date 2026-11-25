@@ -17,4 +17,8 @@ fn spec_052_names_from_rust_pytest_and_js_become_headings() {
         heading_from_test("Refunds > auto-approves under $100", Some(Runner::Vitest)),
         "Refunds auto-approves under $100"
     );
+    assert_eq!(
+        heading_from_test("testimony_is_recorded", Some(Runner::Cargo)),
+        "Testimony is recorded"
+    );
 }
