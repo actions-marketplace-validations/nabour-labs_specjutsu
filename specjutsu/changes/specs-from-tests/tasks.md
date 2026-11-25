@@ -12,4 +12,4 @@
 
 ## 3. Skill and docs
 - [x] 3.1 Add the From existing tests section to sj-propose and regenerate adapters (SKILL-021)
-- [ ] 3.2 CLI reference, brownfield guide, CHANGELOG and competitive-analysis row (no-scenario: docs)
+- [x] 3.2 CLI reference, brownfield guide, CHANGELOG and competitive-analysis row (no-scenario: docs)
