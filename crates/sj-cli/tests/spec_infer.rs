@@ -428,6 +428,12 @@ fn spec_050_writing_creates_a_change_that_validates() {
     let change = r.join("specjutsu/changes/infer-refunds");
     let spec = std::fs::read_to_string(change.join("specs/refunds/spec.md")).unwrap();
     assert_eq!(spec.matches("### Requirement: ").count(), 1, "{spec}");
+    assert!(
+        spec.contains(
+            "### Requirement: Refunds\nThe system SHALL keep the behaviour that tests/refunds.rs tests.\n"
+        ),
+        "{spec}"
+    );
     let scenarios: Vec<&str> = spec
         .lines()
         .filter(|l| l.starts_with("#### Scenario: "))
@@ -492,4 +498,88 @@ fn spec_053_check_reports_the_drafted_markers() {
         let n = clarify.iter().filter(|l| l.contains(&naming)).count();
         assert_eq!(n, 2, "expected two clarify lines naming {naming}: {stdout}");
     }
+}
+
+/// The text of a proposal's `### <title>` section, up to the next heading.
+fn proposal_section<'a>(proposal: &'a str, title: &str) -> &'a str {
+    let start = proposal
+        .find(&format!("### {title}\n"))
+        .unwrap_or_else(|| panic!("no {title} section: {proposal}"))
+        + title.len()
+        + 5;
+    let rest = &proposal[start..];
+    &rest[..rest.find("\n#").unwrap_or(rest.len())]
+}
+
+fn requirement_names(spec: &str) -> Vec<&str> {
+    spec.lines()
+        .filter_map(|l| l.strip_prefix("### Requirement: "))
+        .collect()
+}
+
+#[test]
+fn spec_065_test_files_with_the_same_stem_get_distinct_requirements() {
+    let dir = project();
+    let r = dir.path();
+    put(r, "tests/a/refunds.rs", "#[test]\nfn refund_a_works() {}\n");
+    put(r, "tests/b/refunds.rs", "#[test]\nfn refund_b_works() {}\n");
+    commit_all(r);
+
+    let out = sj(r, &["tests/a", "tests/b", "--capability", "dup", "--write"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let spec =
+        std::fs::read_to_string(r.join("specjutsu/changes/infer-dup/specs/dup/spec.md")).unwrap();
+    assert_eq!(
+        requirement_names(&spec),
+        ["Tests a refunds", "Tests b refunds"],
+        "{spec}"
+    );
+
+    sj_spec(r, &["archive", "infer-dup", "--force"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn spec_066_drafts_for_an_existing_capability_modify_it_without_clashing() {
+    let dir = project();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu/specs/refunds/spec.md",
+        "# refunds Specification\n\n## Purpose\nRefund orders.\n\n## Requirements\n\n\
+         ### Requirement: Refunds\nThe system SHALL refund.\n\n\
+         #### Scenario: REFUNDS-001 Refund an order\n- **WHEN** an order is refunded\n- **THEN** it is credited\n",
+    );
+    put(
+        r,
+        "tests/refunds.rs",
+        "#[test]\nfn refund_over_limit_needs_review() {}\n",
+    );
+    commit_all(r);
+
+    let out = write_refunds(r);
+    assert!(out.status.success(), "{out:?}");
+    let change = r.join("specjutsu/changes/infer-refunds");
+    let spec = std::fs::read_to_string(change.join("specs/refunds/spec.md")).unwrap();
+    assert_eq!(requirement_names(&spec), ["Tests refunds"], "{spec}");
+    assert!(
+        spec.contains("#### Scenario: REFUNDS-002 [keep] "),
+        "{spec}"
+    );
+    let proposal = std::fs::read_to_string(change.join("proposal.md")).unwrap();
+    assert!(
+        proposal_section(&proposal, "Modified Capabilities").contains("`refunds`"),
+        "{proposal}"
+    );
+    assert!(
+        !proposal_section(&proposal, "New Capabilities").contains("`refunds`"),
+        "{proposal}"
+    );
+
+    sj_spec(r, &["archive", "infer-refunds", "--force"])
+        .assert()
+        .success();
 }
