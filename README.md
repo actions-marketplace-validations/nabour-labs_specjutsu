@@ -956,21 +956,32 @@ When there is nothing to draft it exits 2 with `no untraced tests under <paths>`
   `--capability`.
 - **IDs** follow the [ID rules](#adding-ids-to-existing-scenarios): an
   `[ids.prefixes]` entry wins, numbering continues after the capability's current,
-  open-change and archived IDs, and a colliding prefix or a capability with no
-  letters exits 2.
+  open-change and archived IDs and after any number a scanned test already carries
+  with that prefix in its name or `spec:` comment, and a colliding prefix or a
+  capability with no letters exits 2. A `--capability` that isn't kebab-case exits 2
+  with ``capability `<name>` must be kebab-case`` before anything is written.
 
 `--write` creates `<spec_root>/changes/infer-<capability>/` (or `--change <name>`)
 with `proposal.md`, `tasks.md` and `specs/<capability>/spec.md`: one requirement
 per test file and one `[keep]` scenario per test, whose WHEN and THEN are
 `[NEEDS CLARIFICATION: … — see <file>:<line>]` markers. It also inserts
 `// spec: <ID>` (Rust, JS, TS) or `# spec: <ID>` (Python) above each test's first
-attribute, decorator or declaration line, and changes no other byte. It refuses a
+attribute, decorator or declaration line, and changes no other byte. Each comment
+moves the tests below it down a line, so the markers and the lines `--write` prints
+name the lines the tests are on afterwards. A requirement whose name is already
+used by the capability's spec or an open change's delta for it is named after the
+file's path instead, and the proposal lists the capability under Modified
+Capabilities when its spec exists or an open change already adds it. It refuses a
 change folder that already exists, and leaves nothing behind on an error.
 
 ```
-sj spec infer tests/refunds.rs --capability refunds --write
-sj spec check infer-refunds    # a clarify line per marker until each is replaced
-sj gate --base origin/main     # REFUNDS-001 and REFUNDS-002 pass as green:keep
+$ sj spec infer tests/refunds.rs --capability refunds --write
+REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:5)
+REFUNDS-002 [keep] Refund over limit needs review  (tests/refunds.rs:12)
+2 tests drafted, 1 linked left out
+created specjutsu/changes/infer-refunds
+$ sj spec check infer-refunds    # a clarify line per marker until each is replaced
+$ sj gate --base origin/main     # REFUNDS-001 and REFUNDS-002 pass as green:keep
 ```
 
 Replace each marker with the WHEN and THEN the test proves, reading the test at the
