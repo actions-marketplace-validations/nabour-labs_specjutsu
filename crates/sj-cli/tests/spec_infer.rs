@@ -856,3 +856,72 @@ fn spec_054_attributes_on_an_item_line_are_not_walked_past() {
          fn refund_inner() {}\n}\n"
     );
 }
+
+#[path = "../../sj-core/tests/support/mod.rs"]
+mod support;
+
+const REFUNDS_LIB: &str = "pub fn auto_approves(amount: u32) -> bool { amount < 100 }\n";
+const REFUNDS_TESTS: &str = "#[test]\nfn refund_under_100_auto_approves() { assert!(demo::auto_approves(50)); }\n\n\
+     #[test]\nfn refund_over_limit_needs_review() { assert!(!demo::auto_approves(150)); }\n";
+
+/// Replace each `[NEEDS CLARIFICATION: ...]` step with concrete WHEN/THEN text.
+fn fill_in(spec: &str) -> String {
+    spec.lines()
+        .map(|l| {
+            if l.starts_with("- **WHEN** [NEEDS CLARIFICATION:") {
+                "- **WHEN** a refund is requested".to_string()
+            } else if l.starts_with("- **THEN** [NEEDS CLARIFICATION:") {
+                "- **THEN** it is approved or sent for review by amount".to_string()
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
+#[test]
+fn spec_060_the_filled_in_change_passes_the_gate() {
+    let repo = support::Repo::with_lib(REFUNDS_LIB);
+    repo.write("tests/refunds.rs", REFUNDS_TESTS);
+    repo.commit("refunds");
+    repo.branch("infer");
+    let r = repo.path();
+
+    let out = sj(r, &["tests/refunds.rs", "--capability", "refunds", "--write"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let spec_path = ["openspec", "specjutsu"]
+        .iter()
+        .map(|root| r.join(root).join("changes/infer-refunds/specs/refunds/spec.md"))
+        .find(|p| p.is_file())
+        .expect("infer-refunds delta");
+    let spec = std::fs::read_to_string(&spec_path).unwrap();
+    let filled = fill_in(&spec);
+    assert!(!filled.contains("NEEDS CLARIFICATION"), "{filled}");
+    std::fs::write(&spec_path, filled).unwrap();
+    repo.commit("spec(refunds): infer keep scenarios");
+
+    let out = Command::cargo_bin("sj")
+        .unwrap()
+        .args(["gate", "--base", "main", "--json", "--root"])
+        .arg(r)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    assert_eq!(out.status.code(), Some(0), "{v}");
+    assert_eq!(v["pass"], true, "{v}");
+    for id in ["REFUNDS-001", "REFUNDS-002"] {
+        assert!(
+            v["proven"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p["id"] == id && p["red"] == "green:keep"),
+            "{id} not green:keep: {v}"
+        );
+    }
+}
