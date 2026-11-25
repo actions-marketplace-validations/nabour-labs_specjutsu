@@ -1740,13 +1740,14 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 &paths,
                 capability.as_deref(),
             )?;
-            let created = if write {
+            let (created, drafts) = if write {
                 let change = change.unwrap_or_else(|| format!("infer-{}", run.capability));
-                Some(authoring::infer::write(&root, &spec_root, &change, &run)?)
+                let (dir, drafts) = authoring::infer::write(&root, &spec_root, &change, &run)?;
+                (Some(dir), drafts)
             } else {
-                None
+                (None, run.drafts.clone())
             };
-            for d in &run.drafts {
+            for d in &drafts {
                 println!(
                     "{} [keep] {}  ({}:{})",
                     d.id,

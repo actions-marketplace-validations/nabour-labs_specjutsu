@@ -42,8 +42,18 @@ pub fn dry_run(
     paths: &[PathBuf],
     capability: Option<&str>,
 ) -> Result<DryRun> {
+    if let Some(c) = capability {
+        if !super::is_kebab(c) {
+            bail!("capability `{c}` must be kebab-case (lowercase letters, digits and hyphens)");
+        }
+    }
     let scenarios = spec::load_scenarios(spec_root)?;
     let scan = testscan::scan_project(root, config)?;
+    let carried: Vec<String> = scan
+        .tests
+        .iter()
+        .flat_map(|t| t.name_ids.iter().chain(&t.comment_ids).cloned())
+        .collect();
     let targets: Vec<PathBuf> = paths.iter().map(|p| resolve(root, p)).collect();
     let targeted: Vec<testscan::TestFn> = scan
         .tests
@@ -55,7 +65,7 @@ pub fn dry_run(
         .collect();
     let untraced = trace::untraced(&scenarios, &targeted);
     let linked = targeted.len() - untraced.len();
-    let (skipped, selected): (Vec<_>, Vec<_>) = untraced.into_iter().partition(|t| t.skipped);
+    let (skipped, mut selected): (Vec<_>, Vec<_>) = untraced.into_iter().partition(|t| t.skipped);
     if selected.is_empty() {
         let given: Vec<String> = paths.iter().map(|p| shown(p)).collect();
         bail!("no untraced tests under {}", given.join(" "));
@@ -72,10 +82,20 @@ pub fn dry_run(
              map it in [ids.prefixes] in specjutsu.toml"
         );
     }
-    let mut next = ids::highest_numbers(spec_root)?
-        .get(&prefix)
-        .copied()
+    let number = |id: &str| -> Option<u64> {
+        let (p, n) = id.rsplit_once('-')?;
+        (p == prefix).then(|| n.parse().ok()).flatten()
+    };
+    let in_specs = ids::highest_numbers(spec_root)?.get(&prefix).copied();
+    let mut next = carried
+        .iter()
+        .filter_map(|id| number(id))
+        .chain(in_specs)
+        .max()
         .unwrap_or(0);
+    // Tests whose names already carry an ID with this prefix are numbered last, so the
+    // others keep the lowest free numbers (SPEC-068).
+    selected.sort_by_key(|t| t.name_ids.iter().any(|id| number(id).is_some()));
     let drafts = selected
         .into_iter()
         .map(|t| {
@@ -101,8 +121,14 @@ pub fn dry_run(
 /// a proposal, one task per test file, and an ADDED delta with one `[keep]` requirement per
 /// test file whose scenarios ask for the behaviour. Refuses, writing nothing, when `change`
 /// is not kebab-case or the folder exists (SPEC-051). Then links each test to its draft with a
-/// `spec:` comment (SPEC-054); when that fails, the change folder is removed again.
-pub fn write(root: &Path, spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
+/// `spec:` comment (SPEC-054); when that fails, the change folder is removed again. Returns the
+/// folder and the drafts with the lines their tests are on once the comments are in (SPEC-067).
+pub fn write(
+    root: &Path,
+    spec_root: &Path,
+    change: &str,
+    run: &DryRun,
+) -> Result<(PathBuf, Vec<Draft>)> {
     if !super::is_kebab(change) {
         bail!("change name `{change}` must be kebab-case (lowercase letters, digits and hyphens)");
     }
@@ -110,8 +136,15 @@ pub fn write(root: &Path, spec_root: &Path, change: &str, run: &DryRun) -> Resul
     if change == "archive" || dir.exists() {
         bail!("change {change} already exists");
     }
+    let (edits, lines) = plan_links(root, &run.drafts)?;
+    let drafts: Vec<Draft> = run
+        .drafts
+        .iter()
+        .zip(lines)
+        .map(|(d, line)| Draft { line, ..d.clone() })
+        .collect();
     let mut files: Vec<(String, Vec<&Draft>)> = Vec::new();
-    for d in &run.drafts {
+    for d in &drafts {
         let file = shown(&d.file);
         match files.iter_mut().find(|(f, _)| *f == file) {
             Some((_, ds)) => ds.push(d),
@@ -120,7 +153,15 @@ pub fn write(root: &Path, spec_root: &Path, change: &str, run: &DryRun) -> Resul
     }
     let cap = &run.capability;
     let target = spec_root.join("specs").join(cap).join("spec.md");
-    let existing = existing_names(&target)?;
+    // The capability's spec and every open change's delta for it (SPEC-069).
+    let mut sources = vec![target.clone()];
+    for c in super::open_changes(spec_root)? {
+        sources.push(c.dir.join("specs").join(cap).join("spec.md"));
+    }
+    let mut existing = Vec::new();
+    for s in &sources {
+        existing.extend(existing_names(s)?);
+    }
     let names = requirement_names(&files, &existing)?;
     let mut spec = String::from("## ADDED Requirements\n");
     let mut tasks = String::from("# Tasks\n\n## 1. Keep the tested behaviour\n");
@@ -144,7 +185,7 @@ pub fn write(root: &Path, spec_root: &Path, change: &str, run: &DryRun) -> Resul
             id_list(&ids)
         ));
     }
-    let (new, modified) = if target.is_file() {
+    let (new, modified) = if sources.iter().any(|s| s.is_file()) {
         ("None.".to_string(), format!("- `{cap}`"))
     } else {
         (format!("- `{cap}`"), "None.".to_string())
@@ -171,42 +212,61 @@ pub fn write(root: &Path, spec_root: &Path, change: &str, run: &DryRun) -> Resul
         }
         Ok(())
     })()
-    .and_then(|()| link_tests(root, &run.drafts));
+    .and_then(|()| apply_links(&edits));
     if let Err(e) = written {
         // The folder did not exist before this run, so removing it leaves no partial change.
         let _ = std::fs::remove_dir_all(&dir);
         return Err(e);
     }
-    Ok(dir)
+    Ok((dir, drafts))
 }
 
-/// Insert a `spec: <ID>` comment above each draft's test (SPEC-054). Every file's new text is
-/// worked out before any file is written; if a write fails, the files already written get their
-/// old text back.
-fn link_tests(root: &Path, drafts: &[Draft]) -> Result<()> {
-    let mut files: Vec<(PathBuf, Vec<&Draft>)> = Vec::new();
-    for d in drafts {
+/// A test file's path, its old text and its text with the `spec:` comments in.
+type Edit = (PathBuf, String, String);
+
+/// Work out the `spec: <ID>` comment above each draft's test (SPEC-054), and each draft's line
+/// once the comments are in: its line plus the comments inserted at or above it (SPEC-067).
+fn plan_links(root: &Path, drafts: &[Draft]) -> Result<(Vec<Edit>, Vec<usize>)> {
+    let mut files: Vec<(PathBuf, Vec<usize>)> = Vec::new();
+    for (i, d) in drafts.iter().enumerate() {
         let path = root.join(&d.file);
         match files.iter_mut().find(|(f, _)| *f == path) {
-            Some((_, ds)) => ds.push(d),
-            None => files.push((path, vec![d])),
+            Some((_, ds)) => ds.push(i),
+            None => files.push((path, vec![i])),
         }
     }
-    let mut edits: Vec<(PathBuf, String, String)> = Vec::new();
+    let mut lines: Vec<usize> = drafts.iter().map(|d| d.line).collect();
+    let mut edits: Vec<Edit> = Vec::new();
     for (path, ds) in files {
         let old = std::fs::read_to_string(&path)
             .with_context(|| format!("cannot read {}", path.display()))?;
-        let python = ds.iter().any(|d| is_python(d));
+        let python = ds.iter().any(|&i| is_python(&drafts[i]));
+        let mark = if python { "#" } else { "//" };
+        let text_lines: Vec<&str> = old
+            .split_inclusive('\n')
+            .map(|s| s.trim_end_matches('\n').trim_end_matches('\r'))
+            .collect();
         let comments: Vec<(usize, String)> = ds
             .iter()
-            .map(|d| {
-                let mark = if python { "#" } else { "//" };
-                (d.line, format!("{mark} spec: {}", d.id))
+            .map(|&i| {
+                let d = &drafts[i];
+                let at = first_header_line(&text_lines, d.line.saturating_sub(1), python);
+                (at, format!("{mark} spec: {}", d.id))
             })
             .collect();
-        let new = with_spec_comments(&old, &comments, python);
+        for &i in &ds {
+            let decl = drafts[i].line.saturating_sub(1);
+            lines[i] += comments.iter().filter(|(at, _)| *at <= decl).count();
+        }
+        let new = with_spec_comments(&old, &comments);
         edits.push((path, old, new));
     }
+    Ok((edits, lines))
+}
+
+/// Write each test file's new text; if a write fails, the files already written get their old
+/// text back.
+fn apply_links(edits: &[Edit]) -> Result<()> {
     for (i, (path, _, new)) in edits.iter().enumerate() {
         if let Err(e) = std::fs::write(path, new) {
             for (done, old, _) in &edits[..i] {
@@ -226,24 +286,12 @@ fn is_python(d: &Draft) -> bool {
     }
 }
 
-/// `content` with each comment on its own line above the first attribute or decorator line of
-/// the test declared on its 1-based line, at that line's indentation. Each inserted line ends
-/// like the line below it, so line endings, a missing final newline and a leading BOM are kept.
-fn with_spec_comments(content: &str, comments: &[(usize, String)], python: bool) -> String {
+/// `content` with each comment on its own line above its 0-based line, at that line's
+/// indentation. Each inserted line ends like the line below it, so line endings, a missing final
+/// newline and a leading BOM are kept.
+fn with_spec_comments(content: &str, comments: &[(usize, String)]) -> String {
     let segments: Vec<&str> = content.split_inclusive('\n').collect();
-    let lines: Vec<&str> = segments
-        .iter()
-        .map(|s| s.trim_end_matches('\n').trim_end_matches('\r'))
-        .collect();
-    let mut at: Vec<(usize, &str)> = comments
-        .iter()
-        .map(|(line, c)| {
-            (
-                first_header_line(&lines, line.saturating_sub(1), python),
-                c.as_str(),
-            )
-        })
-        .collect();
+    let mut at: Vec<(usize, &str)> = comments.iter().map(|(k, c)| (*k, c.as_str())).collect();
     at.sort_by_key(|(k, _)| *k);
     let mut out = String::with_capacity(content.len() + 32 * at.len());
     let mut next = at.iter().peekable();

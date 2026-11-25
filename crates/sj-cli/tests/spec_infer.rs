@@ -493,7 +493,7 @@ fn spec_053_check_reports_the_drafted_markers() {
         .filter(|l| l.starts_with("clarify"))
         .collect();
     assert_eq!(clarify.len(), 4, "{stdout}");
-    for line in [2, 5] {
+    for line in [3, 7] {
         let naming = format!("tests/refunds.rs:{line}");
         let n = clarify.iter().filter(|l| l.contains(&naming)).count();
         assert_eq!(n, 2, "expected two clarify lines naming {naming}: {stdout}");
@@ -807,10 +807,10 @@ fn spec_054_comments_between_attributes_inline_modules_and_ts_tests() {
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(
         stdout.starts_with(
-            "REFUNDS-001 [keep] Refunds auto-approves  (tests/approvals.test.ts:3)\n\
-         REFUNDS-002 [keep] Split doc  (tests/refunds.rs:4)\n\
-         REFUNDS-003 [keep] Inline refund  (tests/refunds.rs:10)\n\
-         REFUNDS-004 [keep] Note  (tests/test_refunds.py:4)\n"
+            "REFUNDS-001 [keep] Refunds auto-approves  (tests/approvals.test.ts:4)\n\
+         REFUNDS-002 [keep] Split doc  (tests/refunds.rs:5)\n\
+         REFUNDS-003 [keep] Inline refund  (tests/refunds.rs:12)\n\
+         REFUNDS-004 [keep] Note  (tests/test_refunds.py:5)\n"
         ),
         "{stdout}"
     );
