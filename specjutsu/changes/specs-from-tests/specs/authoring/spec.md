@@ -20,10 +20,12 @@ With `--write`, `sj spec infer` SHALL create `<spec_root>/changes/<change>/`, wh
 `specs/<capability>/spec.md`. The delta SHALL have one `## ADDED Requirements` requirement per
 test file, named after the file's stem in words and stating that the system SHALL keep the
 behaviour that file tests, and one `[keep]` scenario per selected test. When that name is empty,
-or matches another requirement in the delta or in `specs/<capability>/spec.md`, the requirement
+or matches another requirement in the delta, in `specs/<capability>/spec.md`, or in an open
+change's `specs/<capability>/spec.md`, the requirement
 SHALL be named after the file's root-relative path in words, extensions included, instead; if that name is taken too,
-the run SHALL stop with exit 2 before writing. When `specs/<capability>/spec.md` exists, the
-proposal SHALL list the capability under Modified Capabilities, otherwise under New Capabilities.
+the run SHALL stop with exit 2 before writing. When `specs/<capability>/spec.md` exists or an open
+change already adds that capability, the proposal SHALL list it under Modified Capabilities,
+otherwise under New Capabilities.
 On any error while writing, no part of the change folder SHALL be left behind. `tasks.md` SHALL have one task per
 requirement naming its scenario IDs. It SHALL refuse with exit 2 and write nothing when the change
 folder already exists.
@@ -44,6 +46,10 @@ folder already exists.
 - **WHEN** `specs/refunds/spec.md` has `### Requirement: Refunds` with REFUNDS-001, `tests/refunds.rs` holds one untraced test, and `sj spec infer tests/refunds.rs --capability refunds --write` runs
 - **THEN** the draft is REFUNDS-002 under `### Requirement: Tests refunds rs`, the proposal lists `refunds` under Modified Capabilities, and `sj spec archive infer-refunds --force` succeeds
 
+#### Scenario: SPEC-069 A second run on the same capability does not clash with an open change
+- **WHEN** `sj spec infer tests/one --capability shop --change one --write` has added `### Requirement: Cart` for `tests/one/cart.rs`, and `sj spec infer tests/two --capability shop --change two --write` runs for `tests/two/cart.rs`
+- **THEN** change `two` names its requirement `Tests two cart rs` and lists `shop` under Modified Capabilities, and `sj spec archive one --force` followed by `sj spec archive two --force` both succeed
+
 ### Requirement: Inferred headings come from the test name
 The scenario name SHALL be the test's name made into words: a leading `test` word dropped (`test_`,
 or `test` followed by an upper-case letter, never `test` inside a longer word),
@@ -60,11 +66,16 @@ keeping their own text.
 ### Requirement: Inferred scenario bodies ask for the behaviour
 Each drafted scenario SHALL have a WHEN and a THEN step whose text is
 `[NEEDS CLARIFICATION: <what the test sets up | what the test checks> — see <file>:<line>]`, so
-`sj spec check` reports both until they are replaced.
+`sj spec check` reports both until they are replaced. With `--write`, `<line>` SHALL be the test's
+line after the spec comments are inserted, and the lines `--write` prints SHALL use the same lines.
 
 #### Scenario: SPEC-053 Check reports the drafted markers
 - **WHEN** `sj spec check infer-refunds` runs on the change written above
 - **THEN** it prints two `clarify` lines per scenario, each naming `tests/refunds.rs:<line>`, and exits 1
+
+#### Scenario: SPEC-067 Markers point at the test after the comments shift it
+- **WHEN** `tests/refunds.rs` declares `fn refund_under_100_auto_approves` on line 2 and `fn refund_over_limit_needs_review` on line 5, each preceded by `#[test]`, and `--write` runs
+- **THEN** the markers for REFUNDS-001 and REFUNDS-002 name `tests/refunds.rs:3` and `tests/refunds.rs:7`, the lines where those `fn` declarations now are
 
 ### Requirement: sj spec infer links each test with a spec comment
 With `--write`, `sj spec infer` SHALL insert `// spec: <ID>` (Rust, JS, TS) or `# spec: <ID>`
@@ -97,7 +108,10 @@ exit 2 and a hint to pass `--capability`. Its prefix and numbering SHALL follow 
 configured `[ids.prefixes]` entry wins, numbers continue after the capability's current,
 open-change and archived IDs, a prefix that collides with another capability's stops the run with
 exit 2, and a capability with no letters to make a prefix stops the run with exit 2 as `sj ids`
-does.
+does. Numbering SHALL also continue after the highest number with that prefix in any scanned
+test's name or `spec:` comment, so a drafted ID never matches an ID a test already carries. A
+`--capability` value that is not kebab-case SHALL stop the run with exit 2 before anything is
+written.
 
 #### Scenario: SPEC-057 An existing capability keeps its prefix and numbering
 - **WHEN** `specjutsu.toml` maps `billing = "BILL"`, `specs/billing/spec.md` ends at BILL-014, an archived change used BILL-015, and `sj spec infer tests/invoices.rs --capability billing` runs
@@ -122,6 +136,14 @@ does.
 #### Scenario: SPEC-063 A test with no capability folder needs --capability
 - **WHEN** `sj spec infer tests/top.rs` runs without `--capability`
 - **THEN** it exits 2 with `tests/top.rs is in no capability folder; pass --capability`, and writes nothing
+
+#### Scenario: SPEC-068 Drafted IDs skip numbers tests already carry
+- **WHEN** no `billing` spec exists, `tests/billing.rs` has `fn billing_007_named_early()` and an untraced `fn counts_invoices()`, and `sj spec infer tests/billing.rs --capability billing` runs
+- **THEN** `counts_invoices` is drafted as `BILLING-008`
+
+#### Scenario: SPEC-070 A capability that is not kebab-case is refused
+- **WHEN** `sj spec infer tests/x.rs --capability ../../oops --write` runs, or `--capability "Billing Stuff"`
+- **THEN** it exits 2 with ``capability `<value>` must be kebab-case``, and writes nothing
 
 #### Scenario: SPEC-064 A capability with no letters is refused
 - **WHEN** `sj spec infer tests/x.rs --capability 2024` runs
