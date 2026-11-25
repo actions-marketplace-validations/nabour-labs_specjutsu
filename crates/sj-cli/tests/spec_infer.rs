@@ -274,3 +274,118 @@ fn spec_059_a_colliding_prefix_stops_the_run() {
         ));
     assert_eq!(git(r, &["status", "--porcelain"]), "");
 }
+
+fn commit_all(r: &Path) {
+    git(r, &["init", "-q"]);
+    git(r, &["add", "."]);
+    git(
+        r,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "init",
+        ],
+    );
+}
+
+#[test]
+fn spec_061_test_folders_are_skipped_and_the_name_is_kebab_cased() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        "schema = 1\n\n[[package]]\npath = \"packages/CartItems\"\n\
+         sources = [\"packages/CartItems/src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"vitest\"\n\
+         tests = [\"packages/CartItems/Tests/**/*.test.ts\"]\n",
+    );
+    put(
+        r,
+        "packages/CartItems/Tests/unit/cart.test.ts",
+        "describe(\"cart\", () => {\n  it(\"adds an item\", () => {})\n})\n",
+    );
+
+    let out = sj(r, &["packages/CartItems/Tests/unit/cart.test.ts"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.starts_with("CARTITEMS-001 [keep] "),
+        "first draft is not CARTITEMS-001: {stdout}"
+    );
+}
+
+#[test]
+fn spec_062_tests_in_different_capability_folders_need_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        "schema = 1\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"vitest\"\n\
+         tests = [\"packages/*/tests/**/*.test.ts\"]\n",
+    );
+    put(
+        r,
+        "packages/cart/tests/cart.test.ts",
+        "it(\"adds an item\", () => {})\n",
+    );
+    put(
+        r,
+        "packages/orders/tests/orders.test.ts",
+        "it(\"places an order\", () => {})\n",
+    );
+    commit_all(r);
+
+    sj(r, &["packages/cart", "packages/orders"])
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "the tests' folders name capabilities cart, orders; pass --capability to pick one",
+        ));
+    assert_eq!(git(r, &["status", "--porcelain"]), "");
+}
+
+#[test]
+fn spec_063_a_test_with_no_capability_folder_needs_capability() {
+    let dir = project();
+    let r = dir.path();
+    put(r, "tests/top.rs", "#[test]\nfn top_level_works() {}\n");
+    commit_all(r);
+
+    sj(r, &["tests/top.rs"])
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "tests/top.rs is in no capability folder; pass --capability",
+        ));
+    assert_eq!(git(r, &["status", "--porcelain"]), "");
+}
+
+#[test]
+fn spec_064_a_capability_with_no_letters_is_refused() {
+    let dir = project();
+    let r = dir.path();
+    put(r, "tests/x.rs", "#[test]\nfn x_works() {}\n");
+    commit_all(r);
+
+    sj(r, &["tests/x.rs", "--capability", "2024"])
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "capability `2024` has no letters to make a prefix; map it in [ids.prefixes]",
+        ));
+    assert_eq!(git(r, &["status", "--porcelain"]), "");
+}
