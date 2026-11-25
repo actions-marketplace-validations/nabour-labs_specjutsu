@@ -15,4 +15,4 @@
 - [x] 3.2 CLI reference, brownfield guide, CHANGELOG and competitive-analysis row (no-scenario: docs)
 
 ## 4. Final review fixes
-- [ ] 4.1 Markers name the shifted lines, IDs skip numbers in test names, open changes count for names and New/Modified, `--capability` must be kebab-case (SPEC-067..070)
+- [ ] 4.1 Markers name the shifted lines, IDs skip numbers in test names, open changes count for names and New/Modified, `--capability` must be kebab-case, shared or reused name IDs refused (SPEC-067..071)
