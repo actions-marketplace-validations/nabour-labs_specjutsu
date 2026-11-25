@@ -533,13 +533,41 @@ fn spec_065_test_files_with_the_same_stem_get_distinct_requirements() {
         std::fs::read_to_string(r.join("specjutsu/changes/infer-dup/specs/dup/spec.md")).unwrap();
     assert_eq!(
         requirement_names(&spec),
-        ["Tests a refunds", "Tests b refunds"],
+        ["Tests a refunds rs", "Tests b refunds rs"],
         "{spec}"
     );
 
     sj_spec(r, &["archive", "infer-dup", "--force"])
         .assert()
         .success();
+
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        &CONFIG.replace(
+            r#"tests = ["tests/**/*.test.ts"]"#,
+            r#"tests = ["tests/**/*.test.ts", "tests/**/*.spec.ts"]"#,
+        ),
+    );
+    put(r, "tests/cart.test.ts", "it('adds an item', () => {})\n");
+    put(r, "tests/cart.spec.ts", "it('removes an item', () => {})\n");
+    commit_all(r);
+
+    let out = sj(r, &["tests", "--capability", "cart", "--write"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let spec =
+        std::fs::read_to_string(r.join("specjutsu/changes/infer-cart/specs/cart/spec.md")).unwrap();
+    let mut names = requirement_names(&spec);
+    names.sort();
+    assert_eq!(
+        names,
+        ["Tests cart spec ts", "Tests cart test ts"],
+        "{spec}"
+    );
 }
 
 #[test]
@@ -564,7 +592,7 @@ fn spec_066_drafts_for_an_existing_capability_modify_it_without_clashing() {
     assert!(out.status.success(), "{out:?}");
     let change = r.join("specjutsu/changes/infer-refunds");
     let spec = std::fs::read_to_string(change.join("specs/refunds/spec.md")).unwrap();
-    assert_eq!(requirement_names(&spec), ["Tests refunds"], "{spec}");
+    assert_eq!(requirement_names(&spec), ["Tests refunds rs"], "{spec}");
     assert!(
         spec.contains("#### Scenario: REFUNDS-002 [keep] "),
         "{spec}"
@@ -801,5 +829,30 @@ fn spec_054_comments_between_attributes_inline_modules_and_ts_tests() {
         std::fs::read_to_string(r.join("tests/test_refunds.py")).unwrap(),
         "# spec: REFUNDS-004\n@pytest.mark.slow\n# note\n@pytest.mark.parametrize(\"a\", [1])\n\
          def test_note(a):\n    pass\n"
+    );
+}
+
+/// SPEC-054: an attribute that shares its line with an item is that item's, not the next
+/// test's, so the walk up stops below it. (The scanner does not report `refund_a`, whose
+/// attribute and `fn` share a line, as a test.)
+#[test]
+fn spec_054_attributes_on_an_item_line_are_not_walked_past() {
+    let dir = project();
+    let r = dir.path();
+    put(
+        r,
+        "tests/refunds.rs",
+        "#[test] fn refund_a() {}\n// between\n#[test]\nfn refund_b() {}\n\n\
+         #[cfg(test)] mod tests {\n    // c\n    #[test]\n    fn refund_inner() {}\n}\n",
+    );
+    commit_all(r);
+
+    let out = write_refunds(r);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/refunds.rs")).unwrap(),
+        "#[test] fn refund_a() {}\n// between\n// spec: REFUNDS-001\n#[test]\nfn refund_b() {}\n\n\
+         #[cfg(test)] mod tests {\n    // c\n    // spec: REFUNDS-002\n    #[test]\n    \
+         fn refund_inner() {}\n}\n"
     );
 }
