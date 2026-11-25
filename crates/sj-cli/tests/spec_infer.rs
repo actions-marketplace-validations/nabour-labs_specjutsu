@@ -591,7 +591,9 @@ fn spec_054_tests_gain_a_spec_comment_and_nothing_else() {
     put(
         r,
         "specjutsu.toml",
-        &format!("{CONFIG}\n[[package.suite]]\nrunner = \"pytest\"\ntests = [\"tests/**/test_*.py\"]\n"),
+        &format!(
+            "{CONFIG}\n[[package.suite]]\nrunner = \"pytest\"\ntests = [\"tests/**/test_*.py\"]\n"
+        ),
     );
     put(
         r,
@@ -657,7 +659,10 @@ fn spec_054_tests_gain_a_spec_comment_and_nothing_else() {
         })
         .collect();
     assert!(mapped.contains(&("REFUNDS-001", "tests/refunds.rs")), "{v}");
-    assert!(mapped.contains(&("REFUNDS-003", "tests/test_refunds.py")), "{v}");
+    assert!(
+        mapped.contains(&("REFUNDS-003", "tests/test_refunds.py")),
+        "{v}"
+    );
 }
 
 #[test]
@@ -673,4 +678,53 @@ fn spec_055_a_second_run_drafts_nothing_new() {
         .stderr(predicate::str::contains(
             "no untraced tests under tests/refunds.rs",
         ));
+}
+
+/// SPEC-054's "nothing else": a CRLF file without a final newline keeps both, and a pytest
+/// decorator spanning lines gets the comment above its first line.
+#[test]
+fn spec_054_line_endings_and_multi_line_decorators_are_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        &format!(
+            "{CONFIG}\n[[package.suite]]\nrunner = \"pytest\"\ntests = [\"tests/**/test_*.py\"]\n"
+        ),
+    );
+    put(
+        r,
+        "tests/refunds.rs",
+        "#[test]\r\n#[should_panic]\r\nfn refund_over_limit_panics() { panic!() }",
+    );
+    put(
+        r,
+        "tests/test_refunds.py",
+        "@pytest.mark.parametrize(\n    \"amount\",\n    [1, 2],\n)\ndef test_refund(amount):\n    pass\n",
+    );
+    commit_all(r);
+
+    let out = sj(
+        r,
+        &[
+            "tests/refunds.rs",
+            "tests/test_refunds.py",
+            "--capability",
+            "refunds",
+            "--write",
+        ],
+    )
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/refunds.rs")).unwrap(),
+        "// spec: REFUNDS-001\r\n#[test]\r\n#[should_panic]\r\nfn refund_over_limit_panics() { panic!() }"
+    );
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/test_refunds.py")).unwrap(),
+        "# spec: REFUNDS-002\n@pytest.mark.parametrize(\n    \"amount\",\n    [1, 2],\n)\n\
+         def test_refund(amount):\n    pass\n"
+    );
 }

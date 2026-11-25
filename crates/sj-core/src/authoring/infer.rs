@@ -15,6 +15,8 @@ pub struct Draft {
     /// The test's file, relative to the project root.
     pub file: PathBuf,
     pub line: usize,
+    /// The test's suite runner, which picks the `spec:` comment syntax.
+    pub suite: Option<Runner>,
 }
 
 /// What a dry run would draft, and the tests under its paths it left out.
@@ -83,6 +85,7 @@ pub fn dry_run(
                 heading: heading_from_test(&t.name, t.suite),
                 file: t.file.clone(),
                 line: t.line,
+                suite: t.suite,
             }
         })
         .collect();
@@ -97,8 +100,9 @@ pub fn dry_run(
 /// Write the dry run's drafts as `changes/<change>/` under `spec_root` (SPEC-050, SPEC-053):
 /// a proposal, one task per test file, and an ADDED delta with one `[keep]` requirement per
 /// test file whose scenarios ask for the behaviour. Refuses, writing nothing, when `change`
-/// is not kebab-case or the folder exists (SPEC-051).
-pub fn write(spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
+/// is not kebab-case or the folder exists (SPEC-051). Then links each test to its draft with a
+/// `spec:` comment (SPEC-054); when that fails, the change folder is removed again.
+pub fn write(root: &Path, spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
     if !super::is_kebab(change) {
         bail!("change name `{change}` must be kebab-case (lowercase letters, digits and hyphens)");
     }
@@ -151,7 +155,7 @@ pub fn write(spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
          ## What Changes\n\n- Add `[keep]` scenarios for {cap}, one per existing test. Each \
          `[NEEDS CLARIFICATION]` marker must be replaced with the behaviour the test proves.\n\n\
          ## Capabilities\n\n### New Capabilities\n\n{new}\n\n### Modified Capabilities\n\n\
-         {modified}\n\n## Impact\n\nSpecs only; the tests stay as they are.\n"
+         {modified}\n\n## Impact\n\nSpecs, and one `spec:` comment line above each test that links it.\n"
     );
     let written = (|| -> Result<()> {
         let cap_dir = dir.join("specs").join(cap);
@@ -166,13 +170,154 @@ pub fn write(spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
                 .with_context(|| format!("cannot write {}", path.display()))?;
         }
         Ok(())
-    })();
+    })()
+    .and_then(|()| link_tests(root, &run.drafts));
     if let Err(e) = written {
         // The folder did not exist before this run, so removing it leaves no partial change.
         let _ = std::fs::remove_dir_all(&dir);
         return Err(e);
     }
     Ok(dir)
+}
+
+/// Insert a `spec: <ID>` comment above each draft's test (SPEC-054). Every file's new text is
+/// worked out before any file is written; if a write fails, the files already written get their
+/// old text back.
+fn link_tests(root: &Path, drafts: &[Draft]) -> Result<()> {
+    let mut files: Vec<(PathBuf, Vec<&Draft>)> = Vec::new();
+    for d in drafts {
+        let path = root.join(&d.file);
+        match files.iter_mut().find(|(f, _)| *f == path) {
+            Some((_, ds)) => ds.push(d),
+            None => files.push((path, vec![d])),
+        }
+    }
+    let mut edits: Vec<(PathBuf, String, String)> = Vec::new();
+    for (path, ds) in files {
+        let old = std::fs::read_to_string(&path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        let python = ds.iter().any(|d| is_python(d));
+        let comments: Vec<(usize, String)> = ds
+            .iter()
+            .map(|d| {
+                let mark = if python { "#" } else { "//" };
+                (d.line, format!("{mark} spec: {}", d.id))
+            })
+            .collect();
+        let new = with_spec_comments(&old, &comments, python);
+        edits.push((path, old, new));
+    }
+    for (i, (path, _, new)) in edits.iter().enumerate() {
+        if let Err(e) = std::fs::write(path, new) {
+            for (done, old, _) in &edits[..i] {
+                let _ = std::fs::write(done, old);
+            }
+            return Err(e).with_context(|| format!("cannot write {}", path.display()));
+        }
+    }
+    Ok(())
+}
+
+/// Whether a draft's test is Python: its suite is pytest, or it has no suite and a `.py` file.
+fn is_python(d: &Draft) -> bool {
+    match d.suite {
+        Some(r) => r == Runner::Pytest,
+        None => d.file.extension().is_some_and(|e| e == "py"),
+    }
+}
+
+/// `content` with each comment on its own line above the first attribute or decorator line of
+/// the test declared on its 1-based line, at that line's indentation. Each inserted line ends
+/// like the line below it, so line endings, a missing final newline and a leading BOM are kept.
+fn with_spec_comments(content: &str, comments: &[(usize, String)], python: bool) -> String {
+    let segments: Vec<&str> = content.split_inclusive('\n').collect();
+    let lines: Vec<&str> = segments
+        .iter()
+        .map(|s| s.trim_end_matches('\n').trim_end_matches('\r'))
+        .collect();
+    let mut at: Vec<(usize, &str)> = comments
+        .iter()
+        .map(|(line, c)| {
+            (
+                first_header_line(&lines, line.saturating_sub(1), python),
+                c.as_str(),
+            )
+        })
+        .collect();
+    at.sort_by_key(|(k, _)| *k);
+    let mut out = String::with_capacity(content.len() + 32 * at.len());
+    let mut next = at.iter().peekable();
+    for (k, seg) in segments.iter().enumerate() {
+        let (bom, seg) = match seg.strip_prefix('\u{feff}') {
+            Some(rest) if k == 0 => ("\u{feff}", rest),
+            _ => ("", *seg),
+        };
+        out.push_str(bom);
+        let eol = if seg.ends_with("\r\n") {
+            "\r\n"
+        } else if seg.ends_with('\n') {
+            "\n"
+        } else if k > 0 && segments[k - 1].ends_with("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
+        let indent = &seg[..seg.len() - seg.trim_start_matches([' ', '\t']).len()];
+        while let Some((_, c)) = next.next_if(|(line, _)| *line == k) {
+            out.push_str(indent);
+            out.push_str(c);
+            out.push_str(eol);
+        }
+        out.push_str(seg);
+    }
+    out
+}
+
+/// The 0-based line of the first attribute (`#[...]`) or decorator (`@...`, possibly spanning
+/// lines in Python) directly above the declaration on 0-based line `decl`, or `decl` itself.
+fn first_header_line(lines: &[&str], decl: usize, python: bool) -> usize {
+    let rust_attr = |l: &str| l.trim_start().starts_with("#[");
+    let decorator = |l: &str| l.trim_start().starts_with('@');
+    let mut k = decl.min(lines.len());
+    while k > 0 {
+        let above = lines[k - 1];
+        if (!python && rust_attr(above)) || decorator(above) {
+            k -= 1;
+            continue;
+        }
+        // The last line of a Python decorator that spans lines: its `@` line opens brackets
+        // that stay open until exactly this line.
+        if python && !above.trim().is_empty() && !above.trim_start().starts_with('#') {
+            if let Some(j) = (0..k - 1).rev().find(|&j| decorator(lines[j])) {
+                let mut depth = 0;
+                let closes_here = (j..k).all(|i| {
+                    depth += bracket_balance(lines[i]);
+                    if i + 1 == k {
+                        depth == 0
+                    } else {
+                        depth > 0
+                    }
+                });
+                if closes_here {
+                    k = j;
+                    continue;
+                }
+            }
+        }
+        break;
+    }
+    k
+}
+
+/// Opening minus closing brackets on a line.
+fn bracket_balance(line: &str) -> i32 {
+    line.chars()
+        .map(|c| match c {
+            '(' | '[' | '{' => 1,
+            ')' | ']' | '}' => -1,
+            _ => 0,
+        })
+        .sum()
 }
 
 /// The requirement names in `target`, as comparison keys; none when it does not exist.

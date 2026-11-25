@@ -379,7 +379,7 @@ enum SpecCommand {
         /// The capability the drafts belong to; its prefix numbers them.
         #[arg(long)]
         capability: Option<String>,
-        /// Write the drafts as a change instead of only listing them.
+        /// Write the drafts as a change and link each test with a `spec:` comment.
         #[arg(long)]
         write: bool,
         /// The change to write (default `infer-<capability>`).
@@ -1742,7 +1742,7 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
             )?;
             let created = if write {
                 let change = change.unwrap_or_else(|| format!("infer-{}", run.capability));
-                Some(authoring::infer::write(&spec_root, &change, &run)?)
+                Some(authoring::infer::write(&root, &spec_root, &change, &run)?)
             } else {
                 None
             };
