@@ -728,3 +728,78 @@ fn spec_054_line_endings_and_multi_line_decorators_are_kept() {
          def test_refund(amount):\n    pass\n"
     );
 }
+
+/// SPEC-054's "above the first attribute or decorator": comments between attributes or
+/// decorators are walked past, inline `mod tests` keep their indentation, and a TS `it` inside
+/// a `describe` gets the comment directly above it.
+#[test]
+fn spec_054_comments_between_attributes_inline_modules_and_ts_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        &format!(
+            "{CONFIG}\n[[package.suite]]\nrunner = \"pytest\"\ntests = [\"tests/**/test_*.py\"]\n"
+        ),
+    );
+    put(
+        r,
+        "tests/refunds.rs",
+        "#[test]\n/// inner doc\n#[should_panic]\nfn split_doc() { panic!() }\n\n\
+         #[cfg(test)]\nmod tests {\n    #[test]\n    // why\n    fn inline_refund() {}\n}\n",
+    );
+    put(
+        r,
+        "tests/approvals.test.ts",
+        "describe('refunds', () => {\n  // a note\n  it('auto-approves', () => {})\n})\n",
+    );
+    put(
+        r,
+        "tests/test_refunds.py",
+        "@pytest.mark.slow\n# note\n@pytest.mark.parametrize(\"a\", [1])\n\
+         def test_note(a):\n    pass\n",
+    );
+    commit_all(r);
+
+    let out = sj(
+        r,
+        &[
+            "tests/refunds.rs",
+            "tests/approvals.test.ts",
+            "tests/test_refunds.py",
+            "--capability",
+            "refunds",
+            "--write",
+        ],
+    )
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.starts_with(
+            "REFUNDS-001 [keep] Refunds auto-approves  (tests/approvals.test.ts:3)\n\
+         REFUNDS-002 [keep] Split doc  (tests/refunds.rs:4)\n\
+         REFUNDS-003 [keep] Inline refund  (tests/refunds.rs:10)\n\
+         REFUNDS-004 [keep] Note  (tests/test_refunds.py:4)\n"
+        ),
+        "{stdout}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/refunds.rs")).unwrap(),
+        "// spec: REFUNDS-002\n#[test]\n/// inner doc\n#[should_panic]\nfn split_doc() { panic!() }\n\n\
+         #[cfg(test)]\nmod tests {\n    // spec: REFUNDS-003\n    #[test]\n    // why\n    \
+         fn inline_refund() {}\n}\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/approvals.test.ts")).unwrap(),
+        "describe('refunds', () => {\n  // a note\n  // spec: REFUNDS-001\n  \
+         it('auto-approves', () => {})\n})\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/test_refunds.py")).unwrap(),
+        "# spec: REFUNDS-004\n@pytest.mark.slow\n# note\n@pytest.mark.parametrize(\"a\", [1])\n\
+         def test_note(a):\n    pass\n"
+    );
+}
