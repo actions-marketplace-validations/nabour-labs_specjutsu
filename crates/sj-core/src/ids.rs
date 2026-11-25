@@ -445,16 +445,27 @@ fn read(file: &Path) -> Result<String> {
     std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))
 }
 
+/// Every scenario ID in any `spec.md` under the spec root, archive included.
+pub fn used_ids(spec_root: &Path) -> Result<BTreeSet<String>> {
+    let mut out = BTreeSet::new();
+    for file in all_spec_files(spec_root)? {
+        out.extend(
+            spec::parse_scenarios(&file, &read(&file)?)
+                .into_iter()
+                .filter_map(|s| s.id),
+        );
+    }
+    Ok(out)
+}
+
 /// The highest number used per ID prefix in any `spec.md` under the spec root, archive included.
 pub fn highest_numbers(spec_root: &Path) -> Result<BTreeMap<String, u64>> {
     let mut out: BTreeMap<String, u64> = BTreeMap::new();
-    for file in all_spec_files(spec_root)? {
-        for s in spec::parse_scenarios(&file, &read(&file)?) {
-            if let Some((prefix, n)) = s.id.as_deref().and_then(|id| id.rsplit_once('-')) {
-                if let Ok(n) = n.parse::<u64>() {
-                    let e = out.entry(prefix.to_string()).or_insert(0);
-                    *e = (*e).max(n);
-                }
+    for id in used_ids(spec_root)? {
+        if let Some((prefix, n)) = id.rsplit_once('-') {
+            if let Ok(n) = n.parse::<u64>() {
+                let e = out.entry(prefix.to_string()).or_insert(0);
+                *e = (*e).max(n);
             }
         }
     }

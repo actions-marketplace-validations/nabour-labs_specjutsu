@@ -49,10 +49,16 @@ pub fn dry_run(
     }
     let scenarios = spec::load_scenarios(spec_root)?;
     let scan = testscan::scan_project(root, config)?;
-    let carried: Vec<String> = scan
+    // The IDs each scanned test carries in its name or `spec:` comments.
+    let carried: Vec<Vec<String>> = scan
         .tests
         .iter()
-        .flat_map(|t| t.name_ids.iter().chain(&t.comment_ids).cloned())
+        .map(|t| {
+            let mut ids: Vec<String> = t.name_ids.iter().chain(&t.comment_ids).cloned().collect();
+            ids.sort();
+            ids.dedup();
+            ids
+        })
         .collect();
     let targets: Vec<PathBuf> = paths.iter().map(|p| resolve(root, p)).collect();
     let targeted: Vec<testscan::TestFn> = scan
@@ -86,40 +92,48 @@ pub fn dry_run(
         let (p, n) = id.rsplit_once('-')?;
         (p == prefix).then(|| n.parse().ok()).flatten()
     };
-    let in_specs = ids::highest_numbers(spec_root)?.get(&prefix).copied();
+    let used = ids::used_ids(spec_root)?;
     let mut next = carried
         .iter()
+        .flatten()
+        .chain(&used)
         .filter_map(|id| number(id))
-        .chain(in_specs)
         .max()
         .unwrap_or(0);
-    // A test whose name carries an ID with this prefix keeps it; the first test to claim an
-    // ID wins, and the others are numbered after the highest number in use (SPEC-068).
-    let mut claimed: Vec<String> = Vec::new();
-    let drafts = selected
-        .into_iter()
-        .map(|t| {
-            let own = t
-                .name_ids
-                .iter()
-                .find(|id| number(id).is_some() && !claimed.contains(id));
-            let id = match own {
-                Some(id) => id.clone(),
-                None => {
-                    next += 1;
-                    format!("{prefix}-{next:03}")
+    // A test whose name carries an ID with this prefix keeps it (SPEC-068), unless another
+    // scanned test carries it too or a scenario ever used it (SPEC-071).
+    let mut drafts = Vec::new();
+    for t in selected {
+        let id = match t.name_ids.iter().find(|id| number(id).is_some()) {
+            Some(id) => {
+                let carriers = carried.iter().filter(|ids| ids.contains(id)).count();
+                if carriers > 1 || used.contains(id) {
+                    let why = if carriers > 1 {
+                        "another test carries it too"
+                    } else {
+                        "a scenario already used it"
+                    };
+                    bail!(
+                        "test {} in {} carries {id}, but {why}; rename the test",
+                        t.name,
+                        shown(&t.file)
+                    );
                 }
-            };
-            claimed.push(id.clone());
-            Draft {
-                id,
-                heading: heading_from_test(&t.name, t.suite),
-                file: t.file.clone(),
-                line: t.line,
-                suite: t.suite,
+                id.clone()
             }
-        })
-        .collect();
+            None => {
+                next += 1;
+                format!("{prefix}-{next:03}")
+            }
+        };
+        drafts.push(Draft {
+            id,
+            heading: heading_from_test(&t.name, t.suite),
+            file: t.file.clone(),
+            line: t.line,
+            suite: t.suite,
+        });
+    }
     Ok(DryRun {
         capability,
         drafts,
