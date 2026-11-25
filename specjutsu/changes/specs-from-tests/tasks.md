@@ -7,7 +7,7 @@
 
 ## 2. Writing
 - [x] 2.1 `--write` creates the change folder: proposal, tasks and ADDED delta with clarify bodies (SPEC-050, SPEC-051, SPEC-053, SPEC-065, SPEC-066)
-- [ ] 2.2 Insert spec comments above each test, touching no other byte, so a second run finds nothing (SPEC-054, SPEC-055)
+- [x] 2.2 Insert spec comments above each test, touching no other byte, so a second run finds nothing (SPEC-054, SPEC-055)
 - [ ] 2.3 End-to-end: a filled-in inferred change passes the gate as green:keep (SPEC-060)
 
 ## 3. Skill and docs
