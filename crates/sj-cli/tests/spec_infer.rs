@@ -583,3 +583,94 @@ fn spec_066_drafts_for_an_existing_capability_modify_it_without_clashing() {
         .assert()
         .success();
 }
+
+#[test]
+fn spec_054_tests_gain_a_spec_comment_and_nothing_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    put(
+        r,
+        "specjutsu.toml",
+        &format!("{CONFIG}\n[[package.suite]]\nrunner = \"pytest\"\ntests = [\"tests/**/test_*.py\"]\n"),
+    );
+    put(
+        r,
+        "tests/refunds.rs",
+        "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
+         #[test]\nfn refund_over_limit_needs_review() {}\n",
+    );
+    put(
+        r,
+        "tests/test_refunds.py",
+        "import pytest\n\n\nclass TestRefunds:\n    @pytest.mark.slow\n    \
+         def test_refund_is_logged(self):\n        pass\n",
+    );
+    commit_all(r);
+
+    let out = sj(
+        r,
+        &[
+            "tests/refunds.rs",
+            "tests/test_refunds.py",
+            "--capability",
+            "refunds",
+            "--write",
+        ],
+    )
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("REFUNDS-003 [keep] "), "{stdout}");
+
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/refunds.rs")).unwrap(),
+        "// spec: REFUNDS-001\n#[test]\nfn refund_under_100_auto_approves() {}\n\n\
+         // spec: REFUNDS-002\n#[test]\nfn refund_over_limit_needs_review() {}\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(r.join("tests/test_refunds.py")).unwrap(),
+        "import pytest\n\n\nclass TestRefunds:\n    # spec: REFUNDS-003\n    \
+         @pytest.mark.slow\n    def test_refund_is_logged(self):\n        pass\n"
+    );
+    assert_eq!(
+        git(r, &["diff", "--numstat", "--", "tests"]),
+        "2\t0\ttests/refunds.rs\n1\t0\ttests/test_refunds.py\n"
+    );
+
+    let out = Command::cargo_bin("sj")
+        .unwrap()
+        .args(["trace", "--json", "--root"])
+        .arg(r)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let mapped: Vec<(&str, &str)> = v["mapped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| {
+            (
+                m["id"].as_str().unwrap(),
+                m["tests"][0]["file"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert!(mapped.contains(&("REFUNDS-001", "tests/refunds.rs")), "{v}");
+    assert!(mapped.contains(&("REFUNDS-003", "tests/test_refunds.py")), "{v}");
+}
+
+#[test]
+fn spec_055_a_second_run_drafts_nothing_new() {
+    let dir = refunds_project();
+    let r = dir.path();
+    let out = write_refunds(r);
+    assert!(out.status.success(), "{out:?}");
+
+    sj(r, &["tests/refunds.rs"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "no untraced tests under tests/refunds.rs",
+        ));
+}
