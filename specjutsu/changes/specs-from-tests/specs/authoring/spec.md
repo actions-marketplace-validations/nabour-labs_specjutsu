@@ -110,6 +110,8 @@ open-change and archived IDs, a prefix that collides with another capability's s
 exit 2, and a capability with no letters to make a prefix stops the run with exit 2 as `sj ids`
 does. Numbering SHALL also continue after the highest number with that prefix in any scanned
 test's name or `spec:` comment, so a drafted ID never matches an ID a test already carries. A
+selected test whose name already carries an ID with the capability's prefix that no scenario
+defines SHALL be drafted under that ID, and drafts SHALL be listed in file order. A
 `--capability` value that is not kebab-case SHALL stop the run with exit 2 before anything is
 written.
 
@@ -139,7 +141,7 @@ written.
 
 #### Scenario: SPEC-068 Drafted IDs skip numbers tests already carry
 - **WHEN** no `billing` spec exists, `tests/billing.rs` has `fn billing_007_named_early()` and an untraced `fn counts_invoices()`, and `sj spec infer tests/billing.rs --capability billing` runs
-- **THEN** `counts_invoices` is drafted as `BILLING-008`
+- **THEN** `billing_007_named_early` is drafted as `BILLING-007` and `counts_invoices` as `BILLING-008`, in that order
 
 #### Scenario: SPEC-070 A capability that is not kebab-case is refused
 - **WHEN** `sj spec infer tests/x.rs --capability ../../oops --write` runs, or `--capability "Billing Stuff"`
