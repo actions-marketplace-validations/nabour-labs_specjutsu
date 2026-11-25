@@ -985,7 +985,10 @@ fn spec_068_drafted_ids_skip_numbers_tests_already_carry() {
     assert!(out.status.success(), "{out:?}");
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(
-        stdout.contains("BILLING-008 [keep] Counts invoices  (tests/billing.rs:5)"),
+        stdout.starts_with(
+            "BILLING-007 [keep] Billing 007 named early  (tests/billing.rs:2)\n\
+             BILLING-008 [keep] Counts invoices  (tests/billing.rs:5)\n"
+        ),
         "{stdout}"
     );
 }
