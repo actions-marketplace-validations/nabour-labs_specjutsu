@@ -958,7 +958,9 @@ When there is nothing to draft it exits 2 with `no untraced tests under <paths>`
   `[ids.prefixes]` entry wins, numbering continues after the capability's current,
   open-change and archived IDs and after any number a scanned test already carries
   with that prefix in its name or `spec:` comment, and a colliding prefix or a
-  capability with no letters exits 2. A `--capability` that isn't kebab-case exits 2
+  capability with no letters exits 2. A test whose name already carries an ID with
+  the capability's prefix that no scenario defines (`billing_007_named_early`) keeps
+  that ID; drafts are listed in file order. A `--capability` that isn't kebab-case exits 2
   with ``capability `<name>` must be kebab-case`` before anything is written.
 
 `--write` creates `<spec_root>/changes/infer-<capability>/` (or `--change <name>`)
