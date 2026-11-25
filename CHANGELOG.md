@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-24
+
 ### Added
 - `red_on_base = "assert"` suite policy: only an assertion failure on base counts as red,
   and a test that fails to compile or load there fails as
@@ -430,7 +432,8 @@ All notable changes are recorded here. The format follows
 - `sj gate --since <commit>`: check every `feat(ID)` commit has an earlier `test(ID): red`.
 - `cargo test` runner with libtest result parsing.
 
-[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/nabour-labs/specjutsu/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/nabour-labs/specjutsu/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/nabour-labs/specjutsu/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nabour-labs/specjutsu/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nabour-labs/specjutsu/compare/v0.3.1...v0.4.0
