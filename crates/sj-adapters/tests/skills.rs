@@ -955,7 +955,7 @@ fn skill_021_sj_propose_names_the_infer_workflow() {
         assert!(section.contains(want), "section lacks {want}: {section}");
     }
     assert!(
-        section.contains("replace"),
+        section.to_lowercase().contains("replace"),
         "section does not say to replace the markers: {section}"
     );
     assert!(
