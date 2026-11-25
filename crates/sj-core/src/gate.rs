@@ -69,6 +69,10 @@ pub enum Red {
     /// [`Proven`] kind; base runs report a keep test's pass as [`Red::Green`].
     #[serde(rename = "green:keep")]
     Keep,
+    /// An implemented scenario whose tests pass on base and at head (GATE-059): the test links
+    /// existing behaviour, so it covers no source change. Only ever a [`Proven`] kind.
+    #[serde(rename = "green:linked")]
+    Linked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -140,6 +144,9 @@ pub struct Input {
     pub head_build_failed: Vec<String>,
     /// Why a target test is unverifiable on base (`red_on_base = "skip"`), keyed like `base`.
     pub reasons: BTreeMap<(String, String), String>,
+    /// Target tests in a `red_on_base = "assert"` suite, keyed like `base`: a compile red
+    /// doesn't count for them (GATE-061).
+    pub assert_only: BTreeSet<(String, String)>,
     /// IDs of `[keep]` scenarios at head: their tests must pass on base, not fail (GATE-039).
     pub keep: BTreeSet<String>,
     /// The trace baseline as it is on the merge base (GATE-050/051).
@@ -147,6 +154,11 @@ pub struct Input {
     /// Baseline entries at head that base doesn't list; honoured only with a `config`
     /// exemption (GATE-053/054).
     pub baseline_added: BTreeSet<BaselineEntry>,
+    /// The base run's failure message for target tests that failed there, keyed like `base`.
+    pub base_messages: BTreeMap<(String, String), String>,
+    /// Files the change added or modified in a helper folder ([`crate::config::HELPER_DIRS`])
+    /// that were not overlaid on base (GATE-056/062).
+    pub changed_helpers: Vec<String>,
 }
 
 /// `<ID> <name>`, or just the name when it already starts with the ID (JS and Python names
@@ -157,6 +169,80 @@ fn label(id: &str, name: &str) -> String {
     } else {
         format!("{id} {name}")
     }
+}
+
+/// The first of `helpers` that a base failure message of test `t` names (GATE-056): by its
+/// path from the repository, the test's package or the test's folder, with or without its
+/// extension, and with `\` or `/` as the separator.
+fn missing_helper(t: &trace::TestRef, message: &str, helpers: &[String]) -> Option<String> {
+    let message = &forward_slashes(message);
+    let file = t.file.to_string_lossy().replace('\\', "/");
+    let folder = file.rsplit_once('/').map_or("", |(d, _)| d);
+    let bases = [t.package.as_deref().unwrap_or(""), folder];
+    helpers
+        .iter()
+        .find(|h| {
+            // (name, whether it is the repository path, which may end a longer absolute path)
+            let mut names = vec![(h.as_str(), true)];
+            names.extend(
+                bases
+                    .iter()
+                    .filter(|b| !b.is_empty() && **b != ".")
+                    .filter_map(|b| h.strip_prefix(*b)?.strip_prefix('/'))
+                    .map(|n| (n, false)),
+            );
+            names.iter().any(|&(n, repo)| {
+                let name_start = n.rfind('/').map_or(0, |i| i + 1);
+                let stem = match n.rfind('.') {
+                    Some(dot) if dot > name_start => &n[..dot],
+                    _ => n,
+                };
+                names_path(message, n, repo) || names_path(message, stem, repo)
+            })
+        })
+        .cloned()
+}
+
+/// `message` with each run of `\` as one `/`: Windows runners write `\` in paths, and escaped
+/// messages (Python repr, JSON) double it. A run before a quote escapes the quote and is kept.
+fn forward_slashes(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut chars = message.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        let mut run = 1;
+        while chars.next_if_eq(&'\\').is_some() {
+            run += 1;
+        }
+        if matches!(chars.peek(), Some('"' | '\'')) {
+            out.extend(std::iter::repeat('\\').take(run));
+        } else {
+            out.push('/');
+        }
+    }
+    out
+}
+
+/// Whether `message` holds `path` as a whole path. It must start a path in the message (or
+/// follow `./`, or a `/` when `after_slash`), and end it, a trailing `.` aside.
+fn names_path(message: &str, path: &str, after_slash: bool) -> bool {
+    let in_path = |c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/');
+    let starts_path = |before: &str| {
+        let starts = |s: &str| !s.chars().next_back().is_some_and(in_path);
+        starts(before)
+            || before.strip_suffix("./").is_some_and(starts)
+            || (after_slash && before.ends_with('/'))
+    };
+    let ends_path = |after: &str| {
+        let after = after.strip_prefix('.').unwrap_or(after);
+        !after.chars().next().is_some_and(in_path)
+    };
+    message
+        .match_indices(path)
+        .any(|(i, _)| starts_path(&message[..i]) && ends_path(&message[i + path.len()..]))
 }
 
 fn test_key(t: &trace::TestRef) -> (String, String) {
@@ -201,6 +287,8 @@ pub struct Row {
     pub failed: bool,
     /// A `[keep]` scenario (GATE-043).
     pub keep: bool,
+    /// An implemented scenario whose tests all pass on base (GATE-059).
+    pub linked: bool,
 }
 
 /// Failures of the exemption rules: unknown kinds, missing reasons, and a spike merging to main.
@@ -221,17 +309,19 @@ pub fn exemption_failures(exemptions: &[Exemption], base: &str) -> Vec<String> {
 }
 
 /// `unspecified change: <files>` when source files changed with no changed scenario and no
-/// exemption.
+/// exemption. `linked` scenarios (implemented, every test passing on base) don't count as
+/// changed (GATE-060).
 pub fn unspecified(
     changes: &BTreeMap<String, Change>,
+    linked: &BTreeSet<String>,
     changed_files: &[String],
     exemptions: &[Exemption],
     classifier: &Classifier,
     spec_root: &str,
 ) -> Option<String> {
-    let targets = changes
-        .values()
-        .any(|c| matches!(c, Change::Added | Change::Modified | Change::Implemented));
+    let targets = changes.iter().any(|(id, c)| {
+        matches!(c, Change::Added | Change::Modified | Change::Implemented) && !linked.contains(id)
+    });
     if targets || !exemptions.is_empty() {
         return None;
     }
@@ -304,6 +394,27 @@ pub fn evaluate(input: &Input) -> GateReport {
         .filter(|(_, c)| matches!(c, Change::Added | Change::Modified | Change::Implemented))
         .map(|(id, _)| id)
         .collect();
+    // GATE-060: implemented scenarios whose tests all pass on base link existing behaviour,
+    // and so cover no source change, whether or not they pass at head.
+    let linked: BTreeSet<String> = targets
+        .iter()
+        .filter(|id| input.changes.get(**id) == Some(&Change::Implemented))
+        .filter(|id| !input.keep.contains(**id))
+        .filter(|id| {
+            input
+                .trace
+                .mapped
+                .iter()
+                .find(|m| &&m.id == *id)
+                .is_some_and(|m| {
+                    !m.tests.is_empty()
+                        && m.tests.iter().all(|t| {
+                            input.base.get(&(id.to_string(), t.name.clone())) == Some(&Red::Green)
+                        })
+                })
+        })
+        .map(|id| id.to_string())
+        .collect();
     for id in &targets {
         let keep = input.keep.contains(*id);
         let Some(m) = input.trace.mapped.iter().find(|m| &&m.id == id) else {
@@ -314,11 +425,14 @@ pub fn evaluate(input: &Input) -> GateReport {
                 tests: Vec::new(),
                 failed: true,
                 keep,
+                linked: false,
             });
             continue;
         };
+        let implemented = input.changes.get(*id) == Some(&Change::Implemented);
         let mut ok = true;
         let mut weakest: Option<Red> = None;
+        let mut green_on_base = false;
         let failures_before = r.failures.len();
         for t in &m.tests {
             let head = if is_cargo(t) {
@@ -343,14 +457,38 @@ pub fn evaluate(input: &Input) -> GateReport {
                 continue;
             }
             let key = (id.to_string(), t.name.clone());
-            match input.base.get(&key) {
+            let red = input.base.get(&key);
+            // GATE-056/062: a test that fails to load because of a helper the change added or
+            // modified but didn't overlay shows nothing about the old code, keep test or not.
+            if red == Some(&Red::Compile) {
+                if let Some(file) = input
+                    .base_messages
+                    .get(&key)
+                    .and_then(|msg| missing_helper(t, msg, &input.changed_helpers))
+                {
+                    ok = false;
+                    r.failures.push(format!(
+                        "not-overlaid {what} ({file}; add it to the suite's support globs)"
+                    ));
+                    continue;
+                }
+            }
+            match red {
                 // GATE-039/040: a keep test must pass on base; failing there means the
                 // scenario describes new behaviour.
                 Some(Red::Green) if keep => {}
+                // GATE-059: an implemented scenario's test may link existing behaviour.
+                Some(Red::Green) if implemented => green_on_base = true,
                 Some(Red::Assert | Red::Compile) if keep => {
                     ok = false;
                     r.failures.push(format!(
                         "keep-red-on-base {what} (it fails on base, so it describes new behaviour; drop [keep] to prove it red-on-base)"
+                    ));
+                }
+                Some(Red::Compile) if input.assert_only.contains(&key) => {
+                    ok = false;
+                    r.failures.push(format!(
+                        "compile-red {what} (suite requires an assertion failure on base)"
                     ));
                 }
                 Some(red @ (Red::Assert | Red::Compile)) => {
@@ -376,7 +514,7 @@ pub fn evaluate(input: &Input) -> GateReport {
                         r.failures.push(msg);
                     }
                 }
-                Some(Red::NotRun | Red::Keep) | None => {
+                Some(Red::NotRun | Red::Keep | Red::Linked) | None => {
                     ok = false;
                     r.failures.push(format!("not-run-on-base {what}"));
                 }
@@ -384,6 +522,10 @@ pub fn evaluate(input: &Input) -> GateReport {
         }
         if ok && keep && !skip_red {
             weakest = Some(Red::Keep);
+        }
+        // Linked only when no test failed on base; a red-on-base test is the proof instead.
+        if ok && green_on_base && weakest.is_none() {
+            weakest = Some(Red::Linked);
         }
         if ok {
             if let Some(red) = weakest {
@@ -401,6 +543,7 @@ pub fn evaluate(input: &Input) -> GateReport {
         let evidence = match (&first_failure, weakest) {
             (Some(kind), _) => kind.clone(),
             (None, Some(Red::Keep)) => "green:keep".to_string(),
+            (None, Some(Red::Linked)) => "green:linked".to_string(),
             (None, Some(Red::Compile)) => "red:compile".to_string(),
             (None, Some(_)) => "red:assert".to_string(),
             (None, None) => "green (exempt)".to_string(),
@@ -411,6 +554,7 @@ pub fn evaluate(input: &Input) -> GateReport {
             tests: m.tests.iter().map(|t| t.name.clone()).collect(),
             failed: !ok,
             keep,
+            linked: linked.contains(*id),
         });
     }
 
@@ -464,6 +608,7 @@ pub fn evaluate(input: &Input) -> GateReport {
 
     r.failures.extend(unspecified(
         &input.changes,
+        &linked,
         &input.changed_files,
         &input.exemptions,
         &input.classifier,
@@ -541,6 +686,7 @@ fn pass_summary(proven: &[Proven]) -> String {
         (Red::Assert, "red:assert"),
         (Red::Compile, "red:compile"),
         (Red::Keep, "green:keep"),
+        (Red::Linked, "green:linked"),
     ] {
         if n(k) > 0 {
             kinds.push(format!("{} {label}", n(k)));
@@ -773,11 +919,11 @@ pub fn prepare(root: &Path, spec_root_rel: &Path, config: &Config, base: &str) -
     // which `classify` keeps, is the open change's on both sides (GATE-045).
     let specs_dir = under_root(&base_root, "specs/");
     base_paths.sort_by_key(|p| (!p.starts_with(&specs_dir), p.clone()));
-    for path in base_paths {
-        if spec::is_spec_path(&path, &base_root) {
-            let content = git.show(&mb, &path)?;
+    for path in &base_paths {
+        if spec::is_spec_path(path, &base_root) {
+            let content = git.show(&mb, path)?;
             base_fps.extend(spec::fingerprints(&content));
-            for (s, t) in spec::scenario_texts(Path::new(&path), &content) {
+            for (s, t) in spec::scenario_texts(Path::new(path), &content) {
                 if s.id.is_none() {
                     base_unidentified.insert(t.clone());
                 }
@@ -951,6 +1097,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     // Target tests, by the suite that runs them: (package index, suite index) → (ID, test).
     let mut by_suite: BTreeMap<(usize, usize), Vec<(String, testscan::TestFn)>> = BTreeMap::new();
     let mut cargo_jobs: Vec<(String, String, String)> = Vec::new();
+    // Target tests in a `red_on_base = "assert"` suite (GATE-061).
+    let mut assert_only = BTreeSet::new();
     let rel = |p: &Path| -> String {
         p.strip_prefix(root)
             .unwrap_or(p)
@@ -960,6 +1108,11 @@ pub fn run(opts: &Options) -> Result<GateReport> {
     for m in report.mapped.iter().filter(|m| targets.contains(&&m.id)) {
         for t in &m.tests {
             if is_cargo(t) {
+                if suite_of(&config, t.package.as_deref(), t.suite).is_some_and(|(pi, si)| {
+                    config.packages[pi].suites[si].red_on_base == RedOnBase::Assert
+                }) {
+                    assert_only.insert((m.id.clone(), t.name.clone()));
+                }
                 cargo_jobs.push((m.id.clone(), t.name.clone(), rel(&t.file)));
                 continue;
             }
@@ -1040,6 +1193,8 @@ pub fn run(opts: &Options) -> Result<GateReport> {
 
     // Red-on-base.
     let mut base = BTreeMap::new();
+    let mut base_messages = BTreeMap::new();
+    let mut changed_helpers = Vec::new();
     let mut reasons = BTreeMap::new();
     if !skip_red && !targets.is_empty() {
         for (id, name, file) in &cargo_jobs {
@@ -1057,6 +1212,9 @@ pub fn run(opts: &Options) -> Result<GateReport> {
                     reasons.insert(key, s.reason.clone().unwrap_or_default());
                 }
             } else {
+                if s.red_on_base == RedOnBase::Assert {
+                    assert_only.extend(jobs.iter().map(|(id, t)| (id.clone(), t.name.clone())));
+                }
                 suite_jobs.push(SuiteJob {
                     at: (pi, si),
                     traced: traced_in((pi, si)),
@@ -1082,14 +1240,26 @@ pub fn run(opts: &Options) -> Result<GateReport> {
                 (is_test_support(f) || overlay_globs.is_match(f.as_str())) && root.join(f).is_file()
             })
             .collect();
+        // GATE-056/062: helpers the change added or modified that weren't overlaid.
+        changed_helpers = changed_files
+            .iter()
+            .filter(|f| {
+                f.rsplit_once('/')
+                    .is_some_and(|(dir, _)| dir.split('/').any(crate::config::is_helper_dir))
+                    && !overlay.contains(f)
+                    && root.join(f).is_file()
+            })
+            .cloned()
+            .collect();
         let verifiable: Vec<&(String, String, String)> = cargo_jobs
             .iter()
             .filter(|(_, _, f)| is_test_file(f))
             .collect();
         if !verifiable.is_empty() || !suite_jobs.is_empty() {
-            let results =
+            let (results, messages) =
                 run_on_base(&git, root, &config, &mb, &overlay, &verifiable, &suite_jobs)?;
             base.extend(results);
+            base_messages = messages;
         }
     }
 
@@ -1110,9 +1280,12 @@ pub fn run(opts: &Options) -> Result<GateReport> {
         head_failing,
         head_build_failed,
         reasons,
+        assert_only,
         keep,
         baseline,
         baseline_added,
+        base_messages,
+        changed_helpers,
     });
     // AUDIT-013: the audit's test checks (never the registry ones) over the same range.
     let audit = crate::audit::run(&crate::audit::Options {
@@ -1249,11 +1422,18 @@ fn base_mapped_ids(
         .collect())
 }
 
+/// Base results and failure messages, keyed by (scenario ID, test name).
+type BaseResults = (
+    BTreeMap<(String, String), Red>,
+    BTreeMap<(String, String), String>,
+);
+
 /// Lines of output kept from a failing base `setup`.
 const SETUP_ERROR_LINES: usize = 20;
 
 /// Check out `rev` in a temporary worktree, overlay the change's test files, and run each Cargo
-/// test target and each non-Cargo suite that holds a scenario test.
+/// test target and each non-Cargo suite that holds a scenario test. Returns each target test's
+/// result and, for non-Cargo tests that failed, the base run's failure message.
 fn run_on_base(
     git: &Git,
     root: &Path,
@@ -1262,11 +1442,11 @@ fn run_on_base(
     overlay: &[&String],
     jobs: &[&(String, String, String)],
     suite_jobs: &[SuiteJob],
-) -> Result<BTreeMap<(String, String), Red>> {
+) -> Result<BaseResults> {
     let tmp = tempfile::tempdir().context("creating temp dir for base checkout")?;
     let wt = tmp.path().join("base");
     git.worktree_add(&wt, rev)?;
-    let result = (|| -> Result<BTreeMap<(String, String), Red>> {
+    let result = (|| -> Result<BaseResults> {
         for f in overlay {
             let dest = wt.join(f);
             if let Some(parent) = dest.parent() {
@@ -1279,6 +1459,7 @@ fn run_on_base(
         // One cargo invocation per test target: (crate dir, target name).
         let mut runs: BTreeMap<(String, String), Run> = BTreeMap::new();
         let mut out = BTreeMap::new();
+        let mut messages = BTreeMap::new();
         for (id, name, file) in jobs {
             let (crate_dir, stem) = split_test_target(file);
             let key = (crate_dir.clone(), stem.clone());
@@ -1347,10 +1528,14 @@ fn run_on_base(
                     None if failed_early => Red::Compile,
                     None => Red::NotRun,
                 };
-                out.insert((id.clone(), t.name.clone()), red);
+                let key = (id.clone(), t.name.clone());
+                if let Some(msg) = joined.and_then(|j| j.message.clone()) {
+                    messages.insert(key.clone(), msg);
+                }
+                out.insert(key, red);
             }
         }
-        Ok(out)
+        Ok((out, messages))
     })();
     let cleanup = git.worktree_remove(&wt);
     let out = result?;
@@ -1466,4 +1651,83 @@ pub fn history(root: &Path, since: &str) -> Result<GateReport> {
         format!("gate: fail — {}", plural(r.failures.len(), "problem"))
     };
     Ok(r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Which helper a base failure message names for the STAFF-073 test in `apps/api/src`.
+    fn named(message: &str, helpers: &[&str]) -> Option<String> {
+        let t = trace::TestRef {
+            name: "STAFF-073 lists admins".into(),
+            file: PathBuf::from("apps/api/src/users.test.ts"),
+            package: Some("apps/api".into()),
+            ..trace::TestRef::default()
+        };
+        let helpers: Vec<String> = helpers.iter().map(|h| h.to_string()).collect();
+        missing_helper(&t, message, &helpers)
+    }
+
+    #[test]
+    fn missing_helper_matches_whole_paths() {
+        let admin = "apps/api/src/testing/admin.ts";
+        let hit = Some(admin.to_string());
+        // From the test's folder, the package and the repository, with or without extension.
+        assert_eq!(named("Failed to load url ./testing/admin", &[admin]), hit);
+        assert_eq!(named("Cannot find './testing/admin.ts'.", &[admin]), hit);
+        assert_eq!(named("Cannot find src/testing/admin", &[admin]), hit);
+        assert_eq!(
+            named("ENOENT /tmp/x/base/apps/api/src/testing/admin.ts", &[admin]),
+            hit
+        );
+        // Not inside an unrelated path, and not a longer or different file name.
+        assert_eq!(
+            named("Failed to load url ./other/testing/admin", &[admin]),
+            None
+        );
+        assert_eq!(
+            named("Failed to load url ./testing/admin.spec", &[admin]),
+            None
+        );
+        assert_eq!(
+            named("Failed to load url ./testing/admin/index", &[admin]),
+            None
+        );
+        assert_eq!(
+            named(
+                "Failed to load url ./testing/admin",
+                &["apps/api/src/testing/a.ts"]
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn missing_helper_matches_backslash_paths() {
+        let admin = "apps/api/src/testing/admin.ts";
+        let hit = Some(admin.to_string());
+        assert_eq!(named(r"Failed to load url .\testing\admin", &[admin]), hit);
+        assert_eq!(
+            named(r"ENOENT C:\x\base\apps\api\src\testing\admin.ts", &[admin]),
+            hit
+        );
+        assert_eq!(
+            named(r"Failed to load url .\other\testing\admin", &[admin]),
+            None
+        );
+        // Escaped, as Python repr and JSON write them: a run of `\` is one separator, and a
+        // `\` before a quote escapes the quote.
+        assert_eq!(
+            named(
+                r"ENOENT C:\\x\\base\\apps\\api\\src\\testing\\admin.ts",
+                &[admin]
+            ),
+            hit
+        );
+        assert_eq!(
+            named(r#"Failed to load url \"./testing/admin\""#, &[admin]),
+            hit
+        );
+    }
 }

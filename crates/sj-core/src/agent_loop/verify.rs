@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 use serde::Serialize;
 
-use super::{default_base, targets, Ledger};
+use super::{classification, default_base, targets, why_unproven_against_base, Ledger};
 use crate::authoring::{self, check};
 use crate::gate;
 use crate::git::Git;
@@ -129,11 +129,11 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
     }
 
     // Evidence, read after the runs above were recorded.
-    // A passing `[keep]` scenario never has a red run (LOOP-020).
     let ledger = Ledger::load(root)?;
     let keep = crate::spec::keep_ids(&spec_root)?;
-    for id in passing.iter().filter(|id| !keep.contains(*id)) {
-        if let Some(why) = ledger.why_unproven(id) {
+    let classified = classification(root, &prep);
+    for id in &passing {
+        if let Some(why) = why_unproven_against_base(&ledger, &keep, classified, id) {
             r.problems.push(problem(
                 "unproven",
                 Some(id),
@@ -197,8 +197,19 @@ pub fn verify(opts: &Options) -> Result<VerifyReport> {
     for f in gate::exemption_failures(&prep.exemptions, &base) {
         r.problems.push(problem("gate", None, f));
     }
+    // Verify doesn't run base, so it can't see `green:linked`. An implemented scenario never
+    // proven red may be one, and a linked scenario covers no source change (GATE-060).
+    let linked: std::collections::BTreeSet<String> = prep
+        .changes
+        .iter()
+        .filter(|(id, c)| {
+            **c == gate::Change::Implemented && !ledger.status(id).is_some_and(|s| s.proven)
+        })
+        .map(|(id, _)| id.clone())
+        .collect();
     if let Some(f) = gate::unspecified(
         &prep.changes,
+        &linked,
         &prep.changed_files,
         &prep.exemptions,
         &prep.classifier,

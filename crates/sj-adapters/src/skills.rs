@@ -387,6 +387,36 @@ fn has_word(text: &str, word: &str) -> bool {
     })
 }
 
+const EXPLORE: &str = "sj-explore";
+
+/// The sj-explore brainstorming body and its reference (SKILL-019, SKILL-020). The
+/// description rule (SKILL-018) sits with the other frontmatter rules.
+fn check_explore(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
+    let t = norm(text);
+    if !t.contains("go wide") {
+        out.push(problem(EXPLORE, "does not go wide before narrowing"));
+    }
+    if !t.contains("brainstorming.md") {
+        out.push(problem(EXPLORE, "does not name brainstorming.md"));
+    }
+    let p = dir.join(EXPLORE).join("brainstorming.md");
+    if !p.is_file() {
+        return Ok(());
+    }
+    let r =
+        norm(&std::fs::read_to_string(&p).with_context(|| format!("cannot read {}", p.display()))?);
+    if !r.contains("yagni") {
+        out.push(problem(EXPLORE, "brainstorming.md does not name YAGNI"));
+    }
+    if !r.contains("one section at a time") {
+        out.push(problem(
+            EXPLORE,
+            "brainstorming.md does not present the design one section at a time",
+        ));
+    }
+    Ok(())
+}
+
 /// The sj-apply review loop and its prompts (SKILL-011..013).
 fn check_apply(dir: &Path, text: &str, out: &mut Vec<Problem>) -> Result<()> {
     const NAME: &str = "sj-apply";
@@ -490,6 +520,12 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
             if !says_when {
                 out.push(problem(name, "description does not say when to use it"));
             }
+            let brainstorms = fields
+                .get("description")
+                .is_some_and(|d| d.to_ascii_lowercase().contains("brainstorm"));
+            if name == EXPLORE && !brainstorms {
+                out.push(problem(name, "description does not name brainstorming"));
+            }
             if body.len() > BODY_LIMIT {
                 out.push(problem(
                     name,
@@ -513,6 +549,9 @@ fn check_skill(dir: &Path, name: &str, out: &mut Vec<Problem>) -> Result<()> {
         check_apply(dir, &text, out)?;
     }
     check_discipline(name, &text, out);
+    if name == EXPLORE {
+        check_explore(dir, &text, out)?;
+    }
     if name == "sj-onboard" {
         check_onboard(&text, out);
     }

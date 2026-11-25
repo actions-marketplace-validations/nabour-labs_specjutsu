@@ -524,3 +524,189 @@ fn spec_033_all_done_archives_only_finished_changes() {
         .success()
         .stdout("nothing to archive\n");
 }
+
+// ---------- MODIFIED scenarios whose original has no ID ----------
+
+/// `<root>/specs/staff/spec.md` with `Role changes are audited` holding the scenario
+/// `original`, and a change `audit-roles` whose MODIFIED copy of it has `scenario`.
+fn with_original(dir: &Path, root: &str, original: &str, scenario: &str) {
+    put(
+        dir,
+        &format!("{root}/specs/staff/spec.md"),
+        &format!(
+            "# staff Specification\n\n## Purpose\nManage staff accounts and roles.\n\n## Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes.\n\n#### Scenario: {original}\n- **WHEN** a role changes\n- **THEN** it is recorded\n"
+        ),
+    );
+    put(
+        dir,
+        &format!("{root}/changes/audit-roles/specs/staff/spec.md"),
+        &format!(
+            "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes with the actor.\n\n#### Scenario: {scenario}\n- **WHEN** a role changes\n- **THEN** it is recorded with the actor\n"
+        ),
+    );
+    put(
+        dir,
+        &format!("{root}/changes/audit-roles/tasks.md"),
+        "# Tasks\n\n- [ ] 1.1 Record the actor (STAFF-057)\n",
+    );
+}
+
+/// The original without an ID, in an `openspec/` tree.
+fn with_unnamed_original(dir: &Path, scenario: &str) {
+    with_original(dir, "openspec", "Role change is recorded", scenario);
+}
+
+fn spec_045_warning(root: &str) -> String {
+    format!(
+        "validate: 0 errors, 1 warning\n\
+         warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario without an ID; run sj ids --write staff first ({root}/changes/audit-roles/specs/staff/spec.md:6)\n"
+    )
+}
+
+#[test]
+fn spec_045_an_id_the_original_lacks_is_a_warning_with_the_fix() {
+    let dir = project();
+    with_unnamed_original(dir.path(), "STAFF-057 Role change is recorded");
+    let warning = spec_045_warning("openspec");
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(warning.clone());
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .code(1)
+        .stdout(warning);
+}
+
+#[test]
+fn spec_045_a_specjutsu_root_gives_the_same_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    with_original(
+        dir.path(),
+        "specjutsu",
+        "Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(spec_045_warning("specjutsu"));
+}
+
+#[test]
+fn spec_045_the_keep_marker_is_ignored_when_matching_names() {
+    let dir = project();
+    with_unnamed_original(dir.path(), "STAFF-057 [keep] Role change is recorded");
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(spec_045_warning("openspec"));
+}
+
+// Regression: pins behaviour validate had before this change, so it carries no scenario ID.
+#[test]
+fn regression_no_hint_or_warning_when_the_original_has_the_same_id() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-057 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .success()
+        .stdout("validate: ok\n");
+}
+
+#[test]
+fn spec_047_different_ids_on_a_copy_and_its_original_are_a_warning() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-100 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    let warning = "validate: 0 errors, 1 warning\n\
+         warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario as STAFF-100; give the delta copy STAFF-100 (openspec/changes/audit-roles/specs/staff/spec.md:6)\n";
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(warning);
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .code(1)
+        .stdout(warning);
+}
+
+/// The delta of `audit-roles` with `body` under `## RENAMED` / `## MODIFIED` sections.
+fn with_delta(dir: &Path, body: &str) {
+    put(
+        dir,
+        "openspec/changes/audit-roles/specs/staff/spec.md",
+        body,
+    );
+}
+
+// Regression: an edge of SPEC-047 that base already passed, so it carries no scenario ID.
+// The original's ID moved to a renamed scenario in the same block, so giving the copy that ID
+// would make two.
+#[test]
+fn regression_no_different_id_warning_when_the_block_already_uses_the_originals_id() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-100 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    with_delta(
+        dir.path(),
+        "## MODIFIED Requirements\n\n### Requirement: Role changes are audited\nThe system SHALL record role changes with the actor.\n\n\
+         #### Scenario: STAFF-100 Role change is recorded with the actor\n- **WHEN** a role changes\n- **THEN** it is recorded with the actor\n\n\
+         #### Scenario: STAFF-057 Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n",
+    );
+    sj(dir.path(), &["validate", "audit-roles", "--strict"])
+        .assert()
+        .success()
+        .stdout("validate: ok\n");
+}
+
+// Regression: SPEC-047 through a RENAMED requirement, which matches by its old name.
+#[test]
+fn regression_a_renamed_requirement_gets_the_different_id_warning() {
+    let dir = project();
+    with_original(
+        dir.path(),
+        "openspec",
+        "STAFF-100 Role change is recorded",
+        "STAFF-057 Role change is recorded",
+    );
+    with_delta(
+        dir.path(),
+        "## RENAMED Requirements\n\
+         - FROM: `### Requirement: Role changes are audited`\n\
+         - TO: `### Requirement: Role changes are logged`\n\n\
+         ## MODIFIED Requirements\n\n### Requirement: Role changes are logged\nThe system SHALL log role changes.\n\n\
+         #### Scenario: STAFF-057 Role change is recorded\n- **WHEN** a role changes\n- **THEN** it is recorded\n",
+    );
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(
+            "warn    STAFF-057 Role change is recorded: specs/staff/spec.md has this scenario as STAFF-100; give the delta copy STAFF-100 (openspec/changes/audit-roles/specs/staff/spec.md:10)\n",
+        ));
+}
+
+#[test]
+fn spec_046_a_missing_id_in_a_modified_copy_names_the_same_fix() {
+    let dir = project();
+    with_unnamed_original(dir.path(), "Role change is recorded");
+    sj(dir.path(), &["validate", "audit-roles"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "fail    Role change is recorded has no ID; run sj ids --write staff first (openspec/changes/audit-roles/specs/staff/spec.md:6)\n",
+        ));
+}

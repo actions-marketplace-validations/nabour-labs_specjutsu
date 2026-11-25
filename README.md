@@ -2,7 +2,7 @@
 
 **Master the art of the spec.**
 
-**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
+**[Website](https://nabour-labs.github.io/specjutsu/)** · **[User manual](https://nabour-labs.github.io/specjutsu/manual.html)** · **[Benchmarks](https://nabour-labs.github.io/specjutsu-bench/)** · **[GitHub Marketplace](https://github.com/marketplace/actions/specjutsu-gate)**
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-specjutsu%20gate-2ea44f?logo=github)](https://github.com/marketplace/actions/specjutsu-gate)
 
@@ -28,7 +28,9 @@ specjutsu does in the binary and in CI what other spec-driven tools hand to the 
   agent a few lines, not whole folders and raw test logs. `sj next` gives the agent
   one task's scenarios, files and test commands; a green test run prints one line;
   a red one prints only the failing tests and their scenarios. Every command takes
-  `--json`.
+  `--json`. The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) runs the same three tasks with
+  specjutsu, Spec Kit, OpenSpec and Superpowers and counts every byte each puts into
+  the agent's context.
 
 ## One Action, every pull request
 
@@ -46,8 +48,8 @@ jobs:
 ```
 
 Every PR gets one comment, updated on each push, listing the scenarios the change
-touches, the evidence for each (`red:assert`, `red:compile`, `untested`,
-`green-on-base`, …) and how to fix what fails. The Action is listed on the GitHub
+touches, the evidence for each (`red:assert`, `red:compile`, `green:linked`,
+`untested`, `green-on-base`, …) and how to fix what fails. The Action is listed on the GitHub
 Marketplace as [specjutsu gate](https://github.com/marketplace/actions/specjutsu-gate). See [The GitHub Action](#the-github-action).
 
 **No specs yet?** Start with `command: audit`. It needs no setup and catches the ways
@@ -78,14 +80,15 @@ and it checks it deterministically:
 | How the result is checked | LLM | LLM | LLM + optional tests | Prompt | **Deterministic, no LLM** |
 | Runtime needed | Node | Python + uv | IDE | None | **None: single binary** |
 
-specjutsu is not ahead everywhere yet: a public token benchmark is planned for v0.6,
+The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) is out: see how many context bytes each workflow
+spends on the same feature, bug fix and change. specjutsu is not ahead everywhere yet:
 the rest of OpenSpec parity (custom workflow schemas, multi-repo spec stores) for
 v0.7, and specs inferred from existing tests and property scenarios go further. See [How specjutsu compares](docs/competitive-analysis.md) for the full
 comparison, its sources, and the change that closes each gap.
 
 ## Status
 
-**Pre-alpha, v0.5.1. Beta is next**: it opens once specjutsu has fully replaced
+**Pre-alpha, v0.6.0. Beta is next**: it opens once specjutsu has fully replaced
 OpenSpec and Superpowers in our own production monorepo. `sj trace`, `sj test` and
 `sj gate` work with Rust, vitest, Jest, Playwright and pytest, and any runner that
 writes JUnit XML. Adapters install into Claude Code, Codex, Cursor, Cline, Copilot,
@@ -110,7 +113,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://nabour-labs.github.io/specjut
 
 Both download the latest release for your platform, check it against the release's
 `SHA256SUMS` and install `sj` into `~/.local/bin` (Windows: `%LOCALAPPDATA%\Programs\sj`,
-added to your user `PATH`). Set `SJ_VERSION=0.5.1` to pin a release or `SJ_INSTALL_DIR`
+added to your user `PATH`). Set `SJ_VERSION=0.6.0` to pin a release or `SJ_INSTALL_DIR`
 to choose the folder. Or use a package manager:
 
 ```bash
@@ -135,7 +138,7 @@ cargo install --list | grep -A1 specjutsu   # the installed build and its source
 ```
 
 `sj --version` prints the commit after the version for a build from a git
-checkout, such as `sj 0.5.1 (f62a48b)`, and only the version for a crates.io
+checkout, such as `sj 0.6.0 (f62a48b)`, and only the version for a crates.io
 install. Open agent sessions use the new binary on their next hook call.
 
 ### Let your agent install it
@@ -198,6 +201,7 @@ sj adopt --dry-run  # existing project: detect packages and runners, print the c
 sj doctor           # check the config, runner executables and spec folders
 sj ids              # list scenarios without IDs and the IDs they would get
 sj ids --write      # assign them in place
+sj ids --write staff  # only one capability (a name, or a path to a spec file or folder)
 sj ids prefixes     # suggest a short ID prefix per capability; --write adds them to specjutsu.toml
 sj spec new add-oauth-login  # scaffold a change; prints the next free ID per prefix
 sj spec list        # open changes: tasks done, scenarios added or modified
@@ -369,6 +373,40 @@ A new test in a skipped suite fails as `unverifiable CHAT-002 sends a message
 is never skipped. A test file that fails to load on base, for example because it
 imports a function that doesn't exist yet, counts as `red:compile`.
 
+A test can also fail to load on base because it imports a test helper the change
+added or modified but the gate didn't overlay. That shows nothing about the old code, so the
+gate fails it as `not-overlaid STAFF-073 lists admins (apps/api/src/testing/admin.ts;
+add it to the suite's support globs)` instead. The gate checks the files the change
+added or modified under a helper folder (`testing`, `test-utils`, `test-helpers`,
+`testutils`, `fixtures`, `__fixtures__`, `mocks` or `__mocks__`) that weren't overlaid,
+and looks for each one in the base failure message, by its path from the repository, the
+package or the test's folder, with or without its extension, with `\` or `/` as the
+separator. A helper base already has counts too, such as an edited `testing/index.ts`
+whose new export the base run reports as `does not provide an export named 'makeAdmin'`. Only
+non-Cargo suites report failure messages, so Cargo tests are never `not-overlaid`.
+A new source module that base can't load stays `red:compile`. Declare helpers
+outside these folders in `support` by hand.
+
+A suite that wants no compile red at all sets `red_on_base = "assert"` (it takes no
+`reason`, and works for Cargo suites too). There only an assertion failure on base
+counts, and a test that fails to compile or load fails as `compile-red AUTH-004
+rejects expired token (suite requires an assertion failure on base)`. A
+`not-overlaid` failure is reported first, before the `[keep]` checks, and both come
+before `compile-red`.
+
+A scenario that already existed but gains its first test in the change is
+**implemented**, and is gated like an added one, with one exception: when its tests
+pass on base and at head, the behaviour predates the change and the test only links
+to it. The gate passes it as `green:linked` instead of failing it as
+`green-on-base`. `--json` lists it in `proven` with `"red": "green:linked"`, and
+`--format markdown` lists it under **Linked existing behaviour**, and the pass line
+counts it, as in `gate: pass — 1 scenario proven (1 green:linked)`. When one of its
+tests fails on base, that failure proves it instead, and its other tests may pass there.
+An implemented scenario whose tests all pass on base never counts as specifying a source
+change, even when a test then fails at head, so a change that also edits source still
+needs a scenario that is red on base, or an exemption, or it fails as
+`unspecified change`.
+
 When a package declares `sources`, only changed files matching them need a scenario,
 and files elsewhere in that package don't. A top-level `non_source = ["infra/**"]`
 adds globs to the built-in non-source list.
@@ -383,7 +421,8 @@ leaves it:
   instead of a `gap <ID>` line each.
 - **Known orphans don't fail the gate.**
 - **Changed scenarios are still gated.** An added, modified or newly implemented
-  scenario needs its red-on-base test whether the baseline lists it or not.
+  scenario needs its red-on-base test (or, for an implemented one, a
+  `green:linked` pass) whether the baseline lists it or not.
 - **Stale entries only warn**, as `stale gap AUTH-002`, so adding a test to an old
   scenario doesn't fail a pull request because of the baseline. Run
   `sj trace --strict` in CI to make someone remove the line.
@@ -621,6 +660,24 @@ package with no runner is written with no suites, and adopt reports it as
 `no runner detected: <path>`. Both commands refuse to replace an existing file
 without `--force`.
 
+For each non-Cargo suite, adopt also declares the package's test helper folders
+(`testing`, `test-utils`, `test-helpers`, `testutils`, `fixtures`, `__fixtures__`,
+`mocks`, `__mocks__`) that its `tests` globs don't cover, so the gate overlays them
+on base. With `apps/api/src/testing/admin.ts` and `apps/api/src/__fixtures__/user.json`,
+the `apps/api` vitest suite gets
+`support = ["apps/api/src/__fixtures__/**", "apps/api/src/testing/**"]`. A suite
+with no helper folder gets no `support` key. Helper folders under a `tests` folder are
+left out, since the gate always overlays those. Adopt prints a note on stderr for each
+glob it adds:
+
+```
+note    support: apps/api/src/testing/** (not source; overlaid on base; remove it if this folder holds product code)
+```
+
+Support files are not source: they need no scenario, and the gate runs the head copy
+against the base code. Don't mark a folder of product code as support; remove the glob if
+one is. A helper folder adopt can't read stops it with the error.
+
 Every command reads the file first. An unknown key or runner exits 2 and names
 the problem. `--spec-root` still overrides `spec_root`. `sj doctor` lists config
 errors, packages without a runner, runners that are not installed, and missing
@@ -665,18 +722,53 @@ wrote 2 IDs to 1 file
   user-auth = "AUTH"
   ```
 
-  If two capabilities that need IDs end up with the same prefix, nothing is
-  written and the command exits 2 naming both. Map one of them to fix it.
+  If a capability that needs IDs ends up with the same prefix as another
+  capability, nothing is written and the command exits 2 naming both. That holds
+  when the other one is already fully numbered. Map one of them to fix it.
 - **IDs are never reused.** Numbers continue after the highest one used for that
   prefix anywhere under the spec root, `changes/archive/` included, so keep the
   archive. Archived changes are read, never written.
 - **A delta copy shares its spec's ID.** A scenario in an open change with the
-  same requirement and scenario name as one in `specs/` gets the same ID.
+  same requirement and scenario name as one in `specs/` gets the same ID, matching
+  a requirement the same change renames by its old name. It works
+  the other way too: a `specs/` scenario without an ID takes the ID its copy in an
+  open change's MODIFIED requirement already has, matched by capability,
+  requirement and scenario name, ignoring IDs and `[keep]`. A requirement the same
+  change renames (`## RENAMED Requirements`) matches by its old name. The original
+  gets a new number instead, with a `note:` line, when another scenario already
+  uses that ID or when copies in two open changes disagree:
+
+  ```
+  note: copies disagree: STAFF-057 Role change is recorded (openspec/changes/c1/specs/staff/spec.md:6), STAFF-058 Role change is recorded (openspec/changes/c2/specs/staff/spec.md:6); Role change is recorded (openspec/specs/staff/spec.md:6) gets STAFF-100; give the delta copies STAFF-100
+  ```
+
+  A taken ID reads `note: <copy> is taken by <scenario>; … gets STAFF-100; give the
+  delta copies STAFF-100`. Either way, update the delta copies by hand so they match.
+
+  In `--json`, such an assignment carries a `note` object: `{"kind": "taken",
+  "copy", "by"}` or `{"kind": "disagree", "copies"}`, each scenario with its `id`,
+  `name`, `file` and `line`.
+- **Targets limit the run to some capabilities.** `sj ids --write staff` lists and
+  writes only the `staff` scenarios, in `specs/` and in open changes, and leaves
+  every other file byte for byte. A target is a capability name or a path to a
+  spec file or folder, resolved against `--root` or absolute, and selects the whole
+  capability of every open spec file under it, so a MODIFIED copy and its original
+  always get the same ID. The prefix check covers every capability, anywhere under
+  the spec root, whose prefix a selected capability uses, so a collision on that
+  prefix still stops the run, but one between two other capabilities (`billing` and
+  `bill-ing` both giving `BILLING`) doesn't stop `sj ids staff` or `sj ids --write staff`.
+  When listing a target, a collision that involves a capability being numbered prints
+  as a `note: capabilities … both use prefix …` line instead of stopping. Numbering
+  still covers the whole spec root, so numbers continue after the highest one used
+  anywhere. A target that selects nothing exits 2, names it and lists the known
+  capabilities. A capability named `prefixes` can only be targeted by path (`sj ids specjutsu/specs/prefixes`), since
+  `sj ids prefixes` is the subcommand.
 
 The gate treats a scenario that only gained an ID as unchanged, so the ID commit
 can land on its own: its scenarios show as `gap` warnings, not failures. Adding a
-test in the same change makes the scenario `implemented`, which still needs
-red-on-base. `sj gate --json` lists every scenario that isn't unchanged under
+test in the same change makes the scenario `implemented`: a test that fails on
+base proves it, and one that passes on base is `green:linked`, which covers no
+source change made alongside it. `sj gate --json` lists every scenario that isn't unchanged under
 `changes`.
 
 ### Short prefixes
@@ -768,6 +860,15 @@ and *clarify* passes. Existing `openspec/` folders work unchanged.
   - A task that names no scenario ID. Mark tasks that cover none with
     `(no-scenario: <reason>)`, for example docs.
   - A scenario marker other than `[keep]`.
+
+  A scenario in a MODIFIED requirement whose original in `specs/` has no ID gets
+  a hint, since OpenSpec matches scenarios by full name and would read the copy as
+  a dropped scenario plus a new one. With an ID it is a warning, `STAFF-057 Role change is recorded:
+  specs/staff/spec.md has this scenario without an ID; run sj ids --write staff
+  first`; without one, the missing-ID error ends with `; run sj ids --write staff
+  first`. When both have IDs and they differ, the same tools see two scenarios, so
+  validate warns `STAFF-057 Role change is recorded: specs/staff/spec.md has this
+  scenario as STAFF-100; give the delta copy STAFF-100`.
 
   It exits 1 on errors. `--strict` also fails on warnings, such as a placeholder
   Purpose.
@@ -901,6 +1002,10 @@ takes `--json`, except `sj task done`.
   other byte. In `strict` mode it refuses, exiting 1, unless every scenario the
   task names is proven: `unproven AUTH-005 (no red run recorded)`. In `guided`
   and `advisory` modes it checks the box and prints the same lines as warnings.
+  Like `sj verify`, it asks for a red run only for added and modified scenarios
+  (see below). It always judges against the default branch, never `--base`, and
+  when it can't classify the scenarios it warns `cannot classify scenarios
+  against the merge-base, so every one needs a red run: <why>`.
 - **`sj view`** prints a one-screen project dashboard: each capability with
   its scenario count, each open change with its tasks and scenario evidence
   (the counts `sj status` uses), evidence totals over every scenario, the
@@ -915,6 +1020,19 @@ takes `--json`, except `sj task done`.
   without a `config` exemption are `baseline-added <entry>` problems. Red-on-base
   stays in CI. It prints `verify: ok` or one line per problem, and exits 1 when
   there are any.
+
+  Both `sj verify` and `sj task done` classify each scenario against the
+  merge-base the way the gate does, and need a red run only for **added** and
+  **modified** scenarios. An **unchanged** scenario, such as one copied without
+  edits into a MODIFIED requirement, and an **implemented** one (an existing
+  scenario that gains its first test) need only a passing latest run: an
+  implemented scenario may be `green:linked`, which only the gate's base run can
+  tell. Their tests still run, and a failing one is still reported. Since verify
+  can't see the base run, an implemented scenario whose ledger shows no
+  red-before-green doesn't count as covering a source change there: a change that
+  only adds such a test and edits `src/lib.rs` gets `unspecified change`. On the
+  default branch itself (the merge-base is HEAD), with no merge-base, or when
+  `sj task done` can't classify, every scenario needs a red run.
 
 `sj next` and `sj verify` compare against `--base`, or else the first of
 `origin/HEAD`, `origin/main`, `origin/master`, `main` and `master` that exists.
@@ -960,7 +1078,7 @@ spec folders and logs:
 
 | Skill | Use it to | Replaces |
 | --- | --- | --- |
-| `sj-explore` | think an idea through before specifying it | Superpowers brainstorming, OpenSpec explore |
+| `sj-explore` | brainstorm and think an idea through before specifying it: go wide, then narrow to two or three options | Superpowers brainstorming, OpenSpec explore |
 | `sj-propose` | write the proposal, delta specs, design and tasks | Superpowers writing-plans; OpenSpec propose, update; Spec Kit specify, plan, tasks, analyze |
 | `sj-clarify` | resolve `[NEEDS CLARIFICATION]` markers with the user | Spec Kit clarify |
 | `sj-principles` | create or amend `<spec_root>/principles.md` | Spec Kit constitution |
@@ -991,6 +1109,7 @@ only at the step that needs it:
 | --- | --- |
 | `sj-apply` | `implementer-prompt.md`, `task-reviewer-prompt.md`, `re-review-prompt.md`, `writing-good-tests.md` |
 | `sj-debug` | `root-cause-tracing.md`, `defense-in-depth.md`, `condition-based-waiting.md` |
+| `sj-explore` | `brainstorming.md` |
 
 `sj-apply`, `sj-debug` and `sj-verify` also list the rationalizations that lead agents to
 skip a step, and the red flags that mean stop and go back.
@@ -1000,7 +1119,9 @@ its skill and, for Superpowers, to the file that carries the technique. `cargo t
 checks the skills: frontmatter whose description says when to use the skill, a body of
 at most 6,000 bytes, reference files of at most 8,000 bytes that `SKILL.md` names, no
 commands from the tools they replace, the `sj` commands each workflow needs, the review
-loop and discipline sections above, and complete coverage. Agent adapters install the
+loop and discipline sections above, the brainstorming rules of `sj-explore` (a description
+that names brainstorming, a go-wide step, and a reference with a YAGNI pass that presents the
+design one section at a time), and complete coverage. Agent adapters install the
 ten `sj-*` skills with their reference files; the setup skill is fetched on its own.
 
 ## The Claude Code adapter
@@ -1285,6 +1406,24 @@ Only the last `--write` can be undone. Limits: a restored file doesn't get its
 executable bit back; and git doesn't track empty folders, so a folder left empty by
 the deleted files goes even if it existed, empty, before the migration.
 
+### Adopting a repo that already has OpenSpec specs
+
+When specjutsu runs beside OpenSpec instead of replacing it, three things keep the
+two in step:
+
+- **Give a capability IDs before modifying it.** Run `sj ids --write <capability>`
+  and commit it on its own. Otherwise a MODIFIED copy with an ID doesn't match its
+  original by name, `openspec validate --strict` reads it as a dropped scenario plus
+  a new one, and `sj spec validate` says to run the same command.
+- **Declare test helper folders as `support`.** `sj adopt` does this for the
+  folders it knows; add any other helper path by hand, or the gate fails tests that
+  import it as `not-overlaid`. Support files aren't source and are overlaid on base,
+  so keep product code out of them.
+- **Behaviour that already existed shows as `green:linked`.** A test added for an
+  old scenario passes on base, so the gate links it instead of failing it, and
+  `sj verify` and `sj task done` accept its passing run. It doesn't cover source
+  edits in the same change.
+
 ## Roadmap
 
 | Release | Delivers |
@@ -1295,7 +1434,8 @@ the deleted files goes even if it existed, empty, before the migration.
 | v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
 | v0.5 | Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills; bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; `specjutsu/` as the default spec root |
 | v0.5.1 | Trace baseline for gradual adoption, `sj ids prefixes`, `sj migrate --diff` and `--undo`; one-line installers, Homebrew and `cargo binstall`; `sj gain` |
-| v0.6 (beta) | Public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); beta launch |
+| v0.6 | Public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); `red_on_base = "assert"` and `green:linked` in the gate; `sj ids` for selected capabilities; brainstorming in `sj-explore` |
+| Beta | Opens once specjutsu has fully replaced OpenSpec and Superpowers in our own production monorepo |
 | v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing

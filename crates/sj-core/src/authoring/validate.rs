@@ -72,7 +72,7 @@ pub fn validate(spec_root: &Path, change: Option<&str>) -> Result<Report> {
             check_keywords(&mut r, &file, &lines, &mask);
             let blocks = blocks::blocks_in(&lines, &mask, all);
             for b in &blocks {
-                check_block(&mut r, &file, &lines, &mask, b);
+                check_block(&mut r, &file, &lines, &mask, b, None);
             }
             check_purpose(&mut r, &file, &text);
         }
@@ -160,8 +160,79 @@ fn check_keywords(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool]) {
     }
 }
 
+/// The scenarios of the `specs/` copy of a MODIFIED requirement: those without an ID, with
+/// the command that gives them one (SPEC-045/046), and the IDs of the others (SPEC-047).
+struct IdFix {
+    names: BTreeSet<String>,
+    /// Scenario name → ID, for the scenarios that have one.
+    ids: BTreeMap<String, String>,
+    target: String,
+    capability: String,
+}
+
+impl IdFix {
+    fn hint(&self) -> String {
+        format!("run sj ids --write {} first", self.capability)
+    }
+}
+
+/// The `specs/` scenarios without an ID in the requirement a MODIFIED block `name` replaces.
+/// `None` when the delta sits in no capability folder: the first folder, as `sj ids` reads it.
+fn unnamed_originals(
+    spec_root: &Path,
+    target: &Path,
+    rel: &Path,
+    renames: &[blocks::Rename],
+    name: &str,
+) -> Result<Option<IdFix>> {
+    let mut parts = rel.components();
+    let capability = match (parts.next(), parts.next()) {
+        (Some(c), Some(_)) => c.as_os_str().to_string_lossy().into_owned(),
+        _ => return Ok(None),
+    };
+    let shown = target.strip_prefix(spec_root).unwrap_or(target);
+    let mut fix = IdFix {
+        names: BTreeSet::new(),
+        ids: BTreeMap::new(),
+        target: shown.to_string_lossy().replace('\\', "/"),
+        capability,
+    };
+    if !target.is_file() {
+        return Ok(Some(fix));
+    }
+    let original = blocks::name_before(renames, name);
+    let text = read(target)?;
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mask = blocks::fence_mask(&lines);
+    for b in blocks::blocks_in(&lines, &mask, 0..lines.len()) {
+        if b.name == original {
+            for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
+                match s.id {
+                    None => {
+                        fix.names.insert(s.name);
+                    }
+                    Some(id) => {
+                        // The first of two same-named scenarios; other checks flag the pair.
+                        fix.ids.entry(s.name).or_insert(id);
+                    }
+                }
+            }
+        }
+    }
+    Ok(Some(fix))
+}
+
 /// A requirement needs a scenario and a SHALL or MUST; each scenario needs an ID, WHEN and THEN.
-fn check_block(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool], b: &Block) {
+/// `fix`, for a MODIFIED block, describes the `specs/` copy's scenarios: which lack an ID, and the
+/// IDs of the rest.
+fn check_block(
+    r: &mut Report,
+    file: &Path,
+    lines: &[&str],
+    mask: &[bool],
+    b: &Block,
+    fix: Option<&IdFix>,
+) {
     let scenarios = blocks::scenarios_in(lines, mask, b.lines.clone());
     let first = scenarios.first().map_or(b.lines.end, |s| s.line - 1);
     let text = lines[b.header..first].join("\n");
@@ -181,8 +252,36 @@ fn check_block(r: &mut Report, file: &Path, lines: &[&str], mask: &[bool], b: &B
     }
     for s in &scenarios {
         let label = s.id.clone().unwrap_or_else(|| s.name.clone());
-        if s.id.is_none() {
-            r.err(format!("{} has no ID", s.name), file, s.line);
+        let unnamed = fix.filter(|f| f.names.contains(&s.name));
+        match (&s.id, unnamed) {
+            (None, None) => r.err(format!("{} has no ID", s.name), file, s.line),
+            (None, Some(f)) => r.err(format!("{} has no ID; {}", s.name, f.hint()), file, s.line),
+            (Some(id), Some(f)) => r.warn(
+                format!(
+                    "{id} {}: {} has this scenario without an ID; {}",
+                    s.name,
+                    f.target,
+                    f.hint()
+                ),
+                file,
+                s.line,
+            ),
+            (Some(id), None) => {
+                // SPEC-047: tools that match by full name see two scenarios. When another
+                // scenario in the block already has the original's ID, taking it would make two.
+                let other = fix.and_then(|f| Some((f, f.ids.get(&s.name)?)));
+                let in_block = |o: &String| scenarios.iter().any(|t| t.id.as_ref() == Some(o));
+                if let Some((f, original)) = other.filter(|(_, o)| *o != id && !in_block(o)) {
+                    r.warn(
+                        format!(
+                            "{id} {}: {} has this scenario as {original}; give the delta copy {original}",
+                            s.name, f.target
+                        ),
+                        file,
+                        s.line,
+                    );
+                }
+            }
         }
         if let Some(m) = s.marker.as_deref().filter(|m| *m != crate::spec::KEEP) {
             r.err(format!("unknown scenario marker [{m}]"), file, s.line);
@@ -278,7 +377,7 @@ fn validate_change(
             );
         }
         for b in &d.added {
-            check_block(out, &file, &lines, &mask, b);
+            check_block(out, &file, &lines, &mask, b, None);
             for s in blocks::scenarios_in(&lines, &mask, b.lines.clone()) {
                 let Some(id) = s.id else { continue };
                 match seen.get(&id) {
@@ -290,7 +389,8 @@ fn validate_change(
             }
         }
         for b in &d.modified {
-            check_block(out, &file, &lines, &mask, b);
+            let fix = unnamed_originals(spec_root, &target, rel, &d.renamed, &b.name)?;
+            check_block(out, &file, &lines, &mask, b, fix.as_ref());
             if !after.contains(&b.name) {
                 out.err(
                     format!("MODIFIED requirement not found: {}", b.name),

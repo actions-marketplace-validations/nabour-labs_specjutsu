@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde_json::Value as Json;
 
-use crate::config::{default_spec_root, Config, Package, Runner, Suite, SCHEMA};
+use crate::config::{default_spec_root, is_helper_dir, Config, Package, Runner, Suite, SCHEMA};
 
 /// Default vitest/jest test files.
 const JS_TESTS: &str = "**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}";
@@ -65,6 +65,7 @@ pub fn detect(root: &Path) -> Result<Detected> {
             .push(Suite::new(Runner::Cargo, vec!["**/*.rs".into()]));
     }
 
+    let package_paths: Vec<String> = found.keys().cloned().collect();
     let mut notes = Vec::new();
     let packages = found
         .into_iter()
@@ -74,9 +75,17 @@ pub fn detect(root: &Path) -> Result<Detected> {
             if suites.is_empty() {
                 notes.push(format!("no runner detected: {path}"));
             }
+            let helpers = helper_dirs(root, &path, &package_paths)?;
             for s in &mut suites {
                 if s.runner == Runner::Cargo {
                     continue;
+                }
+                s.support = support_for(&helpers, &s.tests)?;
+                // CONF-041: support files skip the scenario check, so say so.
+                for g in &s.support {
+                    notes.push(format!(
+                        "support: {g} (not source; overlaid on base; remove it if this folder holds product code)"
+                    ));
                 }
                 s.setup = setup_for(root, &path, s.runner);
                 if s.setup.is_none() {
@@ -92,13 +101,13 @@ pub fn detect(root: &Path) -> Result<Detected> {
                 (".", false) => vec!["**".to_string()],
                 _ => vec![prefix(&path, "**")],
             };
-            Package {
+            Ok(Package {
                 path,
                 sources,
                 suites,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<_>>()?;
 
     Ok(Detected {
         config: Config {
@@ -115,6 +124,61 @@ pub fn detect(root: &Path) -> Result<Detected> {
         },
         notes,
     })
+}
+
+/// Helper folders (root-relative, sorted) inside package `dir`, outside its nested packages.
+/// A helper folder inside another one is covered by the outer one and not listed, and so is
+/// one under a `tests/` folder, which the gate always overlays.
+fn helper_dirs(root: &Path, dir: &str, packages: &[String]) -> Result<Vec<String>> {
+    let base = if dir == "." {
+        root.to_path_buf()
+    } else {
+        root.join(dir)
+    };
+    // Nested packages (root-relative) whose folders belong to them, not to `dir`.
+    let nested: Vec<String> = packages
+        .iter()
+        .filter(|p| *p != dir && owns(dir, p))
+        .cloned()
+        .collect();
+    let walk_root = root.to_path_buf();
+    let walker = ignore::WalkBuilder::new(&base)
+        .sort_by_file_path(|a, b| a.cmp(b))
+        .filter_entry(move |e| {
+            let name = e.file_name().to_str().unwrap_or("");
+            e.depth() == 0
+                || !(e.file_type().is_some_and(|t| t.is_dir())
+                    && (SKIP_DIRS.contains(&name) || nested.contains(&rel(&walk_root, e.path()))))
+        })
+        .build();
+    let mut out: Vec<String> = Vec::new();
+    for entry in walker {
+        let entry = entry?;
+        let is_helper = entry.depth() > 0
+            && entry.file_type().is_some_and(|t| t.is_dir())
+            && entry.file_name().to_str().is_some_and(is_helper_dir);
+        let rel = rel(root, entry.path());
+        let under_tests = rel.split('/').any(|p| p == "tests");
+        if is_helper && !under_tests && !out.iter().any(|o| owns(o, &rel)) {
+            out.push(rel);
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// `<folder>/**` for each helper folder the suite's `tests` globs do not already cover (CONF-039).
+fn support_for(helpers: &[String], tests: &[String]) -> Result<Vec<String>> {
+    let mut set = GlobSetBuilder::new();
+    for t in tests {
+        set.add(GlobBuilder::new(t).literal_separator(true).build()?);
+    }
+    let set = set.build()?;
+    Ok(helpers
+        .iter()
+        .filter(|h| !set.is_match(format!("{h}/x")))
+        .map(|h| format!("{h}/**"))
+        .collect())
 }
 
 /// Lockfiles that name a JS package manager, with its frozen install command (CONF-035, 036).

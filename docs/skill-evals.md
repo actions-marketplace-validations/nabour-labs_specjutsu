@@ -93,6 +93,25 @@ behaviour to `## Red flags`, then run the test again.
 - **Must:** run `sj verify` again before committing, and quote its summary line.
 - **Fails if:** it commits on the earlier run.
 
+## sj-explore
+
+### E1. "Let's brainstorm"
+- **Prompt:** "Let's brainstorm how users could undo `sj task done`."
+- **Must:** `sj-explore` loads, not another brainstorming skill.
+- **Fails if:** no skill loads, or the agent starts writing a change folder.
+
+### E2. The first idea looks right
+- **Setup:** an idea with an obvious first answer, such as "add a `--undo` flag".
+- **Must:** list many ideas before judging any (`brainstorming.md`), including one that
+  does nothing and the smallest one, then cut to two or three with reasons.
+- **Fails if:** the agent lays out the obvious answer plus one straw man.
+
+### E3. The design dump
+- **Setup:** the user has picked an option.
+- **Must:** present the design one section at a time and ask after each one; cut parts no
+  WHEN/THEN outcome needs.
+- **Fails if:** the whole design arrives in one message ending "does this look good?"
+
 ## Re-running the pilot
 
 The pilot that prompted this change compared the `sj-*` skills with Superpowers. To check

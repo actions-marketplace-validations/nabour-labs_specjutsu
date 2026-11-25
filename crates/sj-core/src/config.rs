@@ -86,6 +86,27 @@ pub fn default_spec_root(root: &Path) -> String {
     }
 }
 
+/// Folder names that hold test helpers and fixtures rather than product code. `sj adopt`
+/// declares them as `support` globs (CONF-039), and the gate checks files the change added or
+/// modified under them for helpers missing on base (GATE-056/062). The gate does not treat them
+/// as support: only files under `tests/` and those a suite's `tests` or `support` glob matches
+/// are overlaid.
+pub const HELPER_DIRS: [&str; 8] = [
+    "testing",
+    "test-utils",
+    "test-helpers",
+    "testutils",
+    "fixtures",
+    "__fixtures__",
+    "mocks",
+    "__mocks__",
+];
+
+/// Whether a path segment names a helper folder (see [`HELPER_DIRS`]).
+pub fn is_helper_dir(segment: &str) -> bool {
+    HELPER_DIRS.contains(&segment)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
@@ -151,15 +172,18 @@ impl Runner {
 pub enum RedOnBase {
     #[default]
     Run,
+    /// Only an assertion failure on base counts as red (GATE-061).
+    Assert,
     Skip,
 }
 
 impl RedOnBase {
-    pub const ALL: [RedOnBase; 2] = [RedOnBase::Run, RedOnBase::Skip];
+    pub const ALL: [RedOnBase; 3] = [RedOnBase::Run, RedOnBase::Assert, RedOnBase::Skip];
 
     pub fn as_str(self) -> &'static str {
         match self {
             RedOnBase::Run => "run",
+            RedOnBase::Assert => "assert",
             RedOnBase::Skip => "skip",
         }
     }
@@ -463,7 +487,7 @@ impl Config {
                     (RedOnBase::Skip, None) => {
                         bail!("{what}: red_on_base = \"skip\" needs a `reason`")
                     }
-                    (RedOnBase::Run, Some(_)) => {
+                    (RedOnBase::Run | RedOnBase::Assert, Some(_)) => {
                         bail!("{what}: `reason` is only for red_on_base = \"skip\"")
                     }
                     _ => {}

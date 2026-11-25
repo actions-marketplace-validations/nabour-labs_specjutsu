@@ -24,15 +24,19 @@ Give every scenario a stable, never-reused ID, so existing spec folders can be t
 - **THEN** no file changes and it prints `0 scenarios without IDs`
 
 ### Requirement: Prefixes come from the capability, or from config
-A scenario's prefix SHALL be its capability folder's name, uppercased with non-letters removed, unless `[ids.prefixes]` in `specjutsu.toml` maps that capability to a prefix. A scenario that already has an ID keeps it. When two capabilities produce the same prefix, `sj ids --write` SHALL write nothing and exit 2, naming both capabilities.
+A scenario's prefix SHALL be its capability folder's name, uppercased with non-letters removed, unless `[ids.prefixes]` in `specjutsu.toml` maps that capability to a prefix. A scenario that already has an ID keeps it. When two capabilities produce the same prefix, `sj ids --write` SHALL write nothing and exit 2, naming both capabilities. This holds when one of them already has every scenario numbered, as long as the other still needs IDs.
 
-#### Scenario: IDS-004 A configured prefix overrides the folder name
+#### Scenario: IDS-004 [keep] A configured prefix overrides the folder name
 - **WHEN** `[ids.prefixes]` maps `user-auth = "AUTH"`
 - **THEN** new IDs in `user-auth` are `AUTH-001`, `AUTH-002`, …
 
-#### Scenario: IDS-005 Colliding prefixes stop the write
+#### Scenario: IDS-005 [keep] Colliding prefixes stop the write
 - **WHEN** capabilities `chat` and `c-hat` both produce `CHAT`
 - **THEN** `sj ids --write` changes no file and exits 2 naming `chat` and `c-hat`
+
+#### Scenario: IDS-023 A numbered capability's prefix is taken
+- **WHEN** every scenario in `specs/staff/spec.md` has an ID (STAFF-001), `specs/st-aff/spec.md` has scenarios without IDs, and both capabilities produce `STAFF`
+- **THEN** `sj ids --write` and `sj ids --write st-aff` each change no file and exit 2 naming `staff` and `st-aff`
 
 ### Requirement: An ID is never reused
 A new ID's number SHALL be one more than the highest number used with that prefix anywhere under the spec root, including `changes/archive/`.
@@ -42,11 +46,15 @@ A new ID's number SHALL be one more than the highest number used with that prefi
 - **THEN** the next new AUTH scenario gets AUTH-008
 
 ### Requirement: Delta copies share their spec's ID
-A scenario without an ID in an open change's delta SHALL get the ID of the `specs/` scenario of the same capability with the same requirement name and scenario name, when one exists.
+A scenario without an ID in an open change's delta SHALL get the ID of the `specs/` scenario of the same capability with the same requirement name and scenario name, when one exists. A requirement renamed in the same change (`## RENAMED Requirements`) SHALL match by its old name.
 
-#### Scenario: IDS-007 A MODIFIED copy gets the original's ID
+#### Scenario: IDS-007 [keep] A MODIFIED copy gets the original's ID
 - **WHEN** `specs/auth/spec.md` has `### Requirement: Login` › `Valid login` and a change's `## MODIFIED Requirements` repeats `### Requirement: Login` › `Valid login` with a reworded THEN line, and both lack IDs
 - **THEN** `sj ids --write` gives both the same ID
+
+#### Scenario: IDS-022 A copy under a renamed requirement gets the original's ID
+- **WHEN** a change renames `Role changes are audited` to `Role changes are logged`, has a MODIFIED copy `Role change is recorded` without an ID under the new name, `specs/staff/spec.md` has `Role change is recorded` without an ID under the old name, and the highest STAFF number in use is STAFF-099
+- **THEN** `sj ids --write staff` gives both STAFF-100
 
 ### Requirement: sj ids prefixes suggests a short prefix for every capability
 `sj ids prefixes` SHALL print an `[ids.prefixes]` TOML table with one line per capability folder, sorted, and write nothing. The prefix it gives is chosen in this order:
@@ -85,3 +93,66 @@ When `sj ids` would assign a prefix derived from a folder name longer than six l
 #### Scenario: IDS-012 A long derived prefix gets a hint
 - **WHEN** capability `distribution` has a scenario without an ID, has no mapping, and `sj ids` runs
 - **THEN** the listing ends with `hint: distribution would use DISTRIBUTION; sj ids prefixes --write maps it to DIST`
+
+### Requirement: sj ids can be limited to some capabilities
+`sj ids [--write] [<target>...]` SHALL accept capability names and paths to spec files or
+folders. A path SHALL select the capability of every open spec file under it, in `specs/` or in
+an open change. The command SHALL list and write only the scenarios of the selected
+capabilities: their `specs/` files and their delta copies in open changes. It selects whole
+capabilities so that a MODIFIED copy and its original always get the same ID.
+
+The prefix checks (IDS-005) SHALL cover every capability whose prefix a selected capability
+uses, anywhere under the spec root, and numbering SHALL still cover the whole spec root; a
+collision between two capabilities that aren't selected and don't share a selected prefix SHALL
+NOT stop the run. A new
+number SHALL continue from the highest one used with the prefix anywhere under the spec root.
+A target that selects no capability SHALL exit 2, list the known capabilities, and write
+nothing.
+
+#### Scenario: IDS-014 Writing one capability leaves the others alone
+- **WHEN** capabilities `staff` and `billing` both have scenarios without IDs, and `sj ids --write staff` runs
+- **THEN** only the headings in `specs/staff/spec.md` change, `specs/billing/spec.md` is byte-identical, and the summary counts only `staff` scenarios
+
+#### Scenario: IDS-015 A spec path limits the listing the same way
+- **WHEN** `sj ids openspec/specs/staff/spec.md` runs in a project whose spec root is `openspec`
+- **THEN** it lists only the scenarios without IDs in that file, and writes nothing
+
+#### Scenario: IDS-016 An unknown target is refused
+- **WHEN** `sj ids --write staf` runs and no capability or path is named `staf`
+- **THEN** it exits 2, names `staf`, lists the known capabilities, and changes no file
+
+#### Scenario: IDS-017 A target still stops on colliding prefixes
+- **WHEN** capabilities `staff` and `st-aff` both produce `STAFF` and have scenarios without IDs, and `sj ids --write staff` runs
+- **THEN** it changes no file and exits 2 naming `staff` and `st-aff`
+
+#### Scenario: IDS-021 An unrelated collision does not stop a target
+- **WHEN** capabilities `billing` and `bill-ing` both produce `BILLING`, `staff` has scenarios without IDs, and `sj ids --write staff` runs
+- **THEN** it writes IDs in `specs/staff/spec.md` and exits 0
+
+### Requirement: An original takes the ID its MODIFIED copy already has
+When a `specs/` scenario without an ID has a copy in an open change's MODIFIED requirement, and
+that copy already has an ID, `sj ids --write` SHALL give the original that ID, not a new number.
+A copy matches when it has the same capability, requirement name and scenario name, ignoring IDs
+and `[keep]`. A requirement renamed in the same change (`## RENAMED Requirements`) SHALL match
+by its old name.
+
+The original SHALL get a new number instead, and `sj ids` SHALL print a note line naming the
+scenarios involved, in two cases:
+- another scenario already uses that ID;
+- copies in two open changes carry different IDs.
+
+The note SHALL end by saying to give the delta copies the original's new ID.
+
+`--json` SHALL carry the same note.
+
+#### Scenario: IDS-018 The original takes the delta's ID
+- **WHEN** a change's `## MODIFIED Requirements` › `### Requirement: Role changes are audited` has `#### Scenario: STAFF-057 Role change is recorded`, `specs/staff/spec.md` has `#### Scenario: Role change is recorded` without an ID, and the highest STAFF number in use is STAFF-099
+- **THEN** `sj ids --write staff` changes that heading in `specs/staff/spec.md` to `#### Scenario: STAFF-057 Role change is recorded`, and the delta is unchanged
+
+#### Scenario: IDS-019 Copies that disagree get a new number and a note
+- **WHEN** open changes `c1` and `c2` both have a MODIFIED copy of `Role change is recorded`, one as STAFF-057 and one as STAFF-058, the original has no ID, and the highest STAFF number in use is STAFF-099
+- **THEN** `sj ids --write staff` gives the original STAFF-100 and prints a note naming both copies, and neither delta changes
+
+#### Scenario: IDS-020 A renamed requirement matches by its old name
+- **WHEN** a change renames `Role changes are audited` to `Role changes are logged`, has a MODIFIED copy `STAFF-057 Role change is recorded` under the new name, and `specs/staff/spec.md` has `Role change is recorded` without an ID under the old name
+- **THEN** `sj ids --write staff` gives the original STAFF-057

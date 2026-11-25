@@ -19,7 +19,7 @@ const SKILLS: [&str; 10] = [
 
 const COVERAGE: &str = "| Tool | Item | Skill | Depth |
 | --- | --- | --- | --- |
-| Superpowers | brainstorming | sj-explore | SKILL.md |
+| Superpowers | brainstorming | sj-explore | brainstorming.md |
 | Superpowers | writing-plans | sj-propose | SKILL.md |
 | Superpowers | executing-plans | sj-apply | SKILL.md |
 | Superpowers | test-driven-development | sj-apply | writing-good-tests.md |
@@ -69,6 +69,13 @@ const REVIEWER: &str = "Read the scenario text. Don't trust the implementer's re
 `git diff` and `sj verify`. Say whether the test would fail without the change. Answer \
 APPROVED or CHANGES_REQUESTED.\n";
 
+/// An sj-explore body that satisfies SKILL-019.
+const EXPLORE: &str = "Run `sj status`. Go wide before narrowing: list many ideas, then cut \
+them down. Use `brainstorming.md`.";
+
+/// A brainstorming reference that satisfies SKILL-020.
+const BRAINSTORMING: &str = "Present the design one section at a time. Run a YAGNI pass.\n";
+
 /// The sections every discipline skill has (SKILL-014).
 const DISCIPLINE: &str = "\n## Rationalizations\n\nNone.\n\n## Red flags\n\nNone.\n";
 
@@ -89,13 +96,19 @@ fn body(name: &str) -> String {
         "sj-clarify" => "Run `sj spec check`.",
         "sj-review" => "Read principles.md and record each deviation in design.md.",
         "sj-onboard" => ONBOARD,
+        "sj-explore" => EXPLORE,
         _ => "Run `sj status`.",
     };
     format!("# {name}\n\n{needs}\n")
 }
 
 fn skill_md(name: &str, body: &str) -> String {
-    format!("---\nname: {name}\ndescription: Use when testing the check.\n---\n\n{body}")
+    let when = if name == "sj-explore" {
+        "Use when brainstorming or testing the check."
+    } else {
+        "Use when testing the check."
+    };
+    format!("---\nname: {name}\ndescription: {when}\n---\n\n{body}")
 }
 
 fn put(root: &Path, rel: &str, content: &str) {
@@ -129,6 +142,7 @@ fn valid() -> tempfile::TempDir {
     ] {
         put(dir.path(), &format!("sj-debug/{f}"), "# Technique\n");
     }
+    put(dir.path(), "sj-explore/brainstorming.md", BRAINSTORMING);
     put(dir.path(), "COVERAGE.md", COVERAGE);
     dir
 }
@@ -152,7 +166,7 @@ fn skill_001_coverage_is_complete() {
     let dir = valid();
     let coverage = COVERAGE
         .replace(
-            "| Superpowers | brainstorming | sj-explore | SKILL.md |\n",
+            "| Superpowers | brainstorming | sj-explore | brainstorming.md |\n",
             "",
         )
         .replace("| OpenSpec | onboard | sj-onboard |\n", "")
@@ -821,7 +835,7 @@ fn skill_017_a_depth_file_that_does_not_exist_fails_the_check() {
             "| verification-before-completion | sj-verify | |",
         )
         .replace(
-            "| brainstorming | sj-explore | SKILL.md |",
+            "| brainstorming | sj-explore | brainstorming.md |",
             "| brainstorming | sj-explore | ../sj-apply/SKILL.md |",
         );
     put(dir.path(), "COVERAGE.md", &coverage);
@@ -848,5 +862,71 @@ fn skill_017_a_depth_file_that_does_not_exist_fails_the_check() {
         text.contains("| Superpowers | systematic-debugging | sj-debug | root-cause-tracing.md |"),
         "shipped COVERAGE.md lacks the debugging depth"
     );
+    assert_eq!(messages(&shipped), Vec::<String>::new());
+}
+
+// spec: SKILL-018
+#[test]
+fn skill_018_brainstorming_triggers_sj_explore() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-explore/SKILL.md",
+        &format!(
+            "---\nname: sj-explore\ndescription: Use when an idea is vague.\n---\n\n{EXPLORE}\n"
+        ),
+    );
+    let got = messages(dir.path());
+    assert!(
+        has(&got, "sj-explore: description does not name brainstorming"),
+        "{got:?}"
+    );
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let got = messages(&shipped);
+    assert!(!got.iter().any(|m| m.starts_with("sj-explore")), "{got:?}");
+}
+
+// spec: SKILL-019
+#[test]
+fn skill_019_sj_explore_goes_wide_before_narrowing() {
+    let dir = valid();
+    with_body(
+        dir.path(),
+        "sj-explore",
+        "Run `sj status`. Give two or three approaches.\n",
+    );
+    std::fs::remove_file(dir.path().join("sj-explore/brainstorming.md")).unwrap();
+    let got = messages(dir.path());
+    for want in [
+        "sj-explore: does not go wide before narrowing",
+        "sj-explore: does not name brainstorming.md",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+}
+
+// spec: SKILL-020
+#[test]
+fn skill_020_the_brainstorming_reference_carries_the_technique() {
+    let dir = valid();
+    put(
+        dir.path(),
+        "sj-explore/brainstorming.md",
+        "List ideas, then show the whole design at once.\n",
+    );
+    let got = messages(dir.path());
+    for want in [
+        "sj-explore: brainstorming.md does not name YAGNI",
+        "sj-explore: brainstorming.md does not present the design one section at a time",
+    ] {
+        assert!(has(&got, want), "{want}: {got:?}");
+    }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let text = std::fs::read_to_string(shipped.join("COVERAGE.md")).unwrap();
+    assert!(
+        text.contains("| Superpowers | brainstorming | sj-explore | brainstorming.md |"),
+        "shipped COVERAGE.md lacks the brainstorming depth"
+    );
+    assert!(shipped.join("sj-explore/brainstorming.md").is_file());
     assert_eq!(messages(&shipped), Vec::<String>::new());
 }

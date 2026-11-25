@@ -192,6 +192,11 @@ enum Command {
         spec_root: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        /// Capabilities, or paths to spec files or folders, to limit the run to; all when none.
+        /// A path is resolved against --root (or is absolute) and selects the capability of
+        /// every open spec file under it. A capability named `prefixes` can only be named by
+        /// path, since `sj ids prefixes` is the subcommand.
+        targets: Vec<String>,
     },
     /// Convert another tool's spec folders into the specjutsu layout (dry run unless --write).
     Import {
@@ -662,7 +667,8 @@ fn run() -> Result<ExitCode> {
             root,
             spec_root,
             json,
-        } => ids_cmd(write, &root, spec_root, json),
+            targets,
+        } => ids_cmd(write, &root, spec_root, json, &targets),
         Command::Import {
             command:
                 ImportCommand::Speckit {
@@ -2062,14 +2068,24 @@ fn task_done_cmd(change: &str, task: &str, args: &SpecArgs) -> Result<ExitCode> 
     let (root, spec_root) = spec_paths(args)?;
     match task::done(&spec_root, &root, change, task, config.mode)? {
         Outcome::AlreadyDone { text } => println!("task: already done {text}"),
-        Outcome::Done { text, warnings } => {
+        Outcome::Done {
+            text,
+            warnings,
+            notes,
+        } => {
             println!("task: done {text}");
+            for n in &notes {
+                println!("warn    {n}");
+            }
             for u in &warnings {
                 println!("warn    unproven {} ({})", u.id, u.why);
             }
         }
-        Outcome::Refused { unproven } => {
+        Outcome::Refused { unproven, notes } => {
             println!("task: refused — {} unproven", unproven.len());
+            for n in &notes {
+                println!("warn    {n}");
+            }
             for u in &unproven {
                 println!("unproven {} ({})", u.id, u.why);
             }
@@ -2129,11 +2145,28 @@ fn ids_prefixes_cmd(root: &Path, spec_root: Option<PathBuf>, write: bool) -> Res
     Ok(ExitCode::SUCCESS)
 }
 
-fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> Result<ExitCode> {
+fn ids_cmd(
+    write: bool,
+    root: &Path,
+    spec_root: Option<PathBuf>,
+    json: bool,
+    targets: &[String],
+) -> Result<ExitCode> {
     let config = sj_core::config::load(root)?;
     let spec_root = spec_root.unwrap_or_else(|| PathBuf::from(&config.spec_root));
-    let plan = sj_core::ids::plan(&root.join(&spec_root), &config.id_prefixes)?;
+    let only = if targets.is_empty() {
+        None
+    } else {
+        Some(sj_core::ids::resolve_targets(
+            root,
+            &root.join(&spec_root),
+            targets,
+        )?)
+    };
+    let plan =
+        sj_core::ids::plan_for(&root.join(&spec_root), &config.id_prefixes, only.as_deref())?;
     let files = if write {
+        sj_core::ids::check_prefixes_free(&root.join(&spec_root), &config.id_prefixes, &plan)?;
         sj_core::ids::write(&plan)?
     } else {
         0
@@ -2142,12 +2175,38 @@ fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> 
         let assignments: Vec<serde_json::Value> = plan
             .iter()
             .map(|a| {
-                serde_json::json!({
+                let mut v = serde_json::json!({
                     "id": a.id,
                     "name": a.name,
                     "file": rel(&a.file, root),
                     "line": a.line,
-                })
+                });
+                // `note` is absent unless the original gets a new number instead of its
+                // MODIFIED copies' ID (IDS-018/019). Its `kind` is `taken` (with `copy`, and
+                // `by`, the scenario that holds the ID) or `disagree` (with `copies`); each
+                // scenario is `{id, name, file, line}`.
+                if let Some(note) = &a.note {
+                    let scn = |s: &sj_core::ids::Scenario| {
+                        serde_json::json!({
+                            "id": s.id,
+                            "name": s.name,
+                            "file": rel(&s.file, root),
+                            "line": s.line,
+                        })
+                    };
+                    v["note"] = match note {
+                        sj_core::ids::Note::Taken { copy, by } => serde_json::json!({
+                            "kind": "taken",
+                            "copy": scn(copy),
+                            "by": scn(by),
+                        }),
+                        sj_core::ids::Note::Disagree { copies } => serde_json::json!({
+                            "kind": "disagree",
+                            "copies": copies.iter().map(scn).collect::<Vec<_>>(),
+                        }),
+                    };
+                }
+                v
             })
             .collect();
         let v = serde_json::json!({
@@ -2165,13 +2224,45 @@ fn ids_cmd(write: bool, root: &Path, spec_root: Option<PathBuf>, json: bool) -> 
         for a in &plan {
             println!("{} {} ({}:{})", a.id, a.name, rel(&a.file, root), a.line);
         }
+        let scn = |s: &sj_core::ids::Scenario| {
+            format!("{} {} ({}:{})", s.id, s.name, rel(&s.file, root), s.line)
+        };
+        for a in &plan {
+            let why = match &a.note {
+                None => continue,
+                Some(sj_core::ids::Note::Taken { copy, by }) => {
+                    format!("{} is taken by {}", scn(copy), scn(by))
+                }
+                Some(sj_core::ids::Note::Disagree { copies }) => format!(
+                    "copies disagree: {}",
+                    copies.iter().map(scn).collect::<Vec<_>>().join(", ")
+                ),
+            };
+            println!(
+                "note: {why}; {} ({}:{}) gets {}; give the delta copies {}",
+                a.name,
+                rel(&a.file, root),
+                a.line,
+                a.id,
+                a.id
+            );
+        }
         if !write {
-            for (cap, long, short) in
-                sj_core::ids::long_prefixes(&root.join(&spec_root), &config.id_prefixes, &plan)?
-            {
+            // With targets, clashes outside the planned capabilities don't matter (IDS-021),
+            // and the ones that do are reported without stopping the listing.
+            let long = sj_core::ids::long_prefixes(
+                &root.join(&spec_root),
+                &config.id_prefixes,
+                &plan,
+                only.is_some(),
+            )?;
+            for (cap, long, short) in &long.hints {
                 println!(
                     "hint: {cap} would use {long}; sj ids prefixes --write maps it to {short}"
                 );
+            }
+            for c in &long.clashes {
+                println!("note: {c}");
             }
         }
         if write && !plan.is_empty() {

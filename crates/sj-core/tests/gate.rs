@@ -387,6 +387,37 @@ fn gate_009_compile_failure_on_base_is_red_compile() {
 }
 
 #[test]
+fn gate_061_a_cargo_assert_suite_rejects_a_compile_red() {
+    let repo = Repo::with_lib("pub fn other() {}\n");
+    repo.write(
+        "specjutsu.toml",
+        "schema = 1\n\n[[package]]\npath = \".\"\nsources = [\"src/**\"]\n\n\
+         [[package.suite]]\nrunner = \"cargo\"\ntests = [\"tests/**\"]\nred_on_base = \"assert\"\n",
+    );
+    repo.commit("config");
+    repo.branch("feature");
+    repo.add_change("add-math", &[("MATH-001", "Add numbers")]);
+    repo.write("tests/math.rs", ADD_TEST);
+    repo.write("src/lib.rs", ADD_OK);
+    repo.commit("feat(MATH-001): green");
+    let r = run(&opts(&repo)).unwrap();
+    assert!(!r.pass);
+    assert!(
+        r.failures.contains(
+            &"compile-red MATH-001 math_001_adds (suite requires an assertion failure on base)"
+                .to_string()
+        ),
+        "{:?}",
+        r.failures
+    );
+    assert!(
+        r.proven.iter().all(|p| p.id != "MATH-001"),
+        "{:?}",
+        r.proven
+    );
+}
+
+#[test]
 fn gate_010_only_test_files_are_overlaid_and_head_is_untouched() {
     let repo = Repo::with_lib(ADD_BUG);
     repo.branch("feature");
@@ -465,6 +496,33 @@ fn gate_023_implemented_is_treated_like_added() {
     let mut i = input();
     i.changes.insert("AUTH-004".into(), Change::Implemented);
     assert!(has(&evaluate(&i).failures, "untested AUTH-004"));
+}
+
+#[test]
+fn gate_023_an_implemented_scenario_with_a_red_test_is_proven_by_it() {
+    // Two tests: one red on base, one passing there. The red one is the proof; the other
+    // doesn't make the scenario green-on-base, nor linked.
+    let mut i = input();
+    i.changes.insert("MATH-001".into(), Change::Implemented);
+    i.trace.mapped.push(Mapped {
+        id: "MATH-001".into(),
+        name: "Add numbers".into(),
+        tests: vec![tref("math_001_adds"), tref("math_001_adds_zero")],
+    });
+    i.head_run = head(&[
+        ("tests::math_001_adds", Outcome::Passed),
+        ("tests::math_001_adds_zero", Outcome::Passed),
+    ]);
+    i.base
+        .insert(("MATH-001".into(), "math_001_adds".into()), Red::Assert);
+    i.base
+        .insert(("MATH-001".into(), "math_001_adds_zero".into()), Red::Green);
+    i.changed_files = vec!["src/lib.rs".into()];
+    let r = evaluate(&i);
+    assert!(r.pass, "{:?}", r.failures);
+    assert_eq!(r.proven.len(), 1);
+    assert_eq!(r.proven[0].id, "MATH-001");
+    assert_eq!(r.proven[0].red, Red::Assert);
 }
 
 // ---------- history ----------
