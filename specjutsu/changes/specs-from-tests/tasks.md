@@ -2,7 +2,7 @@
 
 ## 1. Dry run
 - [x] 1.1 Derive headings from Rust, pytest and JS/TS test names (SPEC-052)
-- [ ] 1.2 `sj spec infer` dry run: expose untraced tests from the trace scan, select them by path, leave out linked and skipped tests, number drafts with the capability's prefix; Rust `#[ignore]` tests count as skipped (SPEC-048, SPEC-049, SPEC-056, TRACE-021)
+- [x] 1.2 `sj spec infer` dry run: expose untraced tests from the trace scan, select them by path, leave out linked and skipped tests, number drafts with the capability's prefix; Rust `#[ignore]` tests count as skipped (SPEC-048, SPEC-049, SPEC-056, TRACE-021)
 - [ ] 1.3 Capability from the folder, configured prefixes, numbering after archived IDs, prefix collisions (SPEC-057..059)
 
 ## 2. Writing
