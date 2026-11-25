@@ -136,7 +136,15 @@ fn spec_056_skipped_tests_are_counted_not_drafted() {
         r,
         "tests/refunds/refunds.rs",
         "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
-         #[test]\n#[ignore]\nfn refund_over_limit_needs_review() {}\n",
+         #[test]\n#[ignore]\nfn refund_over_limit_needs_review() {}\n\n\
+         // spec: ORD-001\n#[test]\nfn refund_closes_the_order() {}\n",
+    );
+    put(
+        r,
+        "specjutsu/specs/orders/spec.md",
+        "# orders Specification\n\n## Purpose\nClose orders.\n\n## Requirements\n\n\
+         ### Requirement: Close\nThe system SHALL close orders.\n\n\
+         #### Scenario: ORD-001 Close an order\n- **WHEN** an order is refunded\n- **THEN** it is closed\n",
     );
     put(
         r,
@@ -152,6 +160,6 @@ fn spec_056_skipped_tests_are_counted_not_drafted() {
     assert_eq!(
         stdout,
         "REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds/refunds.rs:2)\n\
-         1 test drafted, 2 skipped left out\n"
+         1 test drafted, 1 linked and 2 skipped left out\n"
     );
 }

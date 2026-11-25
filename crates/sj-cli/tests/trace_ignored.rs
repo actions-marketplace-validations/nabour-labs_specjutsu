@@ -36,7 +36,7 @@ fn trace_021_an_ignored_rust_test_is_marked_skipped() {
     write(
         r,
         "tests/auth.rs",
-        "#[test]\n#[ignore = \"slow\"]\nfn auth_006_bulk_import() {}\n",
+        "#[test]\n#[ignore = \"slow integration test\"]\nfn auth_006_bulk_import() {}\n",
     );
 
     let out = Command::cargo_bin("sj")
