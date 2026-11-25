@@ -243,7 +243,11 @@ fn spec_059_a_colliding_prefix_stops_the_run() {
          ### Requirement: Pay\nThe system SHALL take payments.\n\n\
          #### Scenario: PAY-001 Take a payment\n- **WHEN** a card is charged\n- **THEN** it is paid\n",
     );
-    put(r, "tests/payroll/runs.rs", "#[test]\nfn payroll_runs_monthly() {}\n");
+    put(
+        r,
+        "tests/payroll/runs.rs",
+        "#[test]\nfn payroll_runs_monthly() {}\n",
+    );
     git(r, &["init", "-q"]);
     git(r, &["add", "."]);
     git(

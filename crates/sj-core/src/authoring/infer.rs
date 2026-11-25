@@ -56,10 +56,12 @@ pub fn dry_run(
         let given: Vec<String> = paths.iter().map(|p| shown(p)).collect();
         bail!("no untraced tests under {}", given.join(" "));
     }
-    let Some(capability) = capability else {
-        bail!("pass --capability to name the capability the drafts belong to");
+    let capability = match capability {
+        Some(c) => c.to_string(),
+        None => capability_from_folders(&selected)?,
     };
-    let prefix = ids::derive_prefix(capability);
+    ids::check_prefix_free(spec_root, &config.id_prefixes, &capability)?;
+    let prefix = ids::prefix_for(&config.id_prefixes, &capability);
     let mut next = ids::highest_numbers(spec_root)?
         .get(&prefix)
         .copied()
@@ -81,6 +83,64 @@ pub fn dry_run(
         linked,
         skipped: skipped.len(),
     })
+}
+
+/// Folders that hold tests rather than name a capability.
+const TEST_FOLDERS: [&str; 4] = ["tests", "test", "__tests__", "spec"];
+
+/// The capability the tests' folders name (SPEC-058): for each test file, the nearest folder
+/// above it that is not a test folder, in kebab-case. Errors when a file has none or the
+/// files name different capabilities.
+fn capability_from_folders(tests: &[&testscan::TestFn]) -> Result<String> {
+    let mut found: Vec<String> = Vec::new();
+    for t in tests {
+        let folder = t
+            .file
+            .parent()
+            .into_iter()
+            .flat_map(Path::ancestors)
+            .filter_map(|p| p.file_name()?.to_str())
+            .find(|n| !TEST_FOLDERS.contains(n));
+        let Some(folder) = folder else {
+            bail!(
+                "{} is in no capability folder; pass --capability to name the capability",
+                shown(&t.file)
+            );
+        };
+        let cap = kebab_case(folder);
+        if !found.contains(&cap) {
+            found.push(cap);
+        }
+    }
+    if found.len() > 1 {
+        bail!(
+            "the tests' folders name capabilities {}; pass --capability to pick one",
+            found.join(", ")
+        );
+    }
+    Ok(found.pop().unwrap_or_default())
+}
+
+/// `name` in kebab-case: lower-case words joined by `-`, split at `_`, spaces, `-`, `.` and
+/// a lower-to-upper case change.
+fn kebab_case(name: &str) -> String {
+    let mut out = String::new();
+    let mut prev_lower = false;
+    for c in name.chars() {
+        if c == '_' || c == ' ' || c == '-' || c == '.' {
+            if !out.is_empty() && !out.ends_with('-') {
+                out.push('-');
+            }
+            prev_lower = false;
+        } else {
+            if c.is_uppercase() && prev_lower && !out.ends_with('-') {
+                out.push('-');
+            }
+            prev_lower = c.is_lowercase() || c.is_ascii_digit();
+            out.extend(c.to_lowercase());
+        }
+    }
+    out.trim_end_matches('-').to_string()
 }
 
 /// A path as given, with `/` separators and no trailing separator.

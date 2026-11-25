@@ -756,37 +756,51 @@ pub fn check_prefixes_free(
     prefixes: &BTreeMap<String, String>,
     plan: &[Assignment],
 ) -> Result<()> {
-    let prefix_for = |cap: &str| {
-        prefixes
-            .get(cap)
-            .cloned()
-            .unwrap_or_else(|| derive_prefix(cap))
-    };
     let planned: BTreeSet<String> = plan
         .iter()
         .filter_map(|a| place(spec_root, &a.file).capability)
         .collect();
-    if planned.is_empty() {
-        return Ok(());
+    for cap in &planned {
+        check_prefix_free(spec_root, prefixes, cap)?;
     }
+    Ok(())
+}
+
+/// The prefix new IDs in `capability` get: its `[ids.prefixes]` entry, else [`derive_prefix`].
+pub fn prefix_for(prefixes: &BTreeMap<String, String>, capability: &str) -> String {
+    prefixes
+        .get(capability)
+        .cloned()
+        .unwrap_or_else(|| derive_prefix(capability))
+}
+
+/// Errors naming both capabilities and the prefix when another capability folder under the
+/// spec root has the prefix [`prefix_for`] gives `capability` (IDS-005, IDS-023, SPEC-059).
+/// `capability` need not have a folder yet.
+pub fn check_prefix_free(
+    spec_root: &Path,
+    prefixes: &BTreeMap<String, String>,
+    capability: &str,
+) -> Result<()> {
+    let prefix = prefix_for(prefixes, capability);
     let mut all: BTreeSet<String> = BTreeSet::new();
     for file in spec::discover_spec_files(spec_root)? {
         if let Some(cap) = place(spec_root, &file).capability {
             all.insert(cap);
         }
     }
-    for cap in &planned {
-        let prefix = prefix_for(cap);
-        if let Some(other) = all.iter().find(|o| *o != cap && prefix_for(o) == prefix) {
-            let mut pair = [cap.as_str(), other.as_str()];
-            pair.sort();
-            bail!(
-                "capabilities `{}` and `{}` both use prefix {prefix}; \
-                 map one in [ids.prefixes] in specjutsu.toml",
-                pair[0],
-                pair[1]
-            );
-        }
+    if let Some(other) = all
+        .iter()
+        .find(|o| *o != capability && prefix_for(prefixes, o) == prefix)
+    {
+        let mut pair = [capability, other.as_str()];
+        pair.sort();
+        bail!(
+            "capabilities `{}` and `{}` both use prefix {prefix}; \
+             map one in [ids.prefixes] in specjutsu.toml",
+            pair[0],
+            pair[1]
+        );
     }
     Ok(())
 }
