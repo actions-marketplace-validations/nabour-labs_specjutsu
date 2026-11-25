@@ -115,12 +115,14 @@ pub fn write(spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
         }
     }
     let cap = &run.capability;
+    let target = spec_root.join("specs").join(cap).join("spec.md");
+    let existing = existing_names(&target)?;
+    let names = requirement_names(&files, &existing)?;
     let mut spec = String::from("## ADDED Requirements\n");
     let mut tasks = String::from("# Tasks\n\n## 1. Keep the tested behaviour\n");
-    for (i, (file, drafts)) in files.iter().enumerate() {
+    for (i, ((file, drafts), name)) in files.iter().zip(&names).enumerate() {
         spec.push_str(&format!(
-            "\n### Requirement: {}\nThe system SHALL keep the behaviour that {file} tests.\n",
-            file_words(file)
+            "\n### Requirement: {name}\nThe system SHALL keep the behaviour that {file} tests.\n"
         ));
         for d in drafts {
             let at = format!("{file}:{}", d.line);
@@ -138,25 +140,102 @@ pub fn write(spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
             id_list(&ids)
         ));
     }
+    let (new, modified) = if target.is_file() {
+        ("None.".to_string(), format!("- `{cap}`"))
+    } else {
+        (format!("- `{cap}`"), "None.".to_string())
+    };
     let proposal = format!(
         "## Why\n\nExisting tests prove behaviour of {cap} that no scenario describes. \
          `sj spec infer` drafted these scenarios from them.\n\n\
          ## What Changes\n\n- Add `[keep]` scenarios for {cap}, one per existing test. Each \
          `[NEEDS CLARIFICATION]` marker must be replaced with the behaviour the test proves.\n\n\
-         ## Capabilities\n\n### New Capabilities\n\n- `{cap}`\n\n### Modified Capabilities\n\n\
-         None.\n\n## Impact\n\nSpecs only; the tests stay as they are.\n"
+         ## Capabilities\n\n### New Capabilities\n\n{new}\n\n### Modified Capabilities\n\n\
+         {modified}\n\n## Impact\n\nSpecs only; the tests stay as they are.\n"
     );
-    let cap_dir = dir.join("specs").join(cap);
-    std::fs::create_dir_all(&cap_dir)
-        .with_context(|| format!("cannot create {}", cap_dir.display()))?;
-    for (path, text) in [
-        (dir.join("proposal.md"), proposal),
-        (dir.join("tasks.md"), tasks),
-        (cap_dir.join("spec.md"), spec),
-    ] {
-        std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
+    let written = (|| -> Result<()> {
+        let cap_dir = dir.join("specs").join(cap);
+        std::fs::create_dir_all(&cap_dir)
+            .with_context(|| format!("cannot create {}", cap_dir.display()))?;
+        for (path, text) in [
+            (dir.join("proposal.md"), proposal),
+            (dir.join("tasks.md"), tasks),
+            (cap_dir.join("spec.md"), spec),
+        ] {
+            std::fs::write(&path, text)
+                .with_context(|| format!("cannot write {}", path.display()))?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = written {
+        // The folder did not exist before this run, so removing it leaves no partial change.
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(e);
     }
     Ok(dir)
+}
+
+/// The requirement names in `target`, as comparison keys; none when it does not exist.
+fn existing_names(target: &Path) -> Result<Vec<String>> {
+    if !target.is_file() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(target)
+        .with_context(|| format!("cannot read {}", target.display()))?;
+    Ok(text
+        .lines()
+        .filter_map(super::blocks::requirement_name)
+        .map(|n| name_key(&n))
+        .collect())
+}
+
+/// A requirement name as archive compares it: lower-case, single spaces.
+fn name_key(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// One requirement name per test file (SPEC-065, SPEC-066): the file's stem in words, or its
+/// path in words when the stem name is empty, used by another file in the delta, or already
+/// a requirement of the capability. Errors when the path name is taken too.
+fn requirement_names<T>(files: &[(String, T)], existing: &[String]) -> Result<Vec<String>> {
+    let stems: Vec<String> = files.iter().map(|(f, _)| file_words(f)).collect();
+    let mut names: Vec<String> = Vec::new();
+    for (i, (file, _)) in files.iter().enumerate() {
+        let key = name_key(&stems[i]);
+        let clash = key.is_empty()
+            || existing.contains(&key)
+            || stems
+                .iter()
+                .enumerate()
+                .any(|(j, s)| j != i && name_key(s) == key);
+        let name = if clash {
+            path_words(file)
+        } else {
+            stems[i].clone()
+        };
+        let key = name_key(&name);
+        if key.is_empty() || existing.contains(&key) || names.iter().any(|n| name_key(n) == key) {
+            bail!(
+                "requirement name `{name}` for {file} is already taken; \
+                 rename the test file or draft it in another run"
+            );
+        }
+        names.push(name);
+    }
+    Ok(names)
+}
+
+/// A test file's root-relative path in words: its folders and its name before the first
+/// `.`, with `/`, `_` and `-` as spaces, the first letter upper-cased.
+fn path_words(file: &str) -> String {
+    let (folders, name) = file.rsplit_once('/').unwrap_or(("", file));
+    let stem = name.split('.').next().unwrap_or(name);
+    upper_first(&join(
+        folders.split(['/', '_', '-']).chain(stem.split(['_', '-'])),
+    ))
 }
 
 /// A test file's name in words: the name before its first `.`, `_` and `-` as spaces, the
