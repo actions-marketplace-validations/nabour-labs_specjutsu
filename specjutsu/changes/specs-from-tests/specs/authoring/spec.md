@@ -10,7 +10,7 @@ and SHALL write nothing. Paths resolve against `--root`, or are absolute.
 - **WHEN** `tests/refunds.rs` has untraced tests `refund_under_100_auto_approves` and `refund_over_limit_needs_review`, and `sj spec infer tests/refunds.rs --capability refunds` runs
 - **THEN** it prints `REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:<line>)`, a line for REFUNDS-002, and `2 tests drafted`, and `git status` shows no change
 
-#### Scenario: SPEC-049 [keep] A target with no untraced test is refused
+#### Scenario: SPEC-049 A target with no untraced test is refused
 - **WHEN** every test under `tests/billing/` already carries a scenario ID, and `sj spec infer tests/billing` runs
 - **THEN** it exits 2 with `no untraced tests under tests/billing` and writes nothing
 
@@ -63,7 +63,7 @@ line, with that line's indentation. No other byte of the test file SHALL change.
 `sj spec infer` SHALL leave out tests that already carry a scenario ID and tests marked skip,
 todo or fixme, and the count line SHALL report how many of each were left out.
 
-#### Scenario: SPEC-055 [keep] A second run drafts nothing new
+#### Scenario: SPEC-055 A second run drafts nothing new
 - **WHEN** `sj spec infer tests/refunds.rs` runs after the `--write` above
 - **THEN** it exits 2 with `no untraced tests under tests/refunds.rs`
 
