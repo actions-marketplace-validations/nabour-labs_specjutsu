@@ -73,13 +73,14 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
             pending_ids.extend(c[1].split(',').map(|s| s.trim().to_string()));
             continue;
         }
-        if test_attr(line) {
-            pending_test = true;
-            continue;
-        }
         let t = line.trim();
+        // Before `test_attr`: an ignore reason may contain the word "test".
         if t.starts_with("#[ignore") {
             pending_skip = true;
+            continue;
+        }
+        if test_attr(line) {
+            pending_test = true;
             continue;
         }
         if t.is_empty() || t.starts_with("//") || attr.is_match(line) {

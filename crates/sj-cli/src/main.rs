@@ -1741,9 +1741,14 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                     d.line
                 );
             }
+            let left: Vec<String> = [(run.linked, "linked"), (run.skipped, "skipped")]
+                .into_iter()
+                .filter(|(n, _)| *n > 0)
+                .map(|(n, what)| format!("{n} {what}"))
+                .collect();
             let mut count = format!("{} drafted", plural(run.drafts.len(), "test"));
-            if run.skipped > 0 {
-                count.push_str(&format!(", {} skipped left out", run.skipped));
+            if !left.is_empty() {
+                count.push_str(&format!(", {} left out", left.join(" and ")));
             }
             println!("{count}");
             Ok(ExitCode::SUCCESS)

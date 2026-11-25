@@ -17,10 +17,13 @@ pub struct Draft {
     pub line: usize,
 }
 
-/// What a dry run would draft, and how many untraced skipped tests it left out.
+/// What a dry run would draft, and the tests under its paths it left out.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DryRun {
     pub drafts: Vec<Draft>,
+    /// Tests that already carry a scenario ID.
+    pub linked: usize,
+    /// Untraced tests marked skip, todo or fixme.
     pub skipped: usize,
 }
 
@@ -38,15 +41,19 @@ pub fn dry_run(
     let scenarios = spec::load_scenarios(spec_root)?;
     let scan = testscan::scan_project(root, config)?;
     let targets: Vec<PathBuf> = paths.iter().map(|p| resolve(root, p)).collect();
-    let (skipped, selected): (Vec<_>, Vec<_>) = trace::untraced(&scenarios, &scan.tests)
+    let targeted: Vec<testscan::TestFn> = scan
+        .tests
         .into_iter()
         .filter(|t| {
             let file = resolve(root, &t.file);
             targets.iter().any(|p| file.starts_with(p))
         })
-        .partition(|t| t.skipped);
+        .collect();
+    let untraced = trace::untraced(&scenarios, &targeted);
+    let linked = targeted.len() - untraced.len();
+    let (skipped, selected): (Vec<_>, Vec<_>) = untraced.into_iter().partition(|t| t.skipped);
     if selected.is_empty() {
-        let given: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+        let given: Vec<String> = paths.iter().map(|p| shown(p)).collect();
         bail!("no untraced tests under {}", given.join(" "));
     }
     let Some(capability) = capability else {
@@ -71,8 +78,18 @@ pub fn dry_run(
         .collect();
     Ok(DryRun {
         drafts,
+        linked,
         skipped: skipped.len(),
     })
+}
+
+/// A path as given, with `/` separators and no trailing separator.
+fn shown(path: &Path) -> String {
+    let s = path.to_string_lossy().replace('\\', "/");
+    match s.trim_end_matches('/') {
+        "" => s,
+        t => t.to_string(),
+    }
 }
 
 /// `path` joined to `root` when relative, canonical when it exists.
