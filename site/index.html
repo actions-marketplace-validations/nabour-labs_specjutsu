@@ -31,7 +31,7 @@
       <a href="#compare">Compare</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#roadmap">Roadmap</a>
-      <a href="https://nabour-labs.github.io/specjutsu-bench/">Benchmarks</a>
+      <a href="#benchmark">Benchmark</a>
       <a href="manual.html">Manual</a>
     </div>
     <a class="btn" href="https://github.com/nabour-labs/specjutsu">
@@ -48,12 +48,12 @@
   <div class="wrap hero-copy">
     <span class="pill"><span class="dot"></span>v0.5.1 · open source · MIT · single binary</span>
     <h1>Master the art<br>of the <span class="grad-text">spec.</span></h1>
-    <p class="lede">The <strong>power tool for spec-driven development with AI</strong>: OpenSpec or Spec Kit on steroids, at a fraction of the token cost.</p>
+    <p class="lede">The <strong>power tool for spec-driven development with AI</strong>: OpenSpec or Spec Kit on steroids, with <a href="#benchmark">less than half the token cost</a> in a public benchmark.</p>
     <p class="lede">The <strong>quality gate for AI-generated code</strong>. Every spec scenario gets a test, every test fails first, and one GitHub Action refuses the pull request until both hold.</p>
     <div class="cta">
       <a class="btn primary" href="#quickstart">Get started in 60 seconds</a>
       <a class="btn" href="manual.html">Read the manual</a>
-      <a class="btn" href="https://nabour-labs.github.io/specjutsu-bench/">See the benchmarks</a>
+      <a class="btn" href="#benchmark">See the benchmark</a>
       <a class="btn" href="https://github.com/marketplace/actions/specjutsu-gate">GitHub Marketplace</a>
     </div>
     <div class="install">
@@ -253,14 +253,13 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
           <tr>
             <th scope="row">Token cost</th>
             <td>High ceremony</td><td>Credit-metered</td><td>Low</td><td>Medium</td><td>High (two workflows)</td>
-            <td class="sj">Designed for lowest; <a href="https://nabour-labs.github.io/specjutsu-bench/">public benchmark</a><span class="tag live">LIVE</span></td>
+            <td class="sj"><span class="yes">Lowest measured</span>: 54–59% fewer tokens (<a href="#benchmark">benchmark</a>)<span class="tag live">LIVE</span></td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="legend">
       <span><span class="tag live" style="margin:0 6px 0 0">LIVE</span>works in v0.5.1 today</span>
-      <span><span class="tag soon" style="margin:0 6px 0 0">v0.x</span>on the public roadmap</span>
     </div>
 
     <div class="moat">
@@ -268,12 +267,51 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
       <div><b>Red-on-base proof</b><span>CI runs new tests against base. No other tool does this.</span></div>
       <div><b>One-command migration</b><span>Your <code>openspec/</code> folders work as-is. <code>sj migrate</code> replaces OpenSpec, Spec Kit or Superpowers in one step.</span></div>
       <div><b>Zero runtime</b><span>One Rust binary. Works in Java, PHP, Go or Python repos.</span></div>
-      <div><b>Token economics</b><span>Deterministic commands return a few lines, not raw logs. <a href="https://nabour-labs.github.io/specjutsu-bench/">See the benchmark</a>.</span></div>
+      <div><b>Token economics</b><span>Deterministic commands return a few lines, not raw logs: 54–59% fewer tokens in the <a href="#benchmark">public benchmark</a>.</span></div>
     </div>
   </div>
 </section>
 
-<section class="alt">
+<section id="benchmark" class="alt">
+  <div class="wrap">
+    <p class="eyebrow">Public benchmark</p>
+    <h2>Fewest tokens per change.<br><span class="grad-text">Measured, not claimed.</span></h2>
+    <p class="section-lede">The same three tasks on the same TypeScript app, run with each workflow. specjutsu put the least into the agent's context on every task: less than half of what Spec Kit or OpenSpec with Superpowers needed for the same code and tests.</p>
+    <div class="bench-stats">
+      <div class="bench-stat"><div class="n grad-text">59%</div><p>fewer context tokens than <b>Spec Kit + Superpowers</b></p></div>
+      <div class="bench-stat"><div class="n grad-text">54%</div><p>fewer context tokens than <b>OpenSpec + Superpowers</b></p></div>
+      <div class="bench-stat"><div class="n grad-text">3 / 3</div><p>tasks where specjutsu was lowest: feature, bug fix and change</p></div>
+    </div>
+    <div class="bench-chart" role="img" aria-label="Context tokens for all three tasks: specjutsu 38,189; OpenSpec plus Superpowers 84,355; Spec Kit plus Superpowers 94,595.">
+      <div class="bench-row sj"><span class="who">specjutsu</span><span class="track"><span class="bar" style="width:40.4%"></span></span><span class="val">38,189</span></div>
+      <div class="bench-row"><span class="who">OpenSpec + Superpowers</span><span class="track"><span class="bar" style="width:89.2%"></span></span><span class="val">84,355</span></div>
+      <div class="bench-row"><span class="who">Spec Kit + Superpowers</span><span class="track"><span class="bar" style="width:100%"></span></span><span class="val">94,595</span></div>
+      <p class="bench-cap">Context tokens for all three tasks (context bytes / 4). Lower is better.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="cmp bench-table">
+        <thead>
+          <tr><th scope="col">Task</th><th scope="col" class="sj">specjutsu</th><th scope="col">OpenSpec + Superpowers</th><th scope="col">Spec Kit + Superpowers</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Feature</th><td class="sj">16,347</td><td>26,963</td><td>34,825</td></tr>
+          <tr><th scope="row">Bug fix</th><td class="sj">6,117</td><td>29,339</td><td>20,524</td></tr>
+          <tr><th scope="row">Change</th><td class="sj">15,724</td><td>28,052</td><td>39,245</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="moat bench-notes">
+      <div><b>Pinned and replayed</b><span>specjutsu 0.5.1, Spec Kit 1.4.3, OpenSpec 2.1.1, Superpowers 7.0.2. CI replays every step on each pull request.</span></div>
+      <div><b>Every step cited</b><span>Each step names the doc or template that prescribes it. Where a doc leaves a choice, the rival gets the cheaper reading.</span></div>
+      <div><b>Rivals are lower bounds</b><span>Their own CLIs aren't run, so their real totals are higher than shown.</span></div>
+      <div><b>Same output</b><span>Every workflow writes the same code and tests, so only the context differs.</span></div>
+      <div><b>Challenge it</b><span>Think a step is wrong? <a href="https://github.com/nabour-labs/specjutsu-bench">Open a pull request</a> and CI shows how the numbers move.</span></div>
+    </div>
+    <p class="bench-more"><a class="btn" href="https://nabour-labs.github.io/specjutsu-bench/">See the per-step breakdown</a></p>
+  </div>
+</section>
+
+<section>
   <div class="wrap agents">
     <div class="art"><img src="assets/mascot.jpg" alt="The specjutsu ninja in neon armor" width="1200" height="896" loading="lazy"></div>
     <div>
@@ -296,7 +334,7 @@ trace: <span class="c-g">3 mapped</span>, <span class="c-r">1 gaps</span>, <span
   </div>
 </section>
 
-<section id="quickstart">
+<section id="quickstart" class="alt">
   <div class="wrap">
     <p class="eyebrow">Quickstart</p>
     <h2>From install to a blocking gate<br>in a few minutes.</h2>
@@ -342,7 +380,7 @@ sj migrate --from openspec --write</pre>
   </div>
 </section>
 
-<section id="roadmap" class="alt">
+<section id="roadmap">
   <div class="wrap">
     <p class="eyebrow">Roadmap</p>
     <h2>Built in the open. Built with itself.</h2>
