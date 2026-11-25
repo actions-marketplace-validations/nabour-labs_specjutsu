@@ -75,7 +75,10 @@ pub fn scan_rust(file: &Path, content: &str) -> Vec<TestFn> {
         }
         let t = line.trim();
         // Before `test_attr`: an ignore reason may contain the word "test".
-        if t.starts_with("#[ignore]") || t.starts_with("#[ignore =") || t.starts_with("#[ignore(") {
+        if t.strip_prefix("#[ignore")
+            .and_then(|r| r.chars().next())
+            .is_some_and(|c| matches!(c, ']' | '=' | '(') || c.is_whitespace())
+        {
             pending_skip = true;
             continue;
         }
