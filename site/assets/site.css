@@ -229,10 +229,32 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; j
 footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
 footer a { color: var(--muted); }
 
+/* benchmark */
+.bench-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 28px; }
+.bench-stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+.bench-stat .n { font-size: clamp(40px, 5vw, 56px); font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+.bench-stat p { margin: 10px 0 0; color: var(--muted); font-size: 15.5px; }
+.bench-stat b { color: var(--text); font-weight: 600; }
+.bench-chart { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 28px; }
+.bench-row { display: grid; grid-template-columns: 210px minmax(0, 1fr) 76px; align-items: center; gap: 14px; margin-bottom: 14px; }
+.bench-row .who { font-size: 15px; color: var(--muted); }
+.bench-row .track { height: 14px; background: var(--bg-2); border-radius: 999px; overflow: hidden; }
+.bench-row .bar { display: block; height: 100%; border-radius: 999px; background: var(--line); }
+.bench-row .val { font-family: var(--mono); font-size: 14px; color: var(--muted); text-align: right; }
+.bench-row.sj .who, .bench-row.sj .val { color: var(--text); font-weight: 600; }
+.bench-row.sj .bar { background: var(--grad); }
+.bench-cap { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.bench-table td, .bench-table th { font-family: var(--mono); font-size: 14.5px; }
+.bench-table tbody th { font-family: var(--sans); }
+.bench-table td.sj { color: var(--text); font-weight: 600; }
+.bench-notes { margin-top: 28px; }
+.bench-more { margin: 28px 0 0; }
+
 @media (max-width: 920px) {
   .gap-grid, .pillars, .steps, .rob, .agents, .qs { grid-template-columns: minmax(0, 1fr); }
   .qs { grid-template-areas: "install" "run" "gate"; }
   .moat { grid-template-columns: 1fr 1fr; }
+  .bench-stats { grid-template-columns: minmax(0, 1fr); }
   .road { grid-template-columns: 1fr 1fr; }
   .nav-links { display: none; }
   nav.top .btn { margin-left: auto; }
@@ -241,6 +263,8 @@ footer a { color: var(--muted); }
 @media (max-width: 560px) {
   .wrap { padding: 0 16px; }
   .moat, .road { grid-template-columns: 1fr; }
+  .bench-row { grid-template-columns: minmax(0, 1fr) 64px; gap: 6px 10px; }
+  .bench-row .who { grid-column: 1 / -1; }
   .hero-copy { margin-top: -10px; }
   .install code { font-size: 12.5px; }
   .lane { flex-wrap: wrap; }

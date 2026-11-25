@@ -140,7 +140,7 @@
 
     <section id="status">
       <h2>What works today</h2>
-      <p>specjutsu is pre-alpha and built in the open; the beta opens with v0.6. This manual marks every feature with its state, so you know what you can rely on.</p>
+      <p>specjutsu is pre-alpha and built in the open; the beta opens once specjutsu has fully replaced OpenSpec and Superpowers in our own production monorepo. This manual marks every feature with its state, so you know what you can rely on.</p>
       <div class="tbl"><table>
         <thead><tr><th>Feature</th><th>State</th><th>Notes</th></tr></thead>
         <tbody>
@@ -158,6 +158,8 @@
           <tr><td>Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared and global skills</td><td><span class="badge live">v0.5.0</span></td><td>A pre-edit hook in each; <code>.agents/skills/</code> beside <code>.claude/skills/</code>; <code>--global</code> installs the skills for every project.</td></tr>
           <tr><td>Trace baseline, <code>sj ids prefixes</code>, <code>sj migrate --diff</code> and <code>--undo</code></td><td><span class="badge live">v0.5.1</span></td><td>Gradual adoption: old gaps and orphans counted, not listed; short ID prefixes; a migration you can read and roll back.</td></tr>
           <tr><td>One-line installers, Homebrew, <code>cargo binstall</code>, <code>sj gain</code></td><td><span class="badge live">v0.5.1</span></td><td><code>install.sh</code> and <code>install.ps1</code> check <code>SHA256SUMS</code>; <code>sj gain</code> counts the bytes the agent-loop commands saved.</td></tr>
+          <tr><td><code>red_on_base = "assert"</code>, <code>green:linked</code></td><td><span class="badge live">v0.6.0</span></td><td>A suite can require an assertion failure on base; a new test for behaviour that already existed is linked instead of failing the gate.</td></tr>
+          <tr><td><code>sj ids</code> for selected capabilities, brainstorming in <code>sj-explore</code></td><td><span class="badge live">v0.6.0</span></td><td>Number only the capabilities you name; <code>sj-explore</code> also handles "let's brainstorm".</td></tr>
           <tr><td><a href="https://nabour-labs.github.io/specjutsu-bench/">Token benchmark</a></td><td><span class="badge live">published</span></td><td>Public comparison against the tools specjutsu replaces: <a href="https://nabour-labs.github.io/specjutsu-bench/">see the results</a>. <code>sj gain</code> is its local half: byte counts on your machine.</td></tr>
         </tbody>
       </table></div>

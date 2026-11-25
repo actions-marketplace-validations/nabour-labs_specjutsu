@@ -1434,7 +1434,8 @@ two in step:
 | v0.4 | Codex, Cursor and Cline adapters and a shared `AGENTS.md` block; `sj spec show` and `sj view`; `sj instructions` and `sj templates` with live project context and artifact language |
 | v0.5 | Copilot, Gemini CLI, Windsurf, Kiro and Antigravity adapters, shared `.agents/skills/` and `--global` skills; bulk archive, `sj update --dry-run`, shell completions and the `sj-onboard` skill; `specjutsu/` as the default spec root |
 | v0.5.1 | Trace baseline for gradual adoption, `sj ids prefixes`, `sj migrate --diff` and `--undo`; one-line installers, Homebrew and `cargo binstall`; `sj gain` |
-| v0.6 (beta) | Public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); beta launch |
+| v0.6 | Public token benchmark against the tools specjutsu replaces (`sj gain` is its local half: byte counts on your machine; the benchmark's agent runs and headline numbers live in a separate repo); `red_on_base = "assert"` and `green:linked` in the gate; `sj ids` for selected capabilities; brainstorming in `sj-explore` |
+| Beta | Opens once specjutsu has fully replaced OpenSpec and Superpowers in our own production monorepo |
 | v0.7 | Custom workflow schemas (OpenSpec `schema.yaml` read in place); spec stores and worksets for specs kept outside the code repo |
 
 ## Contributing
