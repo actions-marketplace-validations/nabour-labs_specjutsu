@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 use crate::config::{Config, Runner};
 use crate::{ids, spec, testscan, trace};
@@ -20,6 +20,8 @@ pub struct Draft {
 /// What a dry run would draft, and the tests under its paths it left out.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DryRun {
+    /// The capability the drafts belong to.
+    pub capability: String,
     pub drafts: Vec<Draft>,
     /// Tests that already carry a scenario ID.
     pub linked: usize,
@@ -85,10 +87,100 @@ pub fn dry_run(
         })
         .collect();
     Ok(DryRun {
+        capability,
         drafts,
         linked,
         skipped: skipped.len(),
     })
+}
+
+/// Write the dry run's drafts as `changes/<change>/` under `spec_root` (SPEC-050, SPEC-053):
+/// a proposal, one task per test file, and an ADDED delta with one `[keep]` requirement per
+/// test file whose scenarios ask for the behaviour. Refuses, writing nothing, when `change`
+/// is not kebab-case or the folder exists (SPEC-051).
+pub fn write(spec_root: &Path, change: &str, run: &DryRun) -> Result<PathBuf> {
+    if !super::is_kebab(change) {
+        bail!("change name `{change}` must be kebab-case (lowercase letters, digits and hyphens)");
+    }
+    let dir = spec_root.join("changes").join(change);
+    if change == "archive" || dir.exists() {
+        bail!("change {change} already exists");
+    }
+    let mut files: Vec<(String, Vec<&Draft>)> = Vec::new();
+    for d in &run.drafts {
+        let file = shown(&d.file);
+        match files.iter_mut().find(|(f, _)| *f == file) {
+            Some((_, ds)) => ds.push(d),
+            None => files.push((file, vec![d])),
+        }
+    }
+    let cap = &run.capability;
+    let mut spec = String::from("## ADDED Requirements\n");
+    let mut tasks = String::from("# Tasks\n\n## 1. Keep the tested behaviour\n");
+    for (i, (file, drafts)) in files.iter().enumerate() {
+        spec.push_str(&format!(
+            "\n### Requirement: {}\nThe system SHALL keep the behaviour that {file} tests.\n",
+            file_words(file)
+        ));
+        for d in drafts {
+            let at = format!("{file}:{}", d.line);
+            spec.push_str(&format!(
+                "\n#### Scenario: {} [keep] {}\n\
+                 - **WHEN** [NEEDS CLARIFICATION: what the test sets up — see {at}]\n\
+                 - **THEN** [NEEDS CLARIFICATION: what the test checks — see {at}]\n",
+                d.id, d.heading
+            ));
+        }
+        let ids: Vec<&str> = drafts.iter().map(|d| d.id.as_str()).collect();
+        tasks.push_str(&format!(
+            "- [ ] 1.{} Keep the behaviour that {file} tests ({})\n",
+            i + 1,
+            id_list(&ids)
+        ));
+    }
+    let proposal = format!(
+        "## Why\n\nExisting tests prove behaviour of {cap} that no scenario describes. \
+         `sj spec infer` drafted these scenarios from them.\n\n\
+         ## What Changes\n\n- Add `[keep]` scenarios for {cap}, one per existing test. Each \
+         `[NEEDS CLARIFICATION]` marker must be replaced with the behaviour the test proves.\n\n\
+         ## Capabilities\n\n### New Capabilities\n\n- `{cap}`\n\n### Modified Capabilities\n\n\
+         None.\n\n## Impact\n\nSpecs only; the tests stay as they are.\n"
+    );
+    let cap_dir = dir.join("specs").join(cap);
+    std::fs::create_dir_all(&cap_dir)
+        .with_context(|| format!("cannot create {}", cap_dir.display()))?;
+    for (path, text) in [
+        (dir.join("proposal.md"), proposal),
+        (dir.join("tasks.md"), tasks),
+        (cap_dir.join("spec.md"), spec),
+    ] {
+        std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    Ok(dir)
+}
+
+/// A test file's name in words: the name before its first `.`, `_` and `-` as spaces, the
+/// first letter upper-cased.
+fn file_words(file: &str) -> String {
+    let name = file.rsplit('/').next().unwrap_or(file);
+    let stem = name.split('.').next().unwrap_or(name);
+    upper_first(&join(stem.split(['_', '-'])))
+}
+
+/// IDs as a task names them: `A-001..003` when they run on without a gap, else `A-001, A-004`.
+fn id_list(ids: &[&str]) -> String {
+    let num = |id: &str| id.rsplit('-').next().and_then(|n| n.parse::<u32>().ok());
+    let nums: Vec<Option<u32>> = ids.iter().map(|id| num(id)).collect();
+    let contiguous = nums.windows(2).all(|w| match (w[0], w[1]) {
+        (Some(a), Some(b)) => b == a + 1,
+        _ => false,
+    });
+    match (ids.first(), ids.last()) {
+        (Some(first), Some(last)) if ids.len() > 1 && contiguous => {
+            format!("{first}..{}", last.rsplit('-').next().unwrap_or(last))
+        }
+        _ => ids.join(", "),
+    }
 }
 
 /// Folders that hold tests rather than name a capability, compared case-insensitively.

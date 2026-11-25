@@ -379,6 +379,12 @@ enum SpecCommand {
         /// The capability the drafts belong to; its prefix numbers them.
         #[arg(long)]
         capability: Option<String>,
+        /// Write the drafts as a change instead of only listing them.
+        #[arg(long)]
+        write: bool,
+        /// The change to write (default `infer-<capability>`).
+        #[arg(long, requires = "write")]
+        change: Option<String>,
         #[command(flatten)]
         args: SpecArgs,
     },
@@ -1721,6 +1727,8 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
         SpecCommand::Infer {
             paths,
             capability,
+            write,
+            change,
             args,
         } => {
             let (root, spec_root) = spec_paths(&args)?;
@@ -1732,6 +1740,12 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 &paths,
                 capability.as_deref(),
             )?;
+            let created = if write {
+                let change = change.unwrap_or_else(|| format!("infer-{}", run.capability));
+                Some(authoring::infer::write(&spec_root, &change, &run)?)
+            } else {
+                None
+            };
             for d in &run.drafts {
                 println!(
                     "{} [keep] {}  ({}:{})",
@@ -1751,6 +1765,9 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
                 count.push_str(&format!(", {} left out", left.join(" and ")));
             }
             println!("{count}");
+            if let Some(dir) = created {
+                println!("created {}", rel(&dir, &root));
+            }
             Ok(ExitCode::SUCCESS)
         }
         SpecCommand::Archive {

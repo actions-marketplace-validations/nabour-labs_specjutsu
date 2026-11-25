@@ -404,9 +404,12 @@ fn refunds_project() -> tempfile::TempDir {
 }
 
 fn write_refunds(r: &Path) -> std::process::Output {
-    sj(r, &["tests/refunds.rs", "--capability", "refunds", "--write"])
-        .output()
-        .unwrap()
+    sj(
+        r,
+        &["tests/refunds.rs", "--capability", "refunds", "--write"],
+    )
+    .output()
+    .unwrap()
 }
 
 fn sj_spec(r: &Path, args: &[&str]) -> Command {
@@ -430,8 +433,14 @@ fn spec_050_writing_creates_a_change_that_validates() {
         .filter(|l| l.starts_with("#### Scenario: "))
         .collect();
     assert_eq!(scenarios.len(), 2, "{spec}");
-    assert!(scenarios[0].starts_with("#### Scenario: REFUNDS-001 [keep] "), "{spec}");
-    assert!(scenarios[1].starts_with("#### Scenario: REFUNDS-002 [keep] "), "{spec}");
+    assert!(
+        scenarios[0].starts_with("#### Scenario: REFUNDS-001 [keep] "),
+        "{spec}"
+    );
+    assert!(
+        scenarios[1].starts_with("#### Scenario: REFUNDS-002 [keep] "),
+        "{spec}"
+    );
     let tasks = std::fs::read_to_string(change.join("tasks.md")).unwrap();
     assert!(tasks.contains("(REFUNDS-001..002)"), "{tasks}");
     assert!(change.join("proposal.md").is_file());
@@ -443,7 +452,11 @@ fn spec_050_writing_creates_a_change_that_validates() {
 fn spec_051_an_existing_change_folder_is_refused() {
     let dir = refunds_project();
     let r = dir.path();
-    put(r, "specjutsu/changes/infer-refunds/proposal.md", "## Why\nMine.\n");
+    put(
+        r,
+        "specjutsu/changes/infer-refunds/proposal.md",
+        "## Why\nMine.\n",
+    );
     commit_all(r);
 
     let out = write_refunds(r);
@@ -453,7 +466,10 @@ fn spec_051_an_existing_change_folder_is_refused() {
         stderr.contains("change infer-refunds already exists"),
         "{stderr}"
     );
-    assert_eq!(git(r, &["status", "--porcelain", "--untracked-files=all"]), "");
+    assert_eq!(
+        git(r, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
 }
 
 #[test]
@@ -466,7 +482,10 @@ fn spec_053_check_reports_the_drafted_markers() {
     let out = sj_spec(r, &["check", "infer-refunds"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let stdout = String::from_utf8(out.stdout).unwrap();
-    let clarify: Vec<&str> = stdout.lines().filter(|l| l.starts_with("clarify")).collect();
+    let clarify: Vec<&str> = stdout
+        .lines()
+        .filter(|l| l.starts_with("clarify"))
+        .collect();
     assert_eq!(clarify.len(), 4, "{stdout}");
     for line in [2, 5] {
         let naming = format!("tests/refunds.rs:{line}");
