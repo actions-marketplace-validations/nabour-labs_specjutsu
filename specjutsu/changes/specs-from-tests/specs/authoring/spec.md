@@ -32,14 +32,15 @@ folder already exists.
 - **THEN** it exits 2 with `change infer-refunds already exists`, and no spec or test file changes
 
 ### Requirement: Inferred headings come from the test name
-The scenario name SHALL be the test's name made into words: a leading `test_` or `test` dropped,
+The scenario name SHALL be the test's name made into words: a leading `test` word dropped (`test_`,
+or `test` followed by an upper-case letter, never `test` inside a longer word),
 `_` and `-` turned into spaces, the first letter upper-cased. A pytest `Class::func` SHALL become
 the class name without its `Test` prefix followed by the function's words. JS and TS titles SHALL
 be joined with a space, keeping their own text.
 
 #### Scenario: SPEC-052 Names from Rust, pytest and JS become headings
-- **WHEN** the selected tests are Rust `refund_under_100_auto_approves`, pytest `TestRefunds::test_partial_refund`, and JS `Refunds > auto-approves under $100`
-- **THEN** their headings are `Refund under 100 auto approves`, `Refunds partial refund` and `Refunds auto-approves under $100`
+- **WHEN** the selected tests are Rust `refund_under_100_auto_approves`, pytest `TestRefunds::test_partial_refund`, JS `Refunds > auto-approves under $100`, and Rust `testimony_is_recorded`
+- **THEN** their headings are `Refund under 100 auto approves`, `Refunds partial refund`, `Refunds auto-approves under $100` and `Testimony is recorded`
 
 ### Requirement: Inferred scenario bodies ask for the behaviour
 Each drafted scenario SHALL have a WHEN and a THEN step whose text is
