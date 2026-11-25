@@ -37,8 +37,22 @@ All notable changes are recorded here. The format follows
   ID, appended to the missing-ID error when it has none. When both have IDs and they
   differ, it warns, as in `STAFF-057 Role change is recorded: specs/staff/spec.md has this
   scenario as STAFF-100; give the delta copy STAFF-100`.
+- `sj spec infer <path>... [--capability <name>] [--write] [--change <name>]` drafts one
+  `[keep]` scenario for every untraced test (no scenario ID in its name, title, `spec:`
+  comment or marker) in suite files under the paths. By default it is a dry run that
+  prints `<ID> [keep] <heading>  (<file>:<line>)` per test and `N tests drafted, L linked
+  and S skipped left out`, and exits 2 with `no untraced tests under <paths>` when there
+  are none. Headings come from the test name; the capability is `--capability` or the
+  nearest folder above the test that isn't a test or source folder, and IDs follow the
+  `sj ids` rules. `--write` creates `changes/infer-<capability>/` (or `--change`) with
+  WHEN/THEN as `[NEEDS CLARIFICATION: … — see <file>:<line>]` markers and inserts a
+  `spec:` comment above each test, changing no other byte. Once the markers are
+  replaced, the change passes `sj gate` as `green:keep`. The `sj-propose` skill has a
+  "From existing tests" section for it.
 
 ### Changed
+- `sj trace` marks Rust tests with `#[ignore]` or `#[ignore = "..."]` as `skipped`, as it
+  already did for JS and Python skip markers; it shows in `sj trace --json` and the badge.
 - `sj-explore` covers brainstorming: its description names it, so "let's brainstorm"
   triggers it; it lists many ideas before narrowing to two or three options; and the new
   reference `sj-explore/brainstorming.md` holds idea prompts, a YAGNI pass, and presenting
