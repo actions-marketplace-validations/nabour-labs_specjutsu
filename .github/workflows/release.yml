@@ -2,6 +2,12 @@ name: release
 
 # Push a tag `vX.Y.Z` to build sj for every platform and publish a GitHub Release with
 # checksums. CI pins a released version (see ci.yml) so a PR never grades itself.
+#
+# After each release, by hand:
+# - GitHub Marketplace: GitHub has no API for listing a release there, so the listing stays
+#   on the last release someone ticked. Edit the new release on GitHub, tick "Publish this
+#   Action to the GitHub Marketplace" and click "Update release".
+# - CI pin: bump SJ_VERSION in ci.yml to the new version once this run has finished.
 on:
   push:
     tags: ["v*.*.*"]
