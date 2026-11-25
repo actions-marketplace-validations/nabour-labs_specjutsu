@@ -64,15 +64,16 @@ line, with that line's indentation. No other byte of the test file SHALL change.
 
 ### Requirement: Linked and skipped tests are left out
 `sj spec infer` SHALL leave out tests that already carry a scenario ID and tests marked skip,
-todo or fixme, and the count line SHALL report how many of each were left out.
+todo or fixme. The count line SHALL be `<N> test(s) drafted`, followed by
+`, <L> linked and <S> skipped left out` with either part omitted when its count is 0.
 
 #### Scenario: SPEC-055 A second run drafts nothing new
 - **WHEN** `sj spec infer tests/refunds.rs` runs after the `--write` above
 - **THEN** it exits 2 with `no untraced tests under tests/refunds.rs`
 
 #### Scenario: SPEC-056 Skipped tests are counted, not drafted
-- **WHEN** the target holds three untraced tests, one marked `#[ignore]` and one inside `describe.skip`
-- **THEN** one scenario is drafted and the count line reads `1 test drafted, 2 skipped left out`
+- **WHEN** the target holds three untraced tests, one marked `#[ignore]` and one inside `describe.skip`, and one test linked to an existing scenario by a `spec:` comment
+- **THEN** one scenario is drafted and the count line reads `1 test drafted, 1 linked and 2 skipped left out`
 
 ### Requirement: Inferred IDs follow the ID rules
 The capability SHALL be `--capability`, or else the name of the nearest folder above the test file
