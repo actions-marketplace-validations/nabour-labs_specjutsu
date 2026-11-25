@@ -161,6 +161,7 @@
           <tr><td><code>red_on_base = "assert"</code>, <code>green:linked</code></td><td><span class="badge live">v0.6.0</span></td><td>A suite can require an assertion failure on base; a new test for behaviour that already existed is linked instead of failing the gate.</td></tr>
           <tr><td><code>sj ids</code> for selected capabilities, brainstorming in <code>sj-explore</code></td><td><span class="badge live">v0.6.0</span></td><td>Number only the capabilities you name; <code>sj-explore</code> also handles "let's brainstorm".</td></tr>
           <tr><td><a href="https://nabour-labs.github.io/specjutsu-bench/">Token benchmark</a></td><td><span class="badge live">published</span></td><td>Public comparison against the tools specjutsu replaces: <a href="https://nabour-labs.github.io/specjutsu-bench/">see the results</a>. <code>sj gain</code> is its local half: byte counts on your machine.</td></tr>
+          <tr><td><code>sj spec infer</code></td><td><span class="badge next">Unreleased</span></td><td>Draft <code>[keep]</code> scenarios from the untraced tests of an existing project.</td></tr>
         </tbody>
       </table></div>
       <div class="callout"><p><b>In practice today:</b> specjutsu runs the whole loop on its own, from <code>sj spec new</code> to <code>sj spec archive</code>. You don't need OpenSpec, Spec Kit or Superpowers alongside it, and <code>sj migrate</code> removes them for you.</p></div>
@@ -275,6 +276,23 @@ sources = ["python/worker/**"]
 runner = "pytest"
 tests = ["python/worker/**/test_*.py", "python/worker/**/*_test.py"]</pre>
       <p><code>mode</code> sets how strict the agent loop is: <code>strict</code> refuses to tick a task until its scenarios are proven, <code>guided</code> warns, <code>advisory</code> only reports. The CI gate is the same in every mode.</p>
+
+      <h3 id="infer">Specs from existing tests</h3>
+      <p>An existing project has tests that no scenario describes. <code>sj spec infer</code> drafts one <code>[keep]</code> scenario per untraced test (no scenario ID in its name, title, <code>spec:</code> comment or marker), so the behaviour those tests already prove is written down and gated. Start with a dry run on one area a reviewer can judge; it writes nothing:</p>
+<pre class="code">$ sj spec infer tests/refunds.rs --capability refunds
+REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:4)
+REFUNDS-002 [keep] Refund over limit needs review  (tests/refunds.rs:10)
+2 tests drafted, 1 linked left out</pre>
+      <p>Linked tests and tests marked skip, todo, fixme or <code>#[ignore]</code> are left out and counted. Without <code>--capability</code>, the capability is the nearest folder above the test that isn't a test or source folder. Then write the change, fill in the scenarios and gate it:</p>
+<pre class="code">$ sj spec infer tests/refunds.rs --capability refunds --write   <span class="c-m"># changes/infer-refunds/ and a spec: comment above each test</span>
+REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:5)
+REFUNDS-002 [keep] Refund over limit needs review  (tests/refunds.rs:12)
+2 tests drafted, 1 linked left out
+created specjutsu/changes/infer-refunds
+<span class="c-m"># ask your agent to replace each [NEEDS CLARIFICATION] marker from the test it names (sj-propose does this)</span>
+$ sj spec check infer-refunds    <span class="c-m"># until no clarify lines remain</span>
+$ sj gate --base origin/main     <span class="c-m"># REFUNDS-001 and REFUNDS-002 pass as green:keep</span></pre>
+      <p>The tests only gain a comment, so they pass on base and at head, which is what <code>[keep]</code> asks. Each comment moves the tests below it down a line, so the lines <code>--write</code> prints and the markers name are the lines the tests are on afterwards. See <a href="#cmd-spec-infer">sj spec infer</a> for headings, IDs and the files it writes.</p>
     </section>
 
     <section id="concepts">
@@ -547,7 +565,7 @@ Specjutsu-Exempt: chore — bump dependencies</pre>
       <h3>Proof</h3>
       <div class="cmd">
         <h3>sj trace</h3>
-        <p>Map spec scenario IDs to tests; list gaps and orphans. Each test in <code>--json</code> carries its package, suite and whether it's skipped.</p>
+        <p>Map spec scenario IDs to tests; list gaps and orphans. Each test in <code>--json</code> carries its package, suite and whether it's skipped (<code>.skip</code>, <code>.todo</code>, <code>.fixme</code>, <code>@pytest.mark.skip</code>, Rust <code>#[ignore]</code>).</p>
         <dl>
           <dt>--strict</dt><dd>Exit 1 when there are gaps or orphans. With a <a href="#baseline">baseline</a>, only entries it doesn't list and stale entries count.</dd>
           <dt>--write-baseline</dt><dd>Write every current gap and orphan to <code>&lt;spec_root&gt;/trace-baseline.txt</code>, dropping stale entries, and print <code>baseline: N entries → &lt;path&gt;</code>. With <code>--json</code> or <code>--strict</code> it exits 2 and writes nothing.</dd>
@@ -654,6 +672,12 @@ total  3  1500  54000  97%  ~13125 tokens saved</pre>
         <h3>sj spec archive &lt;change&gt;…</h3>
         <p>Merge the deltas into <code>specs/</code> (same bytes as <code>openspec archive</code>) and move the change to <code>changes/archive/YYYY-MM-DD-&lt;change&gt;/</code>. Several names archive together, in name order: if any one is refused, nothing is written and every problem is listed. Two changes that modify, remove or rename the same requirement are refused.</p>
         <dl><dt>--all-done</dt><dd>Archive every open change with at least one task and all of them done; <code>nothing to archive</code> when there are none.</dd><dt>--force</dt><dd>Archive despite validation errors and open tasks. Conflicts between changes are refused anyway.</dd></dl>
+      </div>
+      <div class="cmd" id="cmd-spec-infer">
+        <h3>sj spec infer &lt;path&gt;…</h3>
+        <p>Draft a <code>[keep]</code> scenario for every untraced test in suite files under the paths (resolved against <code>--root</code>, or absolute): tests with no scenario ID in their name, title, <code>spec:</code> comment or <code>@pytest.mark.spec</code> marker. A dry run by default: one line per test, <code>&lt;ID&gt; [keep] &lt;heading&gt;  (&lt;file&gt;:&lt;line&gt;)</code>, then <code>N tests drafted</code>, with <code>, L linked and S skipped left out</code> when it left any out. Writes nothing. Exits 2 with <code>no untraced tests under &lt;paths&gt;</code> when there are none. See <a href="#infer">Specs from existing tests</a>.</p>
+        <p>Headings come from the test name: a leading <code>test</code> word dropped, <code>_</code> and <code>-</code> turned into spaces. A pytest class keeps each class name minus a leading <code>Test</code> word; JS and TS titles are kept as written. IDs follow the <code>sj ids</code> rules: an <code>[ids.prefixes]</code> entry wins, numbering continues after current, open-change and archived IDs and after any number with that prefix a scanned test already carries in its name or <code>spec:</code> comment, and a colliding prefix or a capability with no letters exits 2. A test whose name already carries an ID with the capability's prefix (<code>billing_007_named_early</code>) keeps that ID; when another scanned test carries it too, or a current, open-change or archived scenario ever used it, the run exits 2 naming the test and the ID and asks for the test to be renamed. Drafts are listed in file order.</p>
+        <dl><dt>--capability &lt;name&gt;</dt><dd>The capability the drafts belong to. Without it, the nearest folder above the test file that isn't <code>tests</code>, <code>test</code>, <code>__tests__</code>, <code>spec</code>, <code>unit</code>, <code>integration</code>, <code>e2e</code> or <code>src</code> (any case), kebab-cased. One run drafts for one capability: tests whose folders name different capabilities, or none, exit 2 with a hint to pass <code>--capability</code>. A value that isn't kebab-case exits 2 with <code>capability `&lt;name&gt;` must be kebab-case</code> before anything is written.</dd><dt>--write</dt><dd>Create <code>&lt;spec_root&gt;/changes/&lt;change&gt;/</code> with <code>proposal.md</code>, <code>tasks.md</code> and <code>specs/&lt;capability&gt;/spec.md</code>: one requirement per test file, WHEN and THEN as <code>[NEEDS CLARIFICATION: … — see &lt;file&gt;:&lt;line&gt;]</code> markers that <code>sj spec check</code> reports; each <code>&lt;line&gt;</code>, and each line it prints, is where the test is once the comments are in. A requirement name already used by the capability's spec or an open change's delta for it gives way to the file's path in words, and the capability is listed as modified when its spec exists or an open change adds it. Prints <code>created &lt;spec_root&gt;/changes/&lt;change&gt;</code> after the count line. Insert <code>// spec: &lt;ID&gt;</code> or <code># spec: &lt;ID&gt;</code> above each test's first attribute, decorator or declaration line, changing no other byte. Refuses an existing change folder, and leaves nothing behind on an error. Once the markers are replaced, the change passes <code>sj gate</code> as <code>green:keep</code>.</dd><dt>--change &lt;name&gt;</dt><dd>The change to write; default <code>infer-&lt;capability&gt;</code>.</dd></dl>
       </div>
 
       <h3>Agent loop</h3>

@@ -87,3 +87,24 @@ sj spec check <change>         # uncovered scenarios, unknown IDs, open question
 Fix everything they report. Both must be clean before you hand the change back, except
 `clarify` lines, which go to `sj-clarify` with the user. Then show the user the proposal and
 the scenario list (`sj status <change>`), not the whole folder.
+
+## From existing tests
+
+When a project has tests but no scenarios for them, draft the scenarios from the tests
+instead of writing them from scratch.
+
+```bash
+sj spec infer <paths> [--capability <name>]          # dry run: the drafts and counts
+sj spec infer <paths> [--capability <name>] --write  # writes changes/infer-<capability>/
+```
+
+- Run it without `--write` first. Narrow the paths to one area a reviewer can judge.
+- `--write` creates `changes/infer-<capability>/` (or `--change <name>`) and adds a
+  `spec:` comment above each test.
+- For each scenario, open the test at the file and line its marker names. Replace both
+  `[NEEDS CLARIFICATION: …]` markers with a concrete WHEN and THEN that the test proves,
+  using the test's own values. Rename the heading or merge requirements if the drafted
+  names are weak.
+- Run `sj spec check <change>` until no `clarify` lines remain, then go on as for any
+  change. These markers are answered from the test, not with sj-clarify. The scenarios
+  are `[keep]`, so their tests must pass on base and head: don't change the test bodies.
