@@ -21,7 +21,7 @@ With `--write`, `sj spec infer` SHALL create `<spec_root>/changes/<change>/`, wh
 test file, named after the file's stem in words and stating that the system SHALL keep the
 behaviour that file tests, and one `[keep]` scenario per selected test. When that name is empty,
 or matches another requirement in the delta or in `specs/<capability>/spec.md`, the requirement
-SHALL be named after the file's root-relative path in words instead; if that name is taken too,
+SHALL be named after the file's root-relative path in words, extensions included, instead; if that name is taken too,
 the run SHALL stop with exit 2 before writing. When `specs/<capability>/spec.md` exists, the
 proposal SHALL list the capability under Modified Capabilities, otherwise under New Capabilities.
 On any error while writing, no part of the change folder SHALL be left behind. `tasks.md` SHALL have one task per
@@ -38,11 +38,11 @@ folder already exists.
 
 #### Scenario: SPEC-065 Test files with the same stem get distinct requirements
 - **WHEN** `tests/a/refunds.rs` and `tests/b/refunds.rs` each hold an untraced test and `sj spec infer tests/a tests/b --capability dup --write` runs
-- **THEN** the delta has requirements `Tests a refunds` and `Tests b refunds`, and `sj spec archive infer-dup --force` succeeds
+- **THEN** the delta has requirements `Tests a refunds rs` and `Tests b refunds rs`, and `sj spec archive infer-dup --force` succeeds; likewise `tests/cart.test.ts` and `tests/cart.spec.ts` in one folder get `Tests cart test ts` and `Tests cart spec ts`
 
 #### Scenario: SPEC-066 Drafts for an existing capability modify it without clashing
 - **WHEN** `specs/refunds/spec.md` has `### Requirement: Refunds` with REFUNDS-001, `tests/refunds.rs` holds one untraced test, and `sj spec infer tests/refunds.rs --capability refunds --write` runs
-- **THEN** the draft is REFUNDS-002 under `### Requirement: Tests refunds`, the proposal lists `refunds` under Modified Capabilities, and `sj spec archive infer-refunds --force` succeeds
+- **THEN** the draft is REFUNDS-002 under `### Requirement: Tests refunds rs`, the proposal lists `refunds` under Modified Capabilities, and `sj spec archive infer-refunds --force` succeeds
 
 ### Requirement: Inferred headings come from the test name
 The scenario name SHALL be the test's name made into words: a leading `test` word dropped (`test_`,
