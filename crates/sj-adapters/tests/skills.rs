@@ -930,3 +930,36 @@ fn skill_020_the_brainstorming_reference_carries_the_technique() {
     assert!(shipped.join("sj-explore/brainstorming.md").is_file());
     assert_eq!(messages(&shipped), Vec::<String>::new());
 }
+
+// spec: SKILL-021
+#[test]
+fn skill_021_sj_propose_names_the_infer_workflow() {
+    let (_, text) = sj_adapters::claude::SKILLS
+        .iter()
+        .find(|(name, _)| *name == "sj-propose")
+        .unwrap();
+    let start = text
+        .find("\n## From existing tests")
+        .expect("sj-propose has no `From existing tests` section");
+    let rest = &text[start + 1..];
+    let section = match rest[3..].find("\n## ") {
+        Some(end) => &rest[..end + 3],
+        None => rest,
+    };
+    for want in [
+        "sj spec infer",
+        "--write",
+        "[NEEDS CLARIFICATION",
+        "sj spec check",
+    ] {
+        assert!(section.contains(want), "section lacks {want}: {section}");
+    }
+    assert!(
+        section.contains("replace"),
+        "section does not say to replace the markers: {section}"
+    );
+    assert!(
+        section.contains("the test"),
+        "section does not point at the test: {section}"
+    );
+}
