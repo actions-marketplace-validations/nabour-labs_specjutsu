@@ -62,6 +62,12 @@ pub fn dry_run(
     };
     ids::check_prefix_free(spec_root, &config.id_prefixes, &capability)?;
     let prefix = ids::prefix_for(&config.id_prefixes, &capability);
+    if prefix.is_empty() {
+        bail!(
+            "capability `{capability}` has no letters to make a prefix; \
+             map it in [ids.prefixes] in specjutsu.toml"
+        );
+    }
     let mut next = ids::highest_numbers(spec_root)?
         .get(&prefix)
         .copied()
@@ -85,29 +91,40 @@ pub fn dry_run(
     })
 }
 
-/// Folders that hold tests rather than name a capability.
-const TEST_FOLDERS: [&str; 4] = ["tests", "test", "__tests__", "spec"];
+/// Folders that hold tests rather than name a capability, compared case-insensitively.
+const TEST_FOLDERS: [&str; 8] = [
+    "tests",
+    "test",
+    "__tests__",
+    "spec",
+    "unit",
+    "integration",
+    "e2e",
+    "src",
+];
 
-/// The capability the tests' folders name (SPEC-058): for each test file, the nearest folder
-/// above it that is not a test folder, in kebab-case. Errors when a file has none or the
-/// files name different capabilities.
+/// The capability a test file's folders name (SPEC-058, SPEC-061): the nearest folder above
+/// `file` that is not a test folder, in kebab-case. `None` when there is no such folder.
+pub fn capability_from_path(file: &Path) -> Option<String> {
+    file.parent()
+        .into_iter()
+        .flat_map(Path::ancestors)
+        .filter_map(|p| p.file_name()?.to_str())
+        .find(|n| !TEST_FOLDERS.iter().any(|t| t.eq_ignore_ascii_case(n)))
+        .map(kebab_case)
+}
+
+/// The one capability the tests' folders name (SPEC-062, SPEC-063). Errors when a file has
+/// none or the files name different capabilities.
 fn capability_from_folders(tests: &[&testscan::TestFn]) -> Result<String> {
     let mut found: Vec<String> = Vec::new();
     for t in tests {
-        let folder = t
-            .file
-            .parent()
-            .into_iter()
-            .flat_map(Path::ancestors)
-            .filter_map(|p| p.file_name()?.to_str())
-            .find(|n| !TEST_FOLDERS.contains(n));
-        let Some(folder) = folder else {
+        let Some(cap) = capability_from_path(&t.file) else {
             bail!(
                 "{} is in no capability folder; pass --capability to name the capability",
                 shown(&t.file)
             );
         };
-        let cap = kebab_case(folder);
         if !found.contains(&cap) {
             found.push(cap);
         }
