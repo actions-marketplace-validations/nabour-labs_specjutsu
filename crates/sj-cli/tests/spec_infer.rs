@@ -389,3 +389,88 @@ fn spec_064_a_capability_with_no_letters_is_refused() {
         ));
     assert_eq!(git(r, &["status", "--porcelain"]), "");
 }
+
+/// SPEC-048's fixture: two untraced Rust tests in `tests/refunds.rs`, committed.
+fn refunds_project() -> tempfile::TempDir {
+    let dir = project();
+    put(
+        dir.path(),
+        "tests/refunds.rs",
+        "#[test]\nfn refund_under_100_auto_approves() {}\n\n\
+         #[test]\nfn refund_over_limit_needs_review() {}\n",
+    );
+    commit_all(dir.path());
+    dir
+}
+
+fn write_refunds(r: &Path) -> std::process::Output {
+    sj(r, &["tests/refunds.rs", "--capability", "refunds", "--write"])
+        .output()
+        .unwrap()
+}
+
+fn sj_spec(r: &Path, args: &[&str]) -> Command {
+    let mut c = Command::cargo_bin("sj").unwrap();
+    c.arg("spec").args(args).arg("--root").arg(r);
+    c
+}
+
+#[test]
+fn spec_050_writing_creates_a_change_that_validates() {
+    let dir = refunds_project();
+    let r = dir.path();
+
+    let out = write_refunds(r);
+    assert!(out.status.success(), "{out:?}");
+    let change = r.join("specjutsu/changes/infer-refunds");
+    let spec = std::fs::read_to_string(change.join("specs/refunds/spec.md")).unwrap();
+    assert_eq!(spec.matches("### Requirement: ").count(), 1, "{spec}");
+    let scenarios: Vec<&str> = spec
+        .lines()
+        .filter(|l| l.starts_with("#### Scenario: "))
+        .collect();
+    assert_eq!(scenarios.len(), 2, "{spec}");
+    assert!(scenarios[0].starts_with("#### Scenario: REFUNDS-001 [keep] "), "{spec}");
+    assert!(scenarios[1].starts_with("#### Scenario: REFUNDS-002 [keep] "), "{spec}");
+    let tasks = std::fs::read_to_string(change.join("tasks.md")).unwrap();
+    assert!(tasks.contains("(REFUNDS-001..002)"), "{tasks}");
+    assert!(change.join("proposal.md").is_file());
+
+    sj_spec(r, &["validate", "infer-refunds"]).assert().code(0);
+}
+
+#[test]
+fn spec_051_an_existing_change_folder_is_refused() {
+    let dir = refunds_project();
+    let r = dir.path();
+    put(r, "specjutsu/changes/infer-refunds/proposal.md", "## Why\nMine.\n");
+    commit_all(r);
+
+    let out = write_refunds(r);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains("change infer-refunds already exists"),
+        "{stderr}"
+    );
+    assert_eq!(git(r, &["status", "--porcelain", "--untracked-files=all"]), "");
+}
+
+#[test]
+fn spec_053_check_reports_the_drafted_markers() {
+    let dir = refunds_project();
+    let r = dir.path();
+    let out = write_refunds(r);
+    assert!(out.status.success(), "{out:?}");
+
+    let out = sj_spec(r, &["check", "infer-refunds"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let clarify: Vec<&str> = stdout.lines().filter(|l| l.starts_with("clarify")).collect();
+    assert_eq!(clarify.len(), 4, "{stdout}");
+    for line in [2, 5] {
+        let naming = format!("tests/refunds.rs:{line}");
+        let n = clarify.iter().filter(|l| l.contains(&naming)).count();
+        assert_eq!(n, 2, "expected two clarify lines naming {naming}: {stdout}");
+    }
+}
