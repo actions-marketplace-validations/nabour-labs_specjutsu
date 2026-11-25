@@ -533,13 +533,6 @@ pub fn plan_for(
 
     // With targets, problems in capabilities outside them don't stop the run (IDS-021).
     let is_selected = |cap: &str| only.map_or(true, |caps| caps.iter().any(|c| c == cap));
-    let prefix_for = |cap: &str| {
-        prefixes
-            .get(cap)
-            .cloned()
-            .unwrap_or_else(|| derive_prefix(cap))
-    };
-
     // Prefixes for capabilities that need IDs, and collisions among them (IDS-004, IDS-005).
     let mut prefix_of: BTreeMap<String, String> = BTreeMap::new();
     for (file, place, located, _) in &files {
@@ -559,7 +552,7 @@ pub fn plan_for(
         if prefix_of.contains_key(cap) {
             continue;
         }
-        let prefix = prefix_for(cap);
+        let prefix = prefix_for(prefixes, cap);
         if prefix.is_empty() {
             if !is_selected(cap) {
                 continue;
@@ -573,7 +566,7 @@ pub fn plan_for(
     }
     // With targets, only prefixes a selected capability uses are checked (IDS-017, IDS-021).
     let selected: Option<BTreeSet<String>> =
-        only.map(|caps| caps.iter().map(|c| prefix_for(c)).collect());
+        only.map(|caps| caps.iter().map(|c| prefix_for(prefixes, c)).collect());
     let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
     for (cap, prefix) in prefix_of
         .iter()
@@ -760,8 +753,12 @@ pub fn check_prefixes_free(
         .iter()
         .filter_map(|a| place(spec_root, &a.file).capability)
         .collect();
+    if planned.is_empty() {
+        return Ok(());
+    }
+    let all = capability_folders(spec_root)?;
     for cap in &planned {
-        check_prefix_free(spec_root, prefixes, cap)?;
+        prefix_free_among(&all, prefixes, cap)?;
     }
     Ok(())
 }
@@ -782,13 +779,27 @@ pub fn check_prefix_free(
     prefixes: &BTreeMap<String, String>,
     capability: &str,
 ) -> Result<()> {
-    let prefix = prefix_for(prefixes, capability);
+    prefix_free_among(&capability_folders(spec_root)?, prefixes, capability)
+}
+
+/// The capability folders under `specs/` and open changes.
+fn capability_folders(spec_root: &Path) -> Result<BTreeSet<String>> {
     let mut all: BTreeSet<String> = BTreeSet::new();
     for file in spec::discover_spec_files(spec_root)? {
         if let Some(cap) = place(spec_root, &file).capability {
             all.insert(cap);
         }
     }
+    Ok(all)
+}
+
+/// [`check_prefix_free`] against the capability folders in `all`.
+fn prefix_free_among(
+    all: &BTreeSet<String>,
+    prefixes: &BTreeMap<String, String>,
+    capability: &str,
+) -> Result<()> {
+    let prefix = prefix_for(prefixes, capability);
     if let Some(other) = all
         .iter()
         .find(|o| *o != capability && prefix_for(prefixes, o) == prefix)
