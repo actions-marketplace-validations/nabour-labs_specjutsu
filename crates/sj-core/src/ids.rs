@@ -445,16 +445,27 @@ fn read(file: &Path) -> Result<String> {
     std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))
 }
 
+/// Every scenario ID in any `spec.md` under the spec root, archive included.
+pub fn used_ids(spec_root: &Path) -> Result<BTreeSet<String>> {
+    let mut out = BTreeSet::new();
+    for file in all_spec_files(spec_root)? {
+        out.extend(
+            spec::parse_scenarios(&file, &read(&file)?)
+                .into_iter()
+                .filter_map(|s| s.id),
+        );
+    }
+    Ok(out)
+}
+
 /// The highest number used per ID prefix in any `spec.md` under the spec root, archive included.
 pub fn highest_numbers(spec_root: &Path) -> Result<BTreeMap<String, u64>> {
     let mut out: BTreeMap<String, u64> = BTreeMap::new();
-    for file in all_spec_files(spec_root)? {
-        for s in spec::parse_scenarios(&file, &read(&file)?) {
-            if let Some((prefix, n)) = s.id.as_deref().and_then(|id| id.rsplit_once('-')) {
-                if let Ok(n) = n.parse::<u64>() {
-                    let e = out.entry(prefix.to_string()).or_insert(0);
-                    *e = (*e).max(n);
-                }
+    for id in used_ids(spec_root)? {
+        if let Some((prefix, n)) = id.rsplit_once('-') {
+            if let Ok(n) = n.parse::<u64>() {
+                let e = out.entry(prefix.to_string()).or_insert(0);
+                *e = (*e).max(n);
             }
         }
     }
@@ -533,13 +544,6 @@ pub fn plan_for(
 
     // With targets, problems in capabilities outside them don't stop the run (IDS-021).
     let is_selected = |cap: &str| only.map_or(true, |caps| caps.iter().any(|c| c == cap));
-    let prefix_for = |cap: &str| {
-        prefixes
-            .get(cap)
-            .cloned()
-            .unwrap_or_else(|| derive_prefix(cap))
-    };
-
     // Prefixes for capabilities that need IDs, and collisions among them (IDS-004, IDS-005).
     let mut prefix_of: BTreeMap<String, String> = BTreeMap::new();
     for (file, place, located, _) in &files {
@@ -559,7 +563,7 @@ pub fn plan_for(
         if prefix_of.contains_key(cap) {
             continue;
         }
-        let prefix = prefix_for(cap);
+        let prefix = prefix_for(prefixes, cap);
         if prefix.is_empty() {
             if !is_selected(cap) {
                 continue;
@@ -573,7 +577,7 @@ pub fn plan_for(
     }
     // With targets, only prefixes a selected capability uses are checked (IDS-017, IDS-021).
     let selected: Option<BTreeSet<String>> =
-        only.map(|caps| caps.iter().map(|c| prefix_for(c)).collect());
+        only.map(|caps| caps.iter().map(|c| prefix_for(prefixes, c)).collect());
     let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
     for (cap, prefix) in prefix_of
         .iter()
@@ -756,12 +760,6 @@ pub fn check_prefixes_free(
     prefixes: &BTreeMap<String, String>,
     plan: &[Assignment],
 ) -> Result<()> {
-    let prefix_for = |cap: &str| {
-        prefixes
-            .get(cap)
-            .cloned()
-            .unwrap_or_else(|| derive_prefix(cap))
-    };
     let planned: BTreeSet<String> = plan
         .iter()
         .filter_map(|a| place(spec_root, &a.file).capability)
@@ -769,24 +767,62 @@ pub fn check_prefixes_free(
     if planned.is_empty() {
         return Ok(());
     }
+    let all = capability_folders(spec_root)?;
+    for cap in &planned {
+        prefix_free_among(&all, prefixes, cap)?;
+    }
+    Ok(())
+}
+
+/// The prefix new IDs in `capability` get: its `[ids.prefixes]` entry, else [`derive_prefix`].
+pub fn prefix_for(prefixes: &BTreeMap<String, String>, capability: &str) -> String {
+    prefixes
+        .get(capability)
+        .cloned()
+        .unwrap_or_else(|| derive_prefix(capability))
+}
+
+/// Errors naming both capabilities and the prefix when another capability folder under the
+/// spec root has the prefix [`prefix_for`] gives `capability` (IDS-005, IDS-023, SPEC-059).
+/// `capability` need not have a folder yet.
+pub fn check_prefix_free(
+    spec_root: &Path,
+    prefixes: &BTreeMap<String, String>,
+    capability: &str,
+) -> Result<()> {
+    prefix_free_among(&capability_folders(spec_root)?, prefixes, capability)
+}
+
+/// The capability folders under `specs/` and open changes.
+fn capability_folders(spec_root: &Path) -> Result<BTreeSet<String>> {
     let mut all: BTreeSet<String> = BTreeSet::new();
     for file in spec::discover_spec_files(spec_root)? {
         if let Some(cap) = place(spec_root, &file).capability {
             all.insert(cap);
         }
     }
-    for cap in &planned {
-        let prefix = prefix_for(cap);
-        if let Some(other) = all.iter().find(|o| *o != cap && prefix_for(o) == prefix) {
-            let mut pair = [cap.as_str(), other.as_str()];
-            pair.sort();
-            bail!(
-                "capabilities `{}` and `{}` both use prefix {prefix}; \
-                 map one in [ids.prefixes] in specjutsu.toml",
-                pair[0],
-                pair[1]
-            );
-        }
+    Ok(all)
+}
+
+/// [`check_prefix_free`] against the capability folders in `all`.
+fn prefix_free_among(
+    all: &BTreeSet<String>,
+    prefixes: &BTreeMap<String, String>,
+    capability: &str,
+) -> Result<()> {
+    let prefix = prefix_for(prefixes, capability);
+    if let Some(other) = all
+        .iter()
+        .find(|o| *o != capability && prefix_for(prefixes, o) == prefix)
+    {
+        let mut pair = [capability, other.as_str()];
+        pair.sort();
+        bail!(
+            "capabilities `{}` and `{}` both use prefix {prefix}; \
+             map one in [ids.prefixes] in specjutsu.toml",
+            pair[0],
+            pair[1]
+        );
     }
     Ok(())
 }

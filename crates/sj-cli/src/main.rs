@@ -371,6 +371,23 @@ enum SpecCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Draft `[keep]` scenarios from the untraced tests under the given paths (dry run).
+    Infer {
+        /// Test files or folders, relative to --root or absolute.
+        #[arg(required = true, num_args = 1..)]
+        paths: Vec<PathBuf>,
+        /// The capability the drafts belong to; its prefix numbers them.
+        #[arg(long)]
+        capability: Option<String>,
+        /// Write the drafts as a change and link each test with a `spec:` comment.
+        #[arg(long)]
+        write: bool,
+        /// The change to write (default `infer-<capability>`).
+        #[arg(long, requires = "write")]
+        change: Option<String>,
+        #[command(flatten)]
+        args: SpecArgs,
+    },
     /// Apply each change's deltas to specs/ and move it to changes/archive/. With several
     /// changes, all are checked and merged first; one failure archives none.
     Archive {
@@ -1707,6 +1724,53 @@ fn spec_cmd(command: SpecCommand) -> Result<ExitCode> {
             })
         }
         SpecCommand::Show { item, args, json } => show_cmd(&item, &args, json),
+        SpecCommand::Infer {
+            paths,
+            capability,
+            write,
+            change,
+            args,
+        } => {
+            let (root, spec_root) = spec_paths(&args)?;
+            let config = sj_core::config::load(&root)?;
+            let run = authoring::infer::dry_run(
+                &root,
+                &config,
+                &spec_root,
+                &paths,
+                capability.as_deref(),
+            )?;
+            let (created, drafts) = if write {
+                let change = change.unwrap_or_else(|| format!("infer-{}", run.capability));
+                let (dir, drafts) = authoring::infer::write(&root, &spec_root, &change, &run)?;
+                (Some(dir), drafts)
+            } else {
+                (None, run.drafts.clone())
+            };
+            for d in &drafts {
+                println!(
+                    "{} [keep] {}  ({}:{})",
+                    d.id,
+                    d.heading,
+                    rel(&d.file, Path::new("")),
+                    d.line
+                );
+            }
+            let left: Vec<String> = [(run.linked, "linked"), (run.skipped, "skipped")]
+                .into_iter()
+                .filter(|(n, _)| *n > 0)
+                .map(|(n, what)| format!("{n} {what}"))
+                .collect();
+            let mut count = format!("{} drafted", plural(run.drafts.len(), "test"));
+            if !left.is_empty() {
+                count.push_str(&format!(", {} left out", left.join(" and ")));
+            }
+            println!("{count}");
+            if let Some(dir) = created {
+                println!("created {}", rel(&dir, &root));
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         SpecCommand::Archive {
             changes,
             all_done,

@@ -149,6 +149,32 @@ fn orphan_entry(orphan: &Orphan) -> BaselineEntry {
     BaselineEntry::Orphan(orphan.id.clone(), file, orphan.test.name.clone())
 }
 
+/// The ID prefixes the scenarios use.
+fn id_prefixes(scenarios: &[Scenario]) -> BTreeSet<&str> {
+    scenarios
+        .iter()
+        .filter_map(|s| s.id.as_deref())
+        .map(prefix_of)
+        .collect()
+}
+
+fn prefix_of(id: &str) -> &str {
+    id.rsplit_once('-').map_or("", |(p, _)| p)
+}
+
+/// The tests [`build_report`] links to no ID, known or orphan: no `spec:` comment or marker
+/// IDs, and no name-embedded ID with a prefix the specs use.
+pub fn untraced<'a>(scenarios: &[Scenario], tests: &'a [TestFn]) -> Vec<&'a TestFn> {
+    let prefixes = id_prefixes(scenarios);
+    tests
+        .iter()
+        .filter(|t| {
+            t.comment_ids.is_empty()
+                && !t.name_ids.iter().any(|id| prefixes.contains(prefix_of(id)))
+        })
+        .collect()
+}
+
 /// Link tests to scenarios. A name-embedded ID counts as an orphan only when its prefix is one the
 /// specs use (avoids noise like `v_2`); `// spec:` comment IDs are explicit and always count.
 pub fn build_report(scenarios: &[Scenario], tests: &[TestFn]) -> Report {
@@ -166,10 +192,7 @@ pub fn build_report(scenarios: &[Scenario], tests: &[TestFn]) -> Report {
             }
         }
     }
-    let prefixes: BTreeSet<&str> = known
-        .iter()
-        .filter_map(|id| id.rsplit_once('-').map(|(p, _)| p))
-        .collect();
+    let prefixes = id_prefixes(scenarios);
 
     let mut links: BTreeMap<&str, Vec<TestRef>> = BTreeMap::new();
     for t in tests {
@@ -192,14 +215,11 @@ pub fn build_report(scenarios: &[Scenario], tests: &[TestFn]) -> Report {
         for (id, explicit) in ids {
             if let Some(k) = known.get(id.as_str()) {
                 links.entry(k).or_default().push(tref.clone());
-            } else {
-                let prefix = id.rsplit_once('-').map_or("", |(p, _)| p);
-                if explicit || prefixes.contains(prefix) {
-                    report.orphans.push(Orphan {
-                        id,
-                        test: tref.clone(),
-                    });
-                }
+            } else if explicit || prefixes.contains(prefix_of(&id)) {
+                report.orphans.push(Orphan {
+                    id,
+                    test: tref.clone(),
+                });
             }
         }
     }

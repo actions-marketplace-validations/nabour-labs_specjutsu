@@ -3,6 +3,7 @@
 pub mod archive;
 pub mod blocks;
 pub mod check;
+pub mod infer;
 pub mod show;
 pub mod validate;
 

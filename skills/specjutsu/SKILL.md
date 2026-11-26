@@ -97,7 +97,22 @@ installed: install the project's dependencies (`npm install`, `uv sync`, …) an
 ## 6. Hand over
 
 Tell the user what was written (`specjutsu.toml`, the spec folders, the adapter files) so
-they can review and commit it. Then point onward: `sj-onboard` walks one toy change end to
+they can review and commit it.
+
+If the project has existing tests, they have no scenarios yet. Offer to draft them, one
+capability at a time (`sj` newer than 0.6.0; skip this if `sj spec infer` is not a
+command):
+
+```bash
+sj spec infer tests/billing --capability billing           # dry run: one draft per test
+sj spec infer tests/billing --capability billing --write   # change folder + spec: comments
+```
+
+`--write` creates `changes/infer-<capability>/` with `[NEEDS CLARIFICATION]` WHEN/THEN
+markers and adds a `spec:` comment above each test. The markers are filled in with
+`sj-clarify`, and the change is then archived with `sj-finish`.
+
+Then point onward: `sj-onboard` walks one toy change end to
 end, `sj-explore` thinks an idea through, and `sj-propose` turns an agreed idea into a
 change. For CI, the GitHub Action is `uses: nabour-labs/specjutsu@v0`; see the manual at
 https://nabour-labs.github.io/specjutsu/manual.html.

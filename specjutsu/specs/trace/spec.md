@@ -127,3 +127,12 @@ A baseline entry that is no longer a gap or orphan SHALL be reported as `stale <
 - **THEN** it prints `stale gap AUTH-002 (remove from trace-baseline.txt)` and exits 1
 - **AND** with `--json` the `stale` array is exactly `["gap AUTH-002"]`
 - **AND** after `sj trace --write-baseline` the baseline no longer lists AUTH-002
+
+### Requirement: Ignored Rust tests are marked skipped
+The Rust test scanner SHALL mark a test `skipped` when an `#[ignore]` or `#[ignore = "<reason>"]`
+attribute appears among the attributes directly above it, as the JS and Python scanners do for
+their skip markers.
+
+#### Scenario: TRACE-021 An ignored Rust test is marked skipped
+- **WHEN** AUTH-006 exists and a test file has, on separate lines, `#[test]`, `#[ignore = "slow integration test"]` and `fn auth_006_bulk_import()`
+- **THEN** `sj trace --json` links AUTH-006 to `auth_006_bulk_import` with `"skipped": true`

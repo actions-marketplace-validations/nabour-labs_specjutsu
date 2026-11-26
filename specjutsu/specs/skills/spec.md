@@ -117,3 +117,13 @@ The `sj-explore` description SHALL name brainstorming. Its body SHALL tell the a
 #### Scenario: SKILL-020 The brainstorming reference carries the technique
 - **WHEN** the skill check reads a `sj-explore/brainstorming.md` that names no YAGNI pass and never says to present the design one section at a time
 - **THEN** the check reports `sj-explore: brainstorming.md does not name YAGNI` and `sj-explore: brainstorming.md does not present the design one section at a time`; the shipped coverage row `brainstorming` has depth `brainstorming.md` and the shipped skills check clean
+
+### Requirement: sj-propose covers specs drafted from existing tests
+The `sj-propose` skill SHALL have a section on drafting specs from existing tests that tells the
+agent to run `sj spec infer` on one area at a time, read each test at the file and line its
+marker names, and replace both markers with a concrete WHEN and THEN before running
+`sj spec check`.
+
+#### Scenario: SKILL-021 sj-propose names the infer workflow
+- **WHEN** the installed `sj-propose` skill is read
+- **THEN** it has a `From existing tests` section that names `sj spec infer`, `--write`, replacing the `[NEEDS CLARIFICATION` markers from the test, and `sj spec check`

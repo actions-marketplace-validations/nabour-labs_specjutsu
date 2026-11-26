@@ -83,7 +83,8 @@ and it checks it deterministically:
 The [public token benchmark](https://nabour-labs.github.io/specjutsu-bench/) is out: see how many context bytes each workflow
 spends on the same feature, bug fix and change. specjutsu is not ahead everywhere yet:
 the rest of OpenSpec parity (custom workflow schemas, multi-repo spec stores) for
-v0.7, and specs inferred from existing tests and property scenarios go further. See [How specjutsu compares](docs/competitive-analysis.md) for the full
+v0.7, and property scenarios go further. Specs for code that already exists ship as
+`sj spec infer`, which drafts `[keep]` scenarios from untraced tests. See [How specjutsu compares](docs/competitive-analysis.md) for the full
 comparison, its sources, and the change that closes each gap.
 
 ## Status
@@ -146,7 +147,8 @@ install. Open agent sessions use the new binary on their next hook call.
 The `specjutsu` setup skill takes an agent from no `sj` to a checked setup: it
 installs `sj` (asking first), runs `sj adopt` on an existing project or `sj init` on
 a new one, installs the agent adapters with `sj init --agents auto`, and finishes
-with `sj doctor` and `sj status`. It never replaces an existing `specjutsu.toml`.
+with `sj doctor` and `sj status`. On a project with tests it offers `sj spec infer` to
+draft their scenarios. It never replaces an existing `specjutsu.toml`.
 Add it with the [skills CLI](https://skills.sh), where it is also the `/specjutsu`
 command in Claude Code:
 
@@ -210,6 +212,7 @@ sj spec validate    # spec format, delta structure, every task names its scenari
 sj spec check add-oauth-login    # uncovered scenarios, unknown IDs, open questions
 sj spec archive add-oauth-login  # merge the deltas into specs/, move to changes/archive/
 sj spec archive --all-done       # archive every change whose tasks are all done, together
+sj spec infer tests/refunds.rs   # existing tests: draft a [keep] scenario per untraced test; --write makes a change
 sj status           # each open change: tasks, scenario evidence, the next task
 sj view             # one-screen dashboard: capabilities, open changes, evidence totals
 sj next             # the next task: its scenarios, changed files, test commands
@@ -276,7 +279,7 @@ class TestDiff:
 tests point at scenarios that no longer exist. It finds test files through each
 suite in `specjutsu.toml` (see [The project file](#the-project-file)), so each
 test in `--json` carries its `package` and `suite`, and `skipped` for
-`.skip`/`.todo`/`.fixme` and `@pytest.mark.skip`. A package with source files but
+`.skip`/`.todo`/`.fixme`, `@pytest.mark.skip` and Rust `#[ignore]`. A package with source files but
 no suite gets a `warn    no test suite: <path>` line. Titles built at runtime
 (variables, `${}` templates) are not read. Use a `// spec:` comment for those.
 
@@ -894,6 +897,8 @@ and *clarify* passes. Existing `openspec/` folders work unchanged.
   each problem is listed. Two changes whose deltas modify, remove or rename the
   same requirement are refused even with `--force`; archive one, then rebase the
   other's delta.
+- **`sj spec infer <path>...`** drafts a `[keep]` scenario for every untraced test
+  under the given paths. See [Specs from existing tests](#specs-from-existing-tests).
 
 ### Bug fixes and kept behaviour
 
@@ -921,6 +926,76 @@ change breaks it. The PR comment lists kept scenarios under **Kept behaviour**.
 Expected and Unchanged Behaviour sections and a `Kind: bug` line, which makes
 `sj spec check` ask for both kinds of scenario. The `sj-debug` skill writes
 bug fixes this way.
+
+### Specs from existing tests
+
+A project that adopts specjutsu late has tests that no scenario describes.
+`sj spec infer <path>... [--capability <name>] [--write] [--change <name>]` turns
+them into `[keep]` scenarios, one per test, so the behaviour they already prove is
+written down and gated. It picks the untraced tests in suite files under the paths:
+tests with no scenario ID in their name, title, `spec:` comment or
+`@pytest.mark.spec` marker. Tests that are already linked, and tests marked skip,
+todo, fixme or Rust `#[ignore]`, are left out and counted.
+
+Without `--write` it is a dry run and writes nothing:
+
+```
+$ sj spec infer tests/refunds.rs --capability refunds
+REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:4)
+REFUNDS-002 [keep] Refund over limit needs review  (tests/refunds.rs:10)
+2 tests drafted, 1 linked left out
+```
+
+When there is nothing to draft it exits 2 with `no untraced tests under <paths>`.
+
+- **Headings** come from the test name: a leading `test` word is dropped and `_` and
+  `-` become spaces (`test_partial_refund` → `Partial refund`). A pytest class keeps
+  each class name minus a leading `Test` word (`TestRefunds::test_partial_refund` →
+  `Refunds partial refund`). JS and TS titles are kept as written.
+- **The capability** is `--capability`, or else the nearest folder above the test
+  file that isn't `tests`, `test`, `__tests__`, `spec`, `unit`, `integration`, `e2e`
+  or `src` (any case), in kebab-case: `packages/CartItems/Tests/unit/cart.test.ts`
+  gives `cart-items`. One run drafts for one capability; tests in folders that name
+  different capabilities, or in no capability folder, exit 2 with a hint to pass
+  `--capability`.
+- **IDs** follow the [ID rules](#adding-ids-to-existing-scenarios): an
+  `[ids.prefixes]` entry wins, numbering continues after the capability's current,
+  open-change and archived IDs and after any number a scanned test already carries
+  with that prefix in its name or `spec:` comment, and a colliding prefix or a
+  capability with no letters exits 2. A test whose name already carries an ID with
+  the capability's prefix (`billing_007_named_early`) keeps that ID; when another
+  scanned test carries it too, or a current, open-change or archived scenario ever
+  used it, the run exits 2 naming the test and the ID and asks for the test to be
+  renamed. Drafts are listed in file order. A `--capability` that isn't kebab-case exits 2
+  with ``capability `<name>` must be kebab-case`` before anything is written.
+
+`--write` creates `<spec_root>/changes/infer-<capability>/` (or `--change <name>`)
+with `proposal.md`, `tasks.md` and `specs/<capability>/spec.md`: one requirement
+per test file and one `[keep]` scenario per test, whose WHEN and THEN are
+`[NEEDS CLARIFICATION: … — see <file>:<line>]` markers. It also inserts
+`// spec: <ID>` (Rust, JS, TS) or `# spec: <ID>` (Python) above each test's first
+attribute, decorator or declaration line, and changes no other byte. Each comment
+moves the tests below it down a line, so the markers and the lines `--write` prints
+name the lines the tests are on afterwards. A requirement whose name is already
+used by the capability's spec or an open change's delta for it is named after the
+file's path instead, and the proposal lists the capability under Modified
+Capabilities when its spec exists or an open change already adds it. It refuses a
+change folder that already exists, and leaves nothing behind on an error.
+
+```
+$ sj spec infer tests/refunds.rs --capability refunds --write
+REFUNDS-001 [keep] Refund under 100 auto approves  (tests/refunds.rs:5)
+REFUNDS-002 [keep] Refund over limit needs review  (tests/refunds.rs:12)
+2 tests drafted, 1 linked left out
+created specjutsu/changes/infer-refunds
+$ sj spec check infer-refunds    # a clarify line per marker until each is replaced
+$ sj gate --base origin/main     # REFUNDS-001 and REFUNDS-002 pass as green:keep
+```
+
+Replace each marker with the WHEN and THEN the test proves, reading the test at the
+line the marker names (the `sj-propose` skill does this). The tests only gained a
+comment, so they pass on base and at head, and the change passes the gate as
+`green:keep`.
 
 ### Project context and rules
 
@@ -1079,7 +1154,7 @@ spec folders and logs:
 | Skill | Use it to | Replaces |
 | --- | --- | --- |
 | `sj-explore` | brainstorm and think an idea through before specifying it: go wide, then narrow to two or three options | Superpowers brainstorming, OpenSpec explore |
-| `sj-propose` | write the proposal, delta specs, design and tasks | Superpowers writing-plans; OpenSpec propose, update; Spec Kit specify, plan, tasks, analyze |
+| `sj-propose` | write the proposal, delta specs, design and tasks, or draft scenarios from existing tests with `sj spec infer` | Superpowers writing-plans; OpenSpec propose, update; Spec Kit specify, plan, tasks, analyze |
 | `sj-clarify` | resolve `[NEEDS CLARIFICATION]` markers with the user | Spec Kit clarify |
 | `sj-principles` | create or amend `<spec_root>/principles.md` | Spec Kit constitution |
 | `sj-apply` | implement tasks test-first, each by an implementer subagent and checked by a fresh reviewer subagent, in parallel where `[P]` allows | Superpowers TDD, executing-plans, subagent and parallel-agent skills; OpenSpec apply; Spec Kit implement |
